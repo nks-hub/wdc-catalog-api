@@ -1,0 +1,38 @@
+{
+  "name": "nginx",
+  "display_name": "Nginx",
+  "category": "webserver",
+  "description": "High-performance reverse proxy and HTTP server. Not wired into WDC by default but available for custom plugins.",
+  "homepage": "https://nginx.org",
+  "license": "BSD-2-Clause",
+  "releases": [
+    {
+      "version": "1.29.2",
+      "major_minor": "1.29",
+      "channel": "stable",
+      "downloads": [
+        {
+          "url": "https://nginx.org/download/nginx-1.29.2.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "nginx.org"
+        }
+      ]
+    },
+    {
+      "version": "1.28.1",
+      "major_minor": "1.28",
+      "channel": "stable",
+      "downloads": [
+        {
+          "url": "https://nginx.org/download/nginx-1.28.1.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "nginx.org"
+        }
+      ]
+    }
+  ]
+}

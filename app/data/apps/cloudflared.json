@@ -1,0 +1,60 @@
+{
+  "name": "cloudflared",
+  "display_name": "Cloudflare Tunnel Connector",
+  "category": "tools",
+  "description": "cloudflared runs a Cloudflare Tunnel on a local machine, exposing origin services to the Cloudflare edge network without inbound firewall rules.",
+  "homepage": "https://github.com/cloudflare/cloudflared",
+  "license": "Apache-2.0",
+  "releases": [
+    {
+      "version": "2026.3.0",
+      "major_minor": "2026.3",
+      "channel": "stable",
+      "released_at": "2026-03-05",
+      "downloads": [
+        {
+          "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.3.0/cloudflared-windows-amd64.exe",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "exe",
+          "source": "github"
+        },
+        {
+          "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.3.0/cloudflared-windows-386.exe",
+          "os": "windows",
+          "arch": "x86",
+          "archive_type": "exe",
+          "source": "github"
+        },
+        {
+          "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.3.0/cloudflared-linux-amd64",
+          "os": "linux",
+          "arch": "x64",
+          "archive_type": "bin",
+          "source": "github"
+        },
+        {
+          "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.3.0/cloudflared-linux-arm64",
+          "os": "linux",
+          "arch": "arm64",
+          "archive_type": "bin",
+          "source": "github"
+        },
+        {
+          "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.3.0/cloudflared-darwin-amd64.tgz",
+          "os": "macos",
+          "arch": "x64",
+          "archive_type": "tgz",
+          "source": "github"
+        },
+        {
+          "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.3.0/cloudflared-darwin-arm64.tgz",
+          "os": "macos",
+          "arch": "arm64",
+          "archive_type": "tgz",
+          "source": "github"
+        }
+      ]
+    }
+  ]
+}

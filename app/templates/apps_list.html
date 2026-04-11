@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Apps — NKS WDC Catalog{% endblock %}
+{% block content %}
+  <section class="page-head">
+    <div>
+      <h1>Apps</h1>
+      <p class="muted">{{ apps|length }} app{{ 's' if apps|length != 1 else '' }} in the catalog</p>
+    </div>
+    <div class="actions">
+      <a class="btn btn-primary" href="/admin/new">+ New app</a>
+    </div>
+  </section>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Category</th>
+        <th>Releases</th>
+        <th>Last updated</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for app in apps %}
+        <tr>
+          <td><code>{{ app.id }}</code></td>
+          <td>{{ app.display_name or app.id }}</td>
+          <td><span class="badge badge-{{ app.category }}">{{ app.category }}</span></td>
+          <td>{{ app.releases|length }}</td>
+          <td class="muted">{{ app.updated_at.strftime('%Y-%m-%d %H:%M') if app.updated_at else '—' }}</td>
+          <td class="row-actions">
+            <a class="btn btn-sm" href="/admin/apps/{{ app.id }}">Manage</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="6" class="empty">
+            No apps yet.
+            <a href="/admin/new">Create one</a>
+            or import from the seed JSON with
+            <code>POST /admin/seed</code>.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

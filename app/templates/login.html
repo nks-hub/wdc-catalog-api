@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Log in — NKS WDC Catalog{% endblock %}
+{% block content %}
+  <section class="login-card">
+    <h1>Sign in</h1>
+    <p class="muted">Admin access to the NKS WDC catalog.</p>
+    {% if error %}
+      <div class="flash flash-error">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="/login" class="form">
+      <label>
+        <span>Username</span>
+        <input type="text" name="username" autocomplete="username" required autofocus>
+      </label>
+      <label>
+        <span>Password</span>
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <button class="btn btn-primary" type="submit">Sign in</button>
+    </form>
+  </section>
+{% endblock %}

@@ -1,0 +1,38 @@
+{
+  "name": "mariadb",
+  "display_name": "MariaDB",
+  "category": "database",
+  "description": "Community-driven MySQL fork with a drop-in compatible wire protocol. Uses the same mysqld.exe-style binary layout.",
+  "homepage": "https://mariadb.org",
+  "license": "GPL-2.0",
+  "releases": [
+    {
+      "version": "12.3.1",
+      "major_minor": "12.3",
+      "channel": "stable",
+      "downloads": [
+        {
+          "url": "https://archive.mariadb.org/mariadb-12.3.1/winx64-packages/mariadb-12.3.1-winx64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "mariadb.org"
+        }
+      ]
+    },
+    {
+      "version": "11.8.3",
+      "major_minor": "11.8",
+      "channel": "lts",
+      "downloads": [
+        {
+          "url": "https://archive.mariadb.org/mariadb-11.8.3/winx64-packages/mariadb-11.8.3-winx64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "mariadb.org"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit ' + app.id if app else 'New app' }} — NKS WDC Catalog{% endblock %}
+{% block content %}
+  <section class="page-head">
+    <div>
+      <a class="back-link" href="{{ '/admin/apps/' + app.id if app else '/admin' }}">← Back</a>
+      <h1>{{ 'Edit ' + (app.display_name or app.id) if app else 'New app' }}</h1>
+    </div>
+  </section>
+
+  <form method="post"
+        action="{{ '/admin/apps/' + app.id + '/edit' if app else '/admin/new' }}"
+        class="form card">
+    <div class="card-body">
+      <label>
+        <span>ID (lowercase, no spaces) — e.g. <code>cloudflared</code></span>
+        <input type="text" name="id" value="{{ app.id if app else '' }}" {{ 'readonly' if app else 'required' }}>
+      </label>
+      <label>
+        <span>Display name</span>
+        <input type="text" name="display_name" value="{{ app.display_name if app else '' }}">
+      </label>
+      <label>
+        <span>Category</span>
+        <select name="category">
+          {% for cat in ['webserver', 'language', 'database', 'cache', 'mail', 'tools', 'other'] %}
+            <option value="{{ cat }}" {{ 'selected' if app and app.category == cat else '' }}>{{ cat }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <span>Homepage</span>
+        <input type="url" name="homepage" value="{{ app.homepage if app else '' }}">
+      </label>
+      <label>
+        <span>License</span>
+        <input type="text" name="license" value="{{ app.license if app else '' }}">
+      </label>
+      <label>
+        <span>Description</span>
+        <textarea name="description" rows="4">{{ app.description if app else '' }}</textarea>
+      </label>
+    </div>
+    <div class="card-footer">
+      <button class="btn btn-primary" type="submit">{{ 'Save' if app else 'Create' }}</button>
+      <a class="btn" href="{{ '/admin/apps/' + app.id if app else '/admin' }}">Cancel</a>
+    </div>
+  </form>
+{% endblock %}

@@ -1,0 +1,40 @@
+{
+  "name": "apache",
+  "display_name": "Apache HTTP Server",
+  "category": "webserver",
+  "description": "Battle-tested open-source HTTP server. The NKS WDC daemon uses httpd.exe (Windows) with mod_fcgid for PHP routing.",
+  "homepage": "https://httpd.apache.org",
+  "license": "Apache-2.0",
+  "releases": [
+    {
+      "version": "2.4.65",
+      "major_minor": "2.4",
+      "channel": "stable",
+      "downloads": [
+        {
+          "url": "https://www.apachelounge.com/download/VS18/binaries/httpd-2.4.65-250401-win64-VS18.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "apachelounge",
+          "headers": { "User-Agent": "NKS-WebDevConsole/1.0 (compatible)" }
+        }
+      ]
+    },
+    {
+      "version": "2.4.62",
+      "major_minor": "2.4",
+      "channel": "stable",
+      "downloads": [
+        {
+          "url": "https://www.apachelounge.com/download/VS17/binaries/httpd-2.4.62-240718-win64-VS17.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "apachelounge",
+          "headers": { "User-Agent": "NKS-WebDevConsole/1.0 (compatible)" }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "name": "mysql",
+  "display_name": "MySQL",
+  "category": "database",
+  "description": "Oracle MySQL community edition. WDC uses mysqld.exe with a generated my.ini for local development databases.",
+  "homepage": "https://dev.mysql.com/downloads/mysql/",
+  "license": "GPL-2.0",
+  "releases": [
+    {
+      "version": "8.4.8",
+      "major_minor": "8.4",
+      "channel": "stable",
+      "downloads": [
+        {
+          "url": "https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.8-winx64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "mysql.com"
+        }
+      ]
+    },
+    {
+      "version": "8.0.43",
+      "major_minor": "8.0",
+      "channel": "stable",
+      "downloads": [
+        {
+          "url": "https://dev.mysql.com/get/Downloads/MySQL-8.0/mysql-8.0.43-winx64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "mysql.com"
+        }
+      ]
+    }
+  ]
+}

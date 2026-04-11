@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}NKS WDC Catalog{% endblock %}</title>
+  <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="/admin" class="brand">NKS WDC Catalog</a>
+    <nav class="nav">
+      <a href="/admin">Apps</a>
+      <a href="/api/v1/catalog" target="_blank">JSON</a>
+      <a href="/docs" target="_blank">API docs</a>
+    </nav>
+    {% if username %}
+      <div class="user">
+        <span class="user-name">{{ username }}</span>
+        <form method="post" action="/logout" class="inline">
+          <button class="btn btn-ghost" type="submit">Log out</button>
+        </form>
+      </div>
+    {% endif %}
+  </header>
+
+  <main class="container">
+    {% if flash %}
+      <div class="flash flash-{{ flash.kind }}">{{ flash.message }}</div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <span>NKS WebDev Console Catalog API v{{ version }}</span>
+  </footer>
+</body>
+</html>

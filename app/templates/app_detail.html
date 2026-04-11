@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}{{ app.display_name or app.id }} — NKS WDC Catalog{% endblock %}
+{% block content %}
+  <section class="page-head">
+    <div>
+      <a class="back-link" href="/admin">← Apps</a>
+      <h1>{{ app.display_name or app.id }}</h1>
+      <p class="muted">
+        <code>{{ app.id }}</code>
+        · <span class="badge badge-{{ app.category }}">{{ app.category }}</span>
+        {% if app.license %}· {{ app.license }}{% endif %}
+      </p>
+      {% if app.homepage %}
+        <p><a href="{{ app.homepage }}" target="_blank" rel="noopener">{{ app.homepage }}</a></p>
+      {% endif %}
+      {% if app.description %}
+        <p class="description">{{ app.description }}</p>
+      {% endif %}
+    </div>
+    <div class="actions">
+      <a class="btn btn-sm" href="/admin/apps/{{ app.id }}/edit">Edit</a>
+      {% if has_generator %}
+        <form method="post" action="/admin/apps/{{ app.id }}/auto-generate" class="inline">
+          <input type="hidden" name="limit" value="5">
+          <button class="btn btn-primary" type="submit">
+            Auto-generate from upstream
+          </button>
+        </form>
+      {% endif %}
+      <form method="post" action="/admin/apps/{{ app.id }}/delete" class="inline"
+            onsubmit="return confirm('Delete {{ app.id }} and all releases?')">
+        <button class="btn btn-danger" type="submit">Delete app</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="card">
+    <header class="card-header">
+      <h2>Releases</h2>
+      <span class="muted">{{ app.releases|length }}</span>
+    </header>
+    <div class="card-body">
+      {% for release in app.releases %}
+        <article class="release">
+          <header class="release-head">
+            <h3>
+              <code>v{{ release.version }}</code>
+              <span class="badge">{{ release.channel }}</span>
+              {% if release.released_at %}
+                <span class="muted">· {{ release.released_at }}</span>
+              {% endif %}
+            </h3>
+            <form method="post" action="/admin/releases/{{ release.id }}/delete" class="inline"
+                  onsubmit="return confirm('Delete release {{ release.version }}?')">
+              <button class="btn btn-sm btn-danger" type="submit">Remove</button>
+            </form>
+          </header>
+          <table class="sub-table">
+            <thead>
+              <tr>
+                <th>OS</th>
+                <th>Arch</th>
+                <th>Archive</th>
+                <th>URL</th>
+                <th>Source</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for dl in release.downloads %}
+                <tr>
+                  <td>{{ dl.os }}</td>
+                  <td>{{ dl.arch }}</td>
+                  <td>{{ dl.archive_type }}</td>
+                  <td class="url-cell">
+                    <a href="{{ dl.url }}" target="_blank" rel="noopener">{{ dl.url }}</a>
+                  </td>
+                  <td class="muted">{{ dl.source }}</td>
+                  <td>
+                    <form method="post" action="/admin/downloads/{{ dl.id }}/delete" class="inline">
+                      <button class="btn btn-xs btn-danger" type="submit">×</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          <details class="add-download">
+            <summary>+ Add download</summary>
+            <form method="post" action="/admin/releases/{{ release.id }}/downloads" class="form-inline">
+              <select name="os">
+                <option value="windows">windows</option>
+                <option value="linux">linux</option>
+                <option value="macos">macos</option>
+              </select>
+              <select name="arch">
+                <option value="x64">x64</option>
+                <option value="arm64">arm64</option>
+                <option value="x86">x86</option>
+              </select>
+              <select name="archive_type">
+                <option value="zip">zip</option>
+                <option value="tar.gz">tar.gz</option>
+                <option value="tgz">tgz</option>
+                <option value="exe">exe</option>
+                <option value="bin">bin</option>
+              </select>
+              <input type="url" name="url" placeholder="https://..." required>
+              <input type="text" name="source" value="manual" placeholder="source">
+              <button class="btn btn-primary" type="submit">Add</button>
+            </form>
+          </details>
+        </article>
+      {% else %}
+        <p class="muted">No releases yet.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card">
+    <header class="card-header">
+      <h2>Add release manually</h2>
+    </header>
+    <div class="card-body">
+      <form method="post" action="/admin/apps/{{ app.id }}/releases" class="form-inline">
+        <input type="text" name="version" placeholder="1.2.3" required>
+        <input type="text" name="channel" value="stable" placeholder="stable">
+        <input type="date" name="released_at">
+        <button class="btn btn-primary" type="submit">Add release</button>
+      </form>
+    </div>
+  </section>
+{% endblock %}

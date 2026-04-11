@@ -1,0 +1,25 @@
+services:
+  catalog-api:
+    build: .
+    image: nks-wdc-catalog-api:latest
+    container_name: nks-wdc-catalog-api
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    environment:
+      - NKS_WDC_CATALOG_STATE_DIR=/state
+      - LOG_LEVEL=INFO
+    volumes:
+      # Persist config-sync uploads outside the container image
+      - catalog-state:/state
+      # Hot-reload the catalog JSONs without rebuilding the image — drop
+      # an updated file into this folder and POST /api/v1/catalog/reload
+      - ./app/data/apps:/srv/app/app/data/apps:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  catalog-state:
