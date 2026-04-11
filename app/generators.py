@@ -274,6 +274,72 @@ def generate_apache(limit: int = 5) -> list[GenRelease]:
     return releases
 
 
+# ── MariaDB (archive.mariadb.org) ──────────────────────────────────────
+#
+# The archive host serves an Apache-style open directory listing at /.
+# We scrape release directories matching `mariadb-X.Y.Z/`, filter to the
+# latest `limit` by semver-descending sort, then derive the direct
+# Windows zip URL from the known `winx64-packages/{name}.zip` pattern.
+# HEAD probe before adding so we never register a release whose
+# Windows build is missing upstream.
+
+_MARIADB_RELEASE_PATTERN = re.compile(
+    r'href="mariadb-(\d+)\.(\d+)\.(\d+)/"',
+    re.IGNORECASE,
+)
+
+
+def generate_mariadb(limit: int = 5) -> list[GenRelease]:
+    releases: list[GenRelease] = []
+    try:
+        r = httpx.get(
+            "https://archive.mariadb.org/",
+            timeout=HTTP_TIMEOUT,
+            headers={"User-Agent": DEFAULT_UA},
+        )
+        r.raise_for_status()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("MariaDB scrape failed: %s", exc)
+        return releases
+
+    seen: set[tuple[int, int, int]] = set()
+    parsed: list[tuple[int, int, int]] = []
+    for m in _MARIADB_RELEASE_PATTERN.finditer(r.text):
+        triple = (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        if triple in seen:
+            continue
+        seen.add(triple)
+        parsed.append(triple)
+
+    # Sort descending so we hand the UI the freshest stable builds first.
+    parsed.sort(reverse=True)
+
+    for major, minor, patch in parsed:
+        if len(releases) >= limit:
+            break
+        version = f"{major}.{minor}.{patch}"
+        url = (
+            f"https://archive.mariadb.org/mariadb-{version}/"
+            f"winx64-packages/mariadb-{version}-winx64.zip"
+        )
+        # HEAD probe so we don't register a directory that exists but whose
+        # Windows zip wasn't built (pre-10.x alpha betas, arch-only drops).
+        try:
+            head = httpx.head(url, timeout=httpx.Timeout(5.0, connect=5.0))
+            if head.status_code >= 400:
+                continue
+        except Exception:  # noqa: BLE001
+            continue
+
+        releases.append(GenRelease(
+            version=version,
+            major_minor=_major_minor(version),
+            downloads=[GenDownload(url, "windows", "x64", "zip", "mariadb.org")],
+        ))
+
+    return releases
+
+
 # ── Nginx (nginx.org) ──────────────────────────────────────────────────
 
 _NGINX_PATTERN = re.compile(r'href="(nginx-(\d+\.\d+\.\d+)\.zip)"')
@@ -317,6 +383,7 @@ GENERATORS = {
     "php": generate_php,
     "apache": generate_apache,
     "nginx": generate_nginx,
+    "mariadb": generate_mariadb,
 }
 
 
