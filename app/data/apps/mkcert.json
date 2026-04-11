@@ -1,0 +1,53 @@
+{
+  "name": "mkcert",
+  "display_name": "mkcert",
+  "category": "tools",
+  "description": "Zero-config local CA for generating trusted development certificates. WDC uses it to issue HTTPS certs for local .loc vhosts.",
+  "homepage": "https://github.com/FiloSottile/mkcert",
+  "license": "MIT",
+  "releases": [
+    {
+      "version": "1.4.4",
+      "major_minor": "1.4",
+      "channel": "stable",
+      "released_at": "2022-07-14",
+      "downloads": [
+        {
+          "url": "https://github.com/FiloSottile/mkcert/releases/download/v1.4.4/mkcert-v1.4.4-windows-amd64.exe",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "exe",
+          "source": "github"
+        },
+        {
+          "url": "https://github.com/FiloSottile/mkcert/releases/download/v1.4.4/mkcert-v1.4.4-linux-amd64",
+          "os": "linux",
+          "arch": "x64",
+          "archive_type": "bin",
+          "source": "github"
+        },
+        {
+          "url": "https://github.com/FiloSottile/mkcert/releases/download/v1.4.4/mkcert-v1.4.4-linux-arm64",
+          "os": "linux",
+          "arch": "arm64",
+          "archive_type": "bin",
+          "source": "github"
+        },
+        {
+          "url": "https://github.com/FiloSottile/mkcert/releases/download/v1.4.4/mkcert-v1.4.4-darwin-amd64",
+          "os": "macos",
+          "arch": "x64",
+          "archive_type": "bin",
+          "source": "github"
+        },
+        {
+          "url": "https://github.com/FiloSottile/mkcert/releases/download/v1.4.4/mkcert-v1.4.4-darwin-arm64",
+          "os": "macos",
+          "arch": "arm64",
+          "archive_type": "bin",
+          "source": "github"
+        }
+      ]
+    }
+  ]
+}
