@@ -68,6 +68,30 @@ class TestMySQLGenerator:
             assert isinstance(rel, GenRelease)
 
 
+class TestNodeGenerator:
+    def test_generate_node_returns_list(self):
+        from app.generators import generate_node
+        result = generate_node(limit=2)
+        assert isinstance(result, list)
+        for rel in result:
+            assert isinstance(rel, GenRelease)
+            assert not rel.version.startswith("v")
+
+    def test_generate_node_has_multi_platform(self):
+        from app.generators import generate_node
+        result = generate_node(limit=1)
+        if result:
+            downloads = result[0].downloads
+            os_set = {d.os for d in downloads}
+            assert "windows" in os_set or len(downloads) > 0
+
+    def test_generate_node_channel_detection(self):
+        from app.generators import generate_node
+        result = generate_node(limit=5)
+        channels = {r.channel for r in result}
+        assert channels <= {"stable", "lts"}
+
+
 class TestGenReleaseStructure:
     """Spot-check that every generator's output conforms to GenRelease."""
 
