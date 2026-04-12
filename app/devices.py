@@ -169,7 +169,10 @@ def list_devices(
     devices = db.scalars(
         select(DeviceConfig).where(DeviceConfig.user_id == account.id)
     ).all()
-    now = datetime.now(timezone.utc)
+    # SQLite stores datetimes as naive (no tzinfo). Use naive UTC now so
+    # the subtraction doesn't throw "can't subtract offset-naive and
+    # offset-aware datetimes".
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     return [
         DeviceInfo(
             device_id=d.device_id,
