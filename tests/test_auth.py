@@ -1,6 +1,6 @@
 """Tests for auth utilities — password hashing + verification + JWT."""
 
-from app.auth import hash_password, verify_password
+from app.auth import hash_password, verify_password, ensure_admin_user
 from app.devices import create_token, decode_token
 
 
@@ -46,3 +46,12 @@ class TestJWT:
         import pytest
         with pytest.raises(Exception):
             decode_token("not.a.valid.token")
+
+
+class TestEnsureAdminUser:
+    def test_ensure_admin_does_not_raise(self):
+        ensure_admin_user()
+
+    def test_ensure_admin_is_idempotent(self):
+        ensure_admin_user()
+        ensure_admin_user()
