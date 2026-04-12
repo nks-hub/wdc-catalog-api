@@ -373,6 +373,99 @@ def generate_nginx(limit: int = 5) -> list[GenRelease]:
     return releases
 
 
+# ── MySQL Community Server (dev.mysql.com) ────────────────────────────
+
+_MYSQL_VERSIONS_URL = "https://dev.mysql.com/downloads/mysql/"
+_MYSQL_CDN = "https://dev.mysql.com/get/Downloads/MySQL-{mm}/mysql-{ver}-winx64.zip"
+_MYSQL_VERSION_PATTERN = re.compile(
+    r"MySQL Community Server (\d+)\.(\d+)\.(\d+)"
+    r"|mysql-(\d+)\.(\d+)\.(\d+)-winx64\.zip"
+)
+
+
+def generate_mysql(limit: int = 5) -> list[GenRelease]:
+    releases: list[GenRelease] = []
+
+    # Strategy: scrape the downloads page for advertised versions, then
+    # construct CDN URLs. MySQL doesn't publish a simple API or GitHub
+    # releases, so we parse the human-readable download page.
+    try:
+        r = httpx.get(
+            _MYSQL_VERSIONS_URL,
+            timeout=HTTP_TIMEOUT,
+            headers={"User-Agent": DEFAULT_UA},
+            follow_redirects=True,
+        )
+        r.raise_for_status()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("MySQL scrape failed: %s", exc)
+        # Fall back to well-known recent stable versions.
+        return _mysql_fallback(limit)
+
+    seen: set[tuple[int, int, int]] = set()
+    parsed: list[tuple[int, int, int]] = []
+    for m in _MYSQL_VERSION_PATTERN.finditer(r.text):
+        groups = m.groups()
+        # The regex has two alternatives — pick whichever matched.
+        if groups[0] is not None:
+            triple = (int(groups[0]), int(groups[1]), int(groups[2]))
+        else:
+            triple = (int(groups[3]), int(groups[4]), int(groups[5]))
+        if triple in seen:
+            continue
+        seen.add(triple)
+        parsed.append(triple)
+
+    parsed.sort(reverse=True)
+
+    for major, minor, patch in parsed:
+        if len(releases) >= limit:
+            break
+        version = f"{major}.{minor}.{patch}"
+        mm = f"{major}.{minor}"
+        url = _MYSQL_CDN.format(mm=mm, ver=version)
+
+        # HEAD probe to confirm the archive exists (some point releases
+        # skip the Windows zip or use a different naming scheme).
+        try:
+            head = httpx.head(url, timeout=httpx.Timeout(5.0, connect=5.0), follow_redirects=True)
+            if head.status_code >= 400:
+                continue
+        except Exception:  # noqa: BLE001
+            continue
+
+        releases.append(GenRelease(
+            version=version,
+            major_minor=mm,
+            downloads=[GenDownload(url, "windows", "x64", "zip", "dev.mysql.com")],
+        ))
+
+    if not releases:
+        return _mysql_fallback(limit)
+    return releases
+
+
+def _mysql_fallback(limit: int) -> list[GenRelease]:
+    """Hardcoded recent MySQL versions as a safety net when scraping fails."""
+    fallback = [
+        ("9.3.0", "9.3"),
+        ("9.2.0", "9.2"),
+        ("8.4.5", "8.4"),
+        ("8.0.42", "8.0"),
+    ]
+    releases: list[GenRelease] = []
+    for ver, mm in fallback[:limit]:
+        releases.append(GenRelease(
+            version=ver,
+            major_minor=mm,
+            downloads=[GenDownload(
+                _MYSQL_CDN.format(mm=mm, ver=ver),
+                "windows", "x64", "zip", "dev.mysql.com (fallback)",
+            )],
+        ))
+    return releases
+
+
 # ── Registry ────────────────────────────────────────────────────────────
 
 GENERATORS = {
@@ -384,6 +477,7 @@ GENERATORS = {
     "apache": generate_apache,
     "nginx": generate_nginx,
     "mariadb": generate_mariadb,
+    "mysql": generate_mysql,
 }
 
 
