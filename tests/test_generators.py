@@ -171,6 +171,27 @@ class TestRedisGenerator:
             assert not rel.version.startswith("v")
 
 
+class TestNginxGenerator:
+    def test_generate_nginx_returns_list(self):
+        from app.generators import generate_nginx
+        result = generate_nginx(limit=2)
+        assert isinstance(result, list)
+        for rel in result:
+            assert isinstance(rel, GenRelease)
+            assert "." in rel.version
+            for dl in rel.downloads:
+                assert "nginx" in dl.url
+
+
+class TestCloudflaredGenerator:
+    def test_generate_cloudflared_has_exe(self):
+        from app.generators import generate_cloudflared
+        result = generate_cloudflared(limit=1)
+        if result and result[0].downloads:
+            exts = {dl.archive_type for dl in result[0].downloads}
+            assert len(exts) > 0
+
+
 class TestApacheGenerator:
     def test_generate_apache_returns_list(self):
         from app.generators import generate_apache
