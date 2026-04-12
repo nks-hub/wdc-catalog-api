@@ -2,12 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
-
-os.environ["NKS_WDC_CATALOG_STATE_DIR"] = tempfile.mkdtemp(prefix="nks-wdc-devices-test-")
-os.environ["NKS_WDC_CATALOG_DEV"] = "1"
-
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
@@ -19,13 +13,17 @@ def client() -> TestClient:
         yield c
 
 
+_test_email = f"test-{__import__('uuid').uuid4().hex[:8]}@nks-wdc.dev"
+_test_password = "testpass123"
+
+
 @pytest.fixture(scope="module")
 def auth_token(client: TestClient) -> str:
     r = client.post("/api/v1/auth/register", json={
-        "email": "test@nks-wdc.dev",
-        "password": "testpass123",
+        "email": _test_email,
+        "password": _test_password,
     })
-    assert r.status_code == 200
+    assert r.status_code == 200, f"Register failed ({r.status_code}): {r.text}"
     return r.json()["token"]
 
 
@@ -43,7 +41,7 @@ def test_register_creates_account(client: TestClient) -> None:
 def test_register_duplicate_email_rejects(client: TestClient, auth_token: str) -> None:
     # auth_token fixture registers test@nks-wdc.dev first, so this is a dup
     r = client.post("/api/v1/auth/register", json={
-        "email": "test@nks-wdc.dev",
+        "email": _test_email,
         "password": "anything",
     })
     assert r.status_code == 409
@@ -51,16 +49,16 @@ def test_register_duplicate_email_rejects(client: TestClient, auth_token: str) -
 
 def test_login_valid_credentials(client: TestClient) -> None:
     r = client.post("/api/v1/auth/login", json={
-        "email": "test@nks-wdc.dev",
+        "email": _test_email,
         "password": "testpass123",
     })
     assert r.status_code == 200
-    assert r.json()["email"] == "test@nks-wdc.dev"
+    assert r.json()["email"] == _test_email
 
 
 def test_login_bad_password(client: TestClient) -> None:
     r = client.post("/api/v1/auth/login", json={
-        "email": "test@nks-wdc.dev",
+        "email": _test_email,
         "password": "wrong",
     })
     assert r.status_code == 401
@@ -69,7 +67,7 @@ def test_login_bad_password(client: TestClient) -> None:
 def test_me_returns_account(client: TestClient, auth_token: str) -> None:
     r = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {auth_token}"})
     assert r.status_code == 200
-    assert r.json()["email"] == "test@nks-wdc.dev"
+    assert r.json()["email"] == _test_email
 
 
 def test_me_rejects_no_token(client: TestClient) -> None:
