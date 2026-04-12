@@ -50,7 +50,8 @@ from .auth import (
     optional_user,
     verify_password,
 )
-from .db import DeviceConfig, User, create_all, get_session, session_factory
+from .db import Account, DeviceConfig, User, create_all, get_session, session_factory
+from .devices import router as devices_router, optional_account
 from .generators import GENERATORS, run_generator
 from .schemas import (
     AppDoc,
@@ -112,9 +113,12 @@ if os.environ.get("NKS_WDC_CATALOG_ALLOW_CORS") == "1":
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
+
+# Mount the accounts + devices router (JWT-authenticated endpoints)
+app.include_router(devices_router)
 
 app.mount("/static", StaticFiles(directory=_APP_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=_APP_DIR / "templates")
@@ -160,6 +164,7 @@ def api_get_app(app_name: str, db: Session = Depends(get_session)) -> AppDoc:
 @app.post("/api/v1/sync/config", response_model=ConfigSyncEntry, tags=["sync"])
 def api_upsert_config(
     body: ConfigSyncUploadRequest,
+    account: Account | None = Depends(optional_account),
     db: Session = Depends(get_session),
 ) -> ConfigSyncEntry:
     from datetime import datetime, timezone
@@ -175,6 +180,35 @@ def api_upsert_config(
     else:
         row.payload = body.payload
         row.updated_at = datetime.now(timezone.utc)
+
+    # Auto-link device to account on first authenticated push — no
+    # explicit "register device" step needed. Also extract metadata
+    # from the payload so the device list can show name/OS/arch/sites
+    # without opening the full JSON blob.
+    if account is not None and row.user_id is None:
+        row.user_id = account.id
+    elif account is not None and row.user_id == account.id:
+        pass  # already linked
+    row.last_seen_at = datetime.now(timezone.utc)
+
+    # Extract device metadata from payload if present
+    p = body.payload or {}
+    if isinstance(p.get("settings"), dict):
+        settings = p["settings"]
+        if "sync.deviceName" in settings:
+            row.name = settings["sync.deviceName"]
+    if isinstance(p.get("sites"), list):
+        row.site_count = len(p["sites"])
+    if "deviceId" in p:
+        pass  # already have device_id from URL
+
+    # Extract OS info from system snapshot if pushed
+    if isinstance(p.get("system"), dict):
+        sys_info = p["system"]
+        if isinstance(sys_info.get("os"), dict):
+            row.os = sys_info["os"].get("tag")
+            row.arch = sys_info["os"].get("arch")
+
     db.flush()
     return ConfigSyncEntry(
         device_id=row.device_id,
