@@ -141,6 +141,36 @@ class TestMariaDBGenerator:
                 assert dl.os == "windows"
 
 
+class TestMailpitGenerator:
+    def test_generate_mailpit_returns_list(self):
+        from app.generators import generate_mailpit
+        result = generate_mailpit(limit=2)
+        assert isinstance(result, list)
+        for rel in result:
+            assert isinstance(rel, GenRelease)
+            assert not rel.version.startswith("v")
+
+
+class TestCaddyGenerator:
+    def test_generate_caddy_returns_list(self):
+        from app.generators import generate_caddy
+        result = generate_caddy(limit=2)
+        assert isinstance(result, list)
+        for rel in result:
+            assert isinstance(rel, GenRelease)
+            assert not rel.version.startswith("v")
+
+
+class TestRedisGenerator:
+    def test_generate_redis_returns_list(self):
+        from app.generators import generate_redis
+        result = generate_redis(limit=2)
+        assert isinstance(result, list)
+        for rel in result:
+            assert isinstance(rel, GenRelease)
+            assert not rel.version.startswith("v")
+
+
 class TestApacheGenerator:
     def test_generate_apache_returns_list(self):
         from app.generators import generate_apache
