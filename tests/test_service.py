@@ -44,3 +44,24 @@ class TestServiceCRUD:
             with pytest.raises(Exception):
                 create_app(db, app_id=app_id, display_name="V2")
                 db.flush()
+
+    def test_create_app_normalizes_id_to_lowercase(self):
+        import uuid
+        create_all()
+        app_id = f"UPPER-{uuid.uuid4().hex[:6]}"
+        with session_factory() as db:
+            app = create_app(db, app_id=app_id, display_name="Test")
+            assert app.id == app_id.strip().lower()
+
+    def test_get_app_returns_none_for_unknown(self):
+        from app.service import get_app
+        create_all()
+        with session_factory() as db:
+            assert get_app(db, "totally-nonexistent-app") is None
+
+    def test_create_app_empty_id_raises(self):
+        import pytest
+        create_all()
+        with session_factory() as db:
+            with pytest.raises(ValueError):
+                create_app(db, app_id="", display_name="Bad")
