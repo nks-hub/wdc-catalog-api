@@ -1,6 +1,7 @@
-"""Tests for auth utilities — password hashing + verification."""
+"""Tests for auth utilities — password hashing + verification + JWT."""
 
 from app.auth import hash_password, verify_password
+from app.devices import create_token, decode_token
 
 
 class TestPasswordHashing:
@@ -26,3 +27,22 @@ class TestPasswordHashing:
         h = hash_password("")
         assert verify_password("", h) is True
         assert verify_password("notempty", h) is False
+
+
+class TestJWT:
+    def test_create_and_decode_roundtrip(self):
+        token = create_token(42, "user@test.com")
+        payload = decode_token(token)
+        assert payload["sub"] == "42"
+        assert payload["email"] == "user@test.com"
+        assert "exp" in payload
+
+    def test_token_is_string(self):
+        token = create_token(1, "a@b.com")
+        assert isinstance(token, str)
+        assert len(token) > 20
+
+    def test_decode_invalid_token_raises(self):
+        import pytest
+        with pytest.raises(Exception):
+            decode_token("not.a.valid.token")
