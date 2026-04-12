@@ -9,15 +9,11 @@ CI before it breaks the daemon.
 from __future__ import annotations
 
 import os
-import tempfile
 from pathlib import Path
 
 import pytest
 
-# Route the service into a temp SQLite before importing the app so tests
-# never touch the user's real catalog db.
-_TEMP_DIR = tempfile.mkdtemp(prefix="nks-wdc-catalog-test-")
-os.environ["NKS_WDC_CATALOG_STATE_DIR"] = _TEMP_DIR
+# State dir set by conftest.py — no need to set again here.
 os.environ["NKS_WDC_CATALOG_DEV"] = "1"  # bootstrap admin/admin
 
 from fastapi.testclient import TestClient  # noqa: E402
