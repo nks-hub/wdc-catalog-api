@@ -123,6 +123,24 @@ class TestPHPGenerator:
             assert len(parts) == 2, f"major_minor {rel.major_minor} should be X.Y"
 
 
+class TestMariaDBGenerator:
+    def test_generate_mariadb_returns_list(self):
+        from app.generators import generate_mariadb
+        result = generate_mariadb(limit=2)
+        assert isinstance(result, list)
+        for rel in result:
+            assert isinstance(rel, GenRelease)
+            assert "mariadb.org" in rel.downloads[0].source if rel.downloads else True
+
+    def test_generate_mariadb_downloads_are_zip(self):
+        from app.generators import generate_mariadb
+        result = generate_mariadb(limit=1)
+        for rel in result:
+            for dl in rel.downloads:
+                assert dl.archive_type == "zip"
+                assert dl.os == "windows"
+
+
 class TestApacheGenerator:
     def test_generate_apache_returns_list(self):
         from app.generators import generate_apache
