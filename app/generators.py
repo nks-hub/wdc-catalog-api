@@ -466,6 +466,79 @@ def _mysql_fallback(limit: int) -> list[GenRelease]:
     return releases
 
 
+# ── Node.js (nodejs.org) ──────────────────────────────────────────────
+
+_NODE_INDEX_URL = "https://nodejs.org/dist/index.json"
+
+
+def generate_node(limit: int = 5) -> list[GenRelease]:
+    releases: list[GenRelease] = []
+    try:
+        r = httpx.get(
+            _NODE_INDEX_URL,
+            timeout=HTTP_TIMEOUT,
+            headers={"User-Agent": DEFAULT_UA},
+        )
+        r.raise_for_status()
+        data = r.json()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Node.js fetch failed: %s", exc)
+        return releases
+
+    # index.json is sorted newest-first. Each entry has:
+    # {"version":"v22.15.0","date":"...","files":["win-x64-zip","linux-x64",...], ...}
+    for entry in data:
+        if len(releases) >= limit:
+            break
+        version_raw = entry.get("version", "")
+        if not version_raw.startswith("v"):
+            continue
+        version = version_raw[1:]  # strip leading 'v'
+        files = entry.get("files", [])
+
+        downloads: list[GenDownload] = []
+        # Windows x64 zip
+        if "win-x64-zip" in files:
+            downloads.append(GenDownload(
+                url=f"https://nodejs.org/dist/{version_raw}/node-{version_raw}-win-x64.zip",
+                os="windows", arch="x64", archive_type="zip", source="nodejs.org",
+            ))
+        # Linux x64 tar.xz
+        if "linux-x64" in files:
+            downloads.append(GenDownload(
+                url=f"https://nodejs.org/dist/{version_raw}/node-{version_raw}-linux-x64.tar.xz",
+                os="linux", arch="x64", archive_type="tar.xz", source="nodejs.org",
+            ))
+        # macOS arm64
+        if "osx-arm64-tar" in files:
+            downloads.append(GenDownload(
+                url=f"https://nodejs.org/dist/{version_raw}/node-{version_raw}-darwin-arm64.tar.gz",
+                os="macos", arch="arm64", archive_type="tar.gz", source="nodejs.org",
+            ))
+        # macOS x64
+        if "osx-x64-tar" in files:
+            downloads.append(GenDownload(
+                url=f"https://nodejs.org/dist/{version_raw}/node-{version_raw}-darwin-x64.tar.gz",
+                os="macos", arch="x64", archive_type="tar.gz", source="nodejs.org",
+            ))
+
+        if not downloads:
+            continue
+
+        # Determine channel: even major = LTS (once it reaches LTS status)
+        lts = entry.get("lts")
+        channel = "lts" if lts else "stable"
+
+        releases.append(GenRelease(
+            version=version,
+            major_minor=_major_minor(version),
+            channel=channel,
+            downloads=downloads,
+        ))
+
+    return releases
+
+
 # ── Registry ────────────────────────────────────────────────────────────
 
 GENERATORS = {
@@ -478,6 +551,7 @@ GENERATORS = {
     "nginx": generate_nginx,
     "mariadb": generate_mariadb,
     "mysql": generate_mysql,
+    "node": generate_node,
 }
 
 

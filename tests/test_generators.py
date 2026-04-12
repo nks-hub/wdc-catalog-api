@@ -23,7 +23,7 @@ class TestGeneratorRegistry:
     def test_all_generators_registered(self):
         expected = {
             "cloudflared", "mailpit", "caddy", "redis",
-            "php", "apache", "nginx", "mariadb", "mysql",
+            "php", "apache", "nginx", "mariadb", "mysql", "node",
         }
         assert set(GENERATORS.keys()) == expected
 
