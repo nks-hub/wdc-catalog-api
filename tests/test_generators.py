@@ -67,6 +67,19 @@ class TestMySQLGenerator:
         for rel in result:
             assert isinstance(rel, GenRelease)
 
+    def test_fallback_urls_contain_version(self):
+        releases = _mysql_fallback(limit=4)
+        for rel in releases:
+            for dl in rel.downloads:
+                assert rel.version in dl.url, f"URL {dl.url} should contain version {rel.version}"
+                assert "dev.mysql.com" in dl.url
+
+    def test_fallback_major_minor_matches_version(self):
+        releases = _mysql_fallback(limit=4)
+        for rel in releases:
+            expected_mm = ".".join(rel.version.split(".")[:2])
+            assert rel.major_minor == expected_mm
+
 
 class TestNodeGenerator:
     def test_generate_node_returns_list(self):
