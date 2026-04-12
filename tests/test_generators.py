@@ -105,6 +105,24 @@ class TestNodeGenerator:
         assert channels <= {"stable", "lts"}
 
 
+class TestPHPGenerator:
+    def test_generate_php_returns_list(self):
+        from app.generators import generate_php
+        result = generate_php(limit=2)
+        assert isinstance(result, list)
+        for rel in result:
+            assert isinstance(rel, GenRelease)
+            assert rel.version
+            assert rel.major_minor
+
+    def test_generate_php_major_minor_format(self):
+        from app.generators import generate_php
+        result = generate_php(limit=3)
+        for rel in result:
+            parts = rel.major_minor.split(".")
+            assert len(parts) == 2, f"major_minor {rel.major_minor} should be X.Y"
+
+
 class TestApacheGenerator:
     def test_generate_apache_returns_list(self):
         from app.generators import generate_apache
