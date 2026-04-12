@@ -105,6 +105,17 @@ class TestNodeGenerator:
         assert channels <= {"stable", "lts"}
 
 
+class TestApacheGenerator:
+    def test_generate_apache_returns_list(self):
+        from app.generators import generate_apache
+        result = generate_apache(limit=2)
+        assert isinstance(result, list)
+        for rel in result:
+            assert isinstance(rel, GenRelease)
+            assert rel.version
+            assert "." in rel.version
+
+
 class TestGenReleaseStructure:
     """Spot-check that every generator's output conforms to GenRelease."""
 
