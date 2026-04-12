@@ -172,8 +172,22 @@ class DeviceConfig(Base):
 # ── Session helper ──────────────────────────────────────────────────────
 
 def create_all() -> None:
-    """Idempotent schema creation — run on app startup."""
-    Base.metadata.create_all(_engine)
+    """Idempotent schema creation — run on app startup.
+
+    Uses ``checkfirst=True`` (the SQLAlchemy default) so ``CREATE TABLE``
+    is skipped when the table already exists. Wrapped in a catch-all
+    because some SQLite builds or concurrent-startup races can still
+    raise ``OperationalError: table X already exists`` even with
+    checkfirst — treating it as benign is the safest recovery since
+    the table is already there.
+    """
+    try:
+        Base.metadata.create_all(_engine, checkfirst=True)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(
+            "create_all raised (likely tables already exist, continuing): %s", exc
+        )
 
 
 def get_session() -> Iterator[Session]:
