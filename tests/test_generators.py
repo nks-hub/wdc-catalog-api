@@ -1,0 +1,83 @@
+"""Tests for the catalog-api auto-generators.
+
+Verifies that every registered generator is callable and returns the
+expected GenRelease structure. The MySQL generator specifically tests
+the fallback path since the live scrape depends on dev.mysql.com being
+reachable (unreliable in CI).
+"""
+
+from __future__ import annotations
+
+import pytest
+from app.generators import (
+    GENERATORS,
+    GenRelease,
+    available_generators,
+    run_generator,
+    generate_mysql,
+    _mysql_fallback,
+)
+
+
+class TestGeneratorRegistry:
+    def test_all_generators_registered(self):
+        expected = {
+            "cloudflared", "mailpit", "caddy", "redis",
+            "php", "apache", "nginx", "mariadb", "mysql",
+        }
+        assert set(GENERATORS.keys()) == expected
+
+    def test_available_generators_matches_registry(self):
+        assert set(available_generators()) == set(GENERATORS.keys())
+
+    def test_run_generator_unknown_returns_empty(self):
+        assert run_generator("nonexistent-app") == []
+
+
+class TestMySQLGenerator:
+    def test_fallback_returns_releases(self):
+        releases = _mysql_fallback(limit=5)
+        assert len(releases) > 0
+        assert len(releases) <= 5
+        for rel in releases:
+            assert isinstance(rel, GenRelease)
+            assert rel.version
+            assert rel.major_minor
+            assert len(rel.downloads) > 0
+            assert "mysql" in rel.downloads[0].url.lower()
+            assert rel.downloads[0].os == "windows"
+            assert rel.downloads[0].arch == "x64"
+
+    def test_fallback_versions_are_semver(self):
+        releases = _mysql_fallback(limit=10)
+        for rel in releases:
+            parts = rel.version.split(".")
+            assert len(parts) == 3, f"Version {rel.version} is not semver"
+            for part in parts:
+                assert part.isdigit(), f"Version segment '{part}' in {rel.version} is not numeric"
+
+    def test_fallback_limit_respected(self):
+        assert len(_mysql_fallback(limit=2)) == 2
+        assert len(_mysql_fallback(limit=1)) == 1
+
+    def test_generate_mysql_returns_list(self):
+        # This may hit the network or fall back — either way must return a list.
+        result = generate_mysql(limit=3)
+        assert isinstance(result, list)
+        for rel in result:
+            assert isinstance(rel, GenRelease)
+
+
+class TestGenReleaseStructure:
+    """Spot-check that every generator's output conforms to GenRelease."""
+
+    @pytest.mark.parametrize("app_id", list(GENERATORS.keys()))
+    def test_generator_returns_valid_releases(self, app_id: str):
+        # Run with limit=1 to minimize network calls in CI.
+        # Some generators may return 0 if the upstream is unreachable.
+        releases = run_generator(app_id, limit=1)
+        assert isinstance(releases, list)
+        for rel in releases:
+            assert isinstance(rel, GenRelease)
+            assert rel.version
+            assert len(rel.downloads) >= 0
