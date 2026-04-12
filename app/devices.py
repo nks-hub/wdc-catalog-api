@@ -31,7 +31,14 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["accounts", "devices"])
 
-JWT_SECRET = os.environ.get("NKS_WDC_CATALOG_SECRET", "dev-only-jwt-secret-change-in-prod")
+JWT_SECRET = os.environ.get("NKS_WDC_CATALOG_SECRET", "")
+if not JWT_SECRET:
+    if os.environ.get("NKS_WDC_CATALOG_DEV") == "1":
+        JWT_SECRET = "dev-only-jwt-secret-change-in-prod"
+        log.warning("NKS_WDC_CATALOG_DEV=1 → using insecure JWT secret")
+    else:
+        JWT_SECRET = "dev-only-jwt-secret-change-in-prod"
+        log.warning("NKS_WDC_CATALOG_SECRET not set — using insecure default. Set it in production!")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_DAYS = 30
 
@@ -126,6 +133,8 @@ def register(body: RegisterRequest, db: Session = Depends(get_session)) -> Token
     email = body.email.strip().lower()
     if not email or len(email) < 5:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid email")
+    if len(body.password) < 8:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Password must be at least 8 characters")
     existing = db.scalar(select(Account).where(Account.email == email))
     if existing:
         raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")

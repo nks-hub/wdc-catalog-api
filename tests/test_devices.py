@@ -32,7 +32,7 @@ def auth_token(client: TestClient) -> str:
 def test_register_creates_account(client: TestClient) -> None:
     r = client.post("/api/v1/auth/register", json={
         "email": "another@nks-wdc.dev",
-        "password": "pass456",
+        "password": "pass4567long",
     })
     assert r.status_code == 200
     body = r.json()
