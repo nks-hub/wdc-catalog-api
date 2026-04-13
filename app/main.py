@@ -161,6 +161,33 @@ def api_get_app(app_name: str, db: Session = Depends(get_session)) -> AppDoc:
 # Config sync (public, runs behind reverse-proxy auth in prod)
 # ─────────────────────────────────────────────────────────────────────────
 
+# Device IDs are used as SQL primary keys and echoed back in responses.
+# Restrict to the same shape the Electron client generates (lowercased
+# alphanumerics + dashes, 3–64 chars) so garbage IDs can't pollute the
+# device_configs table. This is defence-in-depth — SQLAlchemy already
+# parameterizes the SQL, so the risk is cosmetic storage pollution, not
+# injection.
+import re as _re
+_DEVICE_ID_RE = _re.compile(r"^[a-z0-9][a-z0-9-]{2,63}$")
+
+
+def _normalize_device_id(raw: str) -> str:
+    """Lowercase + strip + validate a client-supplied device id.
+
+    Raises HTTP 400 on any format violation so clients see a clear
+    error instead of the request silently succeeding with a mangled id.
+    """
+    normalized = raw.strip().lower()
+    if not normalized:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "device_id is required")
+    if not _DEVICE_ID_RE.match(normalized):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "device_id must be 3–64 chars, lowercase alphanumeric + dashes",
+        )
+    return normalized
+
+
 @app.post("/api/v1/sync/config", response_model=ConfigSyncEntry, tags=["sync"])
 def api_upsert_config(
     body: ConfigSyncUploadRequest,
@@ -169,9 +196,7 @@ def api_upsert_config(
 ) -> ConfigSyncEntry:
     from datetime import datetime, timezone
 
-    device_id = body.device_id.strip().lower()
-    if not device_id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "device_id is required")
+    device_id = _normalize_device_id(body.device_id)
 
     row = db.get(DeviceConfig, device_id)
     if row is None:
@@ -219,9 +244,10 @@ def api_upsert_config(
 
 @app.get("/api/v1/sync/config/{device_id}", response_model=ConfigSyncEntry, tags=["sync"])
 def api_get_config(device_id: str, db: Session = Depends(get_session)) -> ConfigSyncEntry:
-    row = db.get(DeviceConfig, device_id.strip().lower())
+    normalized = _normalize_device_id(device_id)
+    row = db.get(DeviceConfig, normalized)
     if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No snapshot for {device_id}")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No snapshot for {normalized}")
     return ConfigSyncEntry(
         device_id=row.device_id,
         updated_at=row.updated_at.isoformat() if row.updated_at else "",
@@ -235,9 +261,10 @@ def api_get_config(device_id: str, db: Session = Depends(get_session)) -> Config
     tags=["sync"],
 )
 def api_exists_config(device_id: str, db: Session = Depends(get_session)) -> ConfigSyncListResponse:
-    row = db.get(DeviceConfig, device_id.strip().lower())
+    normalized = _normalize_device_id(device_id)
+    row = db.get(DeviceConfig, normalized)
     if row is None:
-        return ConfigSyncListResponse(device_id=device_id.lower(), has_config=False)
+        return ConfigSyncListResponse(device_id=normalized, has_config=False)
     return ConfigSyncListResponse(
         device_id=row.device_id,
         updated_at=row.updated_at.isoformat() if row.updated_at else None,
@@ -247,7 +274,8 @@ def api_exists_config(device_id: str, db: Session = Depends(get_session)) -> Con
 
 @app.delete("/api/v1/sync/config/{device_id}", tags=["sync"])
 def api_delete_config(device_id: str, db: Session = Depends(get_session)) -> JSONResponse:
-    row = db.get(DeviceConfig, device_id.strip().lower())
+    normalized = _normalize_device_id(device_id)
+    row = db.get(DeviceConfig, normalized)
     if row is None:
         return JSONResponse({"ok": True, "removed": False})
     db.delete(row)

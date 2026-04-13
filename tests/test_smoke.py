@@ -136,3 +136,77 @@ def test_config_sync_round_trip(client: TestClient) -> None:
     # Post-delete fetch returns 404
     r = client.get(f"/api/v1/sync/config/{device_id}")
     assert r.status_code == 404
+
+
+def test_config_sync_rejects_invalid_device_id_on_upsert(client: TestClient) -> None:
+    """Device IDs that don't match the strict shape must fail with 400,
+    not silently store garbage rows the admin UI can't interpret."""
+    # Empty
+    r = client.post("/api/v1/sync/config", json={"device_id": "", "payload": {}})
+    assert r.status_code == 400
+
+    # Uppercase (we lowercase, but "A!" has a shell metachar)
+    r = client.post("/api/v1/sync/config", json={"device_id": "A!", "payload": {}})
+    assert r.status_code == 400
+
+    # Path traversal attempt
+    r = client.post(
+        "/api/v1/sync/config",
+        json={"device_id": "../etc/passwd", "payload": {}},
+    )
+    assert r.status_code == 400
+
+    # Too short (< 3 chars)
+    r = client.post("/api/v1/sync/config", json={"device_id": "ab", "payload": {}})
+    assert r.status_code == 400
+
+    # Too long (> 64 chars)
+    r = client.post(
+        "/api/v1/sync/config",
+        json={"device_id": "a" * 65, "payload": {}},
+    )
+    assert r.status_code == 400
+
+    # Whitespace-only
+    r = client.post("/api/v1/sync/config", json={"device_id": "   ", "payload": {}})
+    assert r.status_code == 400
+
+
+def test_config_sync_rejects_invalid_device_id_on_get(client: TestClient) -> None:
+    """GET endpoints also validate so a malformed URL returns 400, not 404
+    (which would confuse clients into retrying a lookup that will never
+    succeed). Note: path-segment '..' would be URL-normalized into the
+    parent route by the test client, so we use characters that fail the
+    validation regex without altering the matched route."""
+    # 'A!' includes an upper-case letter (which we lowercase) but also '!'
+    # which isn't in the [a-z0-9-] charset — so after normalization it's
+    # still rejected.
+    r = client.get("/api/v1/sync/config/A!")
+    assert r.status_code == 400
+
+    # Two characters total — below the 3-char minimum
+    r = client.get("/api/v1/sync/config/ab")
+    assert r.status_code == 400
+
+    # Leading dash is also invalid per the [a-z0-9] start requirement
+    r = client.get("/api/v1/sync/config/-foo")
+    assert r.status_code == 400
+
+
+def test_config_sync_device_id_normalized_to_lowercase(client: TestClient) -> None:
+    """Clients can upload with mixed case — it gets stored lowercased.
+    Verifies the normalization actually happens both on write and echo."""
+    r = client.post(
+        "/api/v1/sync/config",
+        json={"device_id": "MixedCase-DEVICE", "payload": {"marker": True}},
+    )
+    assert r.status_code == 200
+    assert r.json()["device_id"] == "mixedcase-device"
+
+    # Fetch with original casing — should still find it
+    r = client.get("/api/v1/sync/config/MixedCase-DEVICE")
+    assert r.status_code == 200
+    assert r.json()["payload"]["marker"] is True
+
+    # Cleanup
+    client.delete("/api/v1/sync/config/mixedcase-device")
