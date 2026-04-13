@@ -113,6 +113,34 @@ def test_device_config_readable(client: TestClient, auth_token: str) -> None:
     assert r.json()["payload"]["settings"]["sync.deviceName"] == "Test PC"
 
 
+def test_list_devices_is_current_flag(client: TestClient, auth_token: str) -> None:
+    """The caller can pass ?current_device_id to flag its own row with
+    is_current=true. Without the param all rows stay is_current=false
+    (back-compat with pre-flag clients)."""
+    # No param → all False
+    r = client.get("/api/v1/devices", headers={"Authorization": f"Bearer {auth_token}"})
+    assert r.status_code == 200
+    assert all(d["is_current"] is False for d in r.json())
+
+    # With matching param → exactly one True
+    r = client.get(
+        "/api/v1/devices?current_device_id=test-device-001",
+        headers={"Authorization": f"Bearer {auth_token}"},
+    )
+    assert r.status_code == 200
+    flagged = [d for d in r.json() if d["is_current"]]
+    assert len(flagged) == 1
+    assert flagged[0]["device_id"] == "test-device-001"
+
+    # With non-matching param → all False (no crash)
+    r = client.get(
+        "/api/v1/devices?current_device_id=nonexistent-device",
+        headers={"Authorization": f"Bearer {auth_token}"},
+    )
+    assert r.status_code == 200
+    assert all(d["is_current"] is False for d in r.json())
+
+
 def test_push_config_between_devices(client: TestClient, auth_token: str) -> None:
     # Create a second device
     client.post("/api/v1/sync/config", json={

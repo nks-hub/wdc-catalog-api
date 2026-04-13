@@ -172,9 +172,17 @@ def auth_me(account: Account = Depends(get_current_account)) -> dict:
 
 @router.get("/devices", response_model=list[DeviceInfo])
 def list_devices(
+    current_device_id: str | None = None,
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
 ) -> list[DeviceInfo]:
+    """List all devices registered to the authenticated account.
+
+    Optional ``current_device_id`` query param lets the caller tag which
+    row represents their own device so the UI can render a "this device"
+    badge. Without this, ``is_current`` stays False for every row (old
+    behaviour) — callers can omit the param and still get a valid list.
+    """
     devices = db.scalars(
         select(DeviceConfig).where(DeviceConfig.user_id == account.id)
     ).all()
@@ -182,6 +190,7 @@ def list_devices(
     # the subtraction doesn't throw "can't subtract offset-naive and
     # offset-aware datetimes".
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+    current = (current_device_id or "").strip().lower()
     return [
         DeviceInfo(
             device_id=d.device_id,
@@ -192,6 +201,7 @@ def list_devices(
             last_seen_at=d.last_seen_at.isoformat() if d.last_seen_at else None,
             updated_at=d.updated_at.isoformat() if d.updated_at else None,
             online=d.last_seen_at is not None and (now - d.last_seen_at).total_seconds() < 300,
+            is_current=bool(current) and d.device_id == current,
         )
         for d in devices
     ]
