@@ -51,7 +51,7 @@ from .auth import (
     verify_password,
 )
 from .db import Account, DeviceConfig, User, create_all, get_session, session_factory
-from .devices import router as devices_router, optional_account
+from .devices import router as devices_router, optional_account, get_current_account
 from .generators import GENERATORS, run_generator
 from .schemas import (
     AppDoc,
@@ -249,12 +249,37 @@ def api_upsert_config(
     )
 
 
-@app.get("/api/v1/sync/config/{device_id}", response_model=ConfigSyncEntry, tags=["sync"])
-def api_get_config(device_id: str, db: Session = Depends(get_session)) -> ConfigSyncEntry:
+def _require_owned_row(
+    device_id: str,
+    account: Account,
+    db: Session,
+    *,
+    not_found_ok: bool = False,
+) -> DeviceConfig | None:
+    """Load a DeviceConfig, enforcing ownership (F-12 guard).
+
+    Raises 404 when the row does not exist (unless ``not_found_ok``),
+    raises 403 when the row belongs to a different account, and raises
+    404 for unowned rows so we don't leak their existence.
+    """
     normalized = _normalize_device_id(device_id)
     row = db.get(DeviceConfig, normalized)
     if row is None:
+        if not_found_ok:
+            return None
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"No snapshot for {normalized}")
+    if row.user_id is None or row.user_id != account.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No snapshot for {normalized}")
+    return row
+
+
+@app.get("/api/v1/sync/config/{device_id}", response_model=ConfigSyncEntry, tags=["sync"])
+def api_get_config(
+    device_id: str,
+    account: Account = Depends(get_current_account),
+    db: Session = Depends(get_session),
+) -> ConfigSyncEntry:
+    row = _require_owned_row(device_id, account, db)
     return ConfigSyncEntry(
         device_id=row.device_id,
         updated_at=row.updated_at.isoformat() if row.updated_at else "",
@@ -267,9 +292,13 @@ def api_get_config(device_id: str, db: Session = Depends(get_session)) -> Config
     response_model=ConfigSyncListResponse,
     tags=["sync"],
 )
-def api_exists_config(device_id: str, db: Session = Depends(get_session)) -> ConfigSyncListResponse:
+def api_exists_config(
+    device_id: str,
+    account: Account = Depends(get_current_account),
+    db: Session = Depends(get_session),
+) -> ConfigSyncListResponse:
     normalized = _normalize_device_id(device_id)
-    row = db.get(DeviceConfig, normalized)
+    row = _require_owned_row(device_id, account, db, not_found_ok=True)
     if row is None:
         return ConfigSyncListResponse(device_id=normalized, has_config=False)
     return ConfigSyncListResponse(
@@ -280,9 +309,12 @@ def api_exists_config(device_id: str, db: Session = Depends(get_session)) -> Con
 
 
 @app.delete("/api/v1/sync/config/{device_id}", tags=["sync"])
-def api_delete_config(device_id: str, db: Session = Depends(get_session)) -> JSONResponse:
-    normalized = _normalize_device_id(device_id)
-    row = db.get(DeviceConfig, normalized)
+def api_delete_config(
+    device_id: str,
+    account: Account = Depends(get_current_account),
+    db: Session = Depends(get_session),
+) -> JSONResponse:
+    row = _require_owned_row(device_id, account, db, not_found_ok=True)
     if row is None:
         return JSONResponse({"ok": True, "removed": False})
     db.delete(row)

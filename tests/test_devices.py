@@ -223,6 +223,57 @@ class TestSyncOwnershipGuards:
         assert r2.status_code == 403
 
 
+class TestSyncConfigAuthRequired:
+    """F-12: GET/HEAD/DELETE /sync/config/{id} must require auth + ownership."""
+
+    def test_anonymous_get_rejected(self, client: TestClient) -> None:
+        r = client.get("/api/v1/sync/config/some-device")
+        assert r.status_code == 401
+
+    def test_anonymous_delete_rejected(self, client: TestClient) -> None:
+        r = client.delete("/api/v1/sync/config/some-device")
+        assert r.status_code == 401
+
+    def test_anonymous_exists_rejected(self, client: TestClient) -> None:
+        r = client.get("/api/v1/sync/config/some-device/exists")
+        assert r.status_code == 401
+
+    def test_owner_can_get(self, client: TestClient, auth_token: str) -> None:
+        dev = "auth-required-dev-1"
+        client.post(
+            "/api/v1/sync/config",
+            json={"device_id": dev, "payload": {"k": "v"}},
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+        r = client.get(
+            f"/api/v1/sync/config/{dev}",
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+        assert r.status_code == 200
+        assert r.json()["payload"] == {"k": "v"}
+
+    def test_other_account_sees_404(self, client: TestClient, auth_token: str) -> None:
+        import uuid
+        dev = "auth-required-dev-2"
+        client.post(
+            "/api/v1/sync/config",
+            json={"device_id": dev, "payload": {"k": "owner"}},
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+        other_email = f"other-{uuid.uuid4().hex[:8]}@nks-wdc.dev"
+        reg = client.post(
+            "/api/v1/auth/register",
+            json={"email": other_email, "password": "otherpass12345"},
+        )
+        other_token = reg.json()["token"]
+        # Must not leak existence — 404, not 403
+        r = client.get(
+            f"/api/v1/sync/config/{dev}",
+            headers={"Authorization": f"Bearer {other_token}"},
+        )
+        assert r.status_code == 404
+
+
 def test_delete_device(client: TestClient, auth_token: str) -> None:
     r = client.delete(
         "/api/v1/devices/test-device-002",

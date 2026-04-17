@@ -104,37 +104,52 @@ def test_login_accepts_dev_admin(client: TestClient) -> None:
     assert "nks_wdc_catalog_session" in r.cookies
 
 
-def test_config_sync_round_trip(client: TestClient) -> None:
+@pytest.fixture
+def smoke_token(client: TestClient) -> str:
+    """Register a throw-away account and return a JWT for smoke tests."""
+    import uuid
+    email = f"smoke-{uuid.uuid4().hex[:8]}@nks-wdc.dev"
+    r = client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "password": "smokepass12345"},
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["token"]
+
+
+def test_config_sync_round_trip(client: TestClient, smoke_token: str) -> None:
     device_id = "test-device-12345"
     payload = {"sites": [{"domain": "blog.loc"}], "version": 1}
+    auth = {"Authorization": f"Bearer {smoke_token}"}
 
-    # Upsert
+    # Upsert (authenticated — anonymous would be rejected per F-11)
     r = client.post(
         "/api/v1/sync/config",
         json={"device_id": device_id, "payload": payload},
+        headers=auth,
     )
     assert r.status_code == 200
     body = r.json()
     assert body["device_id"] == device_id
     assert body["payload"] == payload
 
-    # Fetch back
-    r = client.get(f"/api/v1/sync/config/{device_id}")
+    # Fetch back (auth required per F-12)
+    r = client.get(f"/api/v1/sync/config/{device_id}", headers=auth)
     assert r.status_code == 200
     assert r.json()["payload"] == payload
 
     # Exists probe
-    r = client.get(f"/api/v1/sync/config/{device_id}/exists")
+    r = client.get(f"/api/v1/sync/config/{device_id}/exists", headers=auth)
     assert r.status_code == 200
     assert r.json()["has_config"] is True
 
     # Delete
-    r = client.delete(f"/api/v1/sync/config/{device_id}")
+    r = client.delete(f"/api/v1/sync/config/{device_id}", headers=auth)
     assert r.status_code == 200
     assert r.json()["removed"] is True
 
     # Post-delete fetch returns 404
-    r = client.get(f"/api/v1/sync/config/{device_id}")
+    r = client.get(f"/api/v1/sync/config/{device_id}", headers=auth)
     assert r.status_code == 404
 
 
@@ -172,41 +187,37 @@ def test_config_sync_rejects_invalid_device_id_on_upsert(client: TestClient) -> 
     assert r.status_code == 400
 
 
-def test_config_sync_rejects_invalid_device_id_on_get(client: TestClient) -> None:
-    """GET endpoints also validate so a malformed URL returns 400, not 404
-    (which would confuse clients into retrying a lookup that will never
-    succeed). Note: path-segment '..' would be URL-normalized into the
-    parent route by the test client, so we use characters that fail the
-    validation regex without altering the matched route."""
-    # 'A!' includes an upper-case letter (which we lowercase) but also '!'
-    # which isn't in the [a-z0-9-] charset — so after normalization it's
-    # still rejected.
-    r = client.get("/api/v1/sync/config/A!")
+def test_config_sync_rejects_invalid_device_id_on_get(
+    client: TestClient, smoke_token: str
+) -> None:
+    """GET endpoints also validate so a malformed URL returns 400, not 404.
+    Now authenticated because anonymous access is rejected since F-12."""
+    auth = {"Authorization": f"Bearer {smoke_token}"}
+    r = client.get("/api/v1/sync/config/A!", headers=auth)
     assert r.status_code == 400
 
-    # Two characters total — below the 3-char minimum
-    r = client.get("/api/v1/sync/config/ab")
+    r = client.get("/api/v1/sync/config/ab", headers=auth)
     assert r.status_code == 400
 
-    # Leading dash is also invalid per the [a-z0-9] start requirement
-    r = client.get("/api/v1/sync/config/-foo")
+    r = client.get("/api/v1/sync/config/-foo", headers=auth)
     assert r.status_code == 400
 
 
-def test_config_sync_device_id_normalized_to_lowercase(client: TestClient) -> None:
-    """Clients can upload with mixed case — it gets stored lowercased.
-    Verifies the normalization actually happens both on write and echo."""
+def test_config_sync_device_id_normalized_to_lowercase(
+    client: TestClient, smoke_token: str
+) -> None:
+    """Clients can upload with mixed case — it gets stored lowercased."""
+    auth = {"Authorization": f"Bearer {smoke_token}"}
     r = client.post(
         "/api/v1/sync/config",
         json={"device_id": "MixedCase-DEVICE", "payload": {"marker": True}},
+        headers=auth,
     )
     assert r.status_code == 200
     assert r.json()["device_id"] == "mixedcase-device"
 
-    # Fetch with original casing — should still find it
-    r = client.get("/api/v1/sync/config/MixedCase-DEVICE")
+    r = client.get("/api/v1/sync/config/MixedCase-DEVICE", headers=auth)
     assert r.status_code == 200
     assert r.json()["payload"]["marker"] is True
 
-    # Cleanup
-    client.delete("/api/v1/sync/config/mixedcase-device")
+    client.delete("/api/v1/sync/config/mixedcase-device", headers=auth)
