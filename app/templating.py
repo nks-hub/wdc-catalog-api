@@ -9,10 +9,13 @@ route triggered the render.
 
 from __future__ import annotations
 
+import json
+import re
 from pathlib import Path
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup, escape
 
 from . import __version__
 
@@ -20,6 +23,63 @@ from . import __version__
 _APP_DIR = Path(__file__).parent
 
 templates = Jinja2Templates(directory=_APP_DIR / "templates")
+
+
+# Tokenise a pretty-printed JSON string into span-wrapped HTML so audit
+# log details are scannable without JS. CSP-safe: runs at render time,
+# emits static HTML. Regex below matches strings (optionally followed by
+# colon → key), numbers, booleans, null, punctuation.
+_JSON_TOKEN_RE = re.compile(
+    r'("(?:\\.|[^"\\])*")(\s*:)?'     # 1: string, 2: colon (→ key when present)
+    r'|\b(true|false|null)\b'         # 3: literal
+    r'|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)'  # 4: number
+    r'|([{}\[\],])'                   # 5: punctuation
+)
+
+
+def _json_highlight(value) -> Markup:
+    """Pretty-print JSON and wrap tokens in span.jsx-* classes for CSS coloring."""
+    if value is None:
+        return Markup("")
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except (ValueError, TypeError):
+            return Markup('<span class="jsx-str">') + escape(value) + Markup("</span>")
+    else:
+        parsed = value
+    pretty = json.dumps(parsed, indent=2, ensure_ascii=False, sort_keys=False)
+
+    def replace(m: re.Match) -> str:
+        s, colon, lit, num, punct = m.group(1), m.group(2), m.group(3), m.group(4), m.group(5)
+        if s is not None:
+            cls = "jsx-key" if colon else "jsx-str"
+            # All three branches return plain str — intentionally NOT Markup,
+            # because Markup + str (or vice-versa) re-escapes the plain side.
+            out = f'<span class="{cls}">{str(escape(s))}</span>'
+            if colon:
+                out += colon  # colon is `\s*:` — no HTML-special chars
+            return out
+        if lit is not None:
+            return f'<span class="jsx-lit">{lit}</span>'
+        if num is not None:
+            return f'<span class="jsx-num">{num}</span>'
+        return f'<span class="jsx-pun">{punct}</span>'  # punct is one of {}[],
+
+    # Escape untouched gap text (whitespace mostly, but be safe); keep
+    # everything as plain str until the final Markup() wrap so neither
+    # side of an addition triggers MarkupSafe's auto-escape on the other.
+    out_parts: list[str] = []
+    pos = 0
+    for m in _JSON_TOKEN_RE.finditer(pretty):
+        out_parts.append(str(escape(pretty[pos:m.start()])))
+        out_parts.append(replace(m))
+        pos = m.end()
+    out_parts.append(str(escape(pretty[pos:])))
+    return Markup("".join(out_parts))
+
+
+templates.env.filters["json_highlight"] = _json_highlight
 
 
 def _current_banner() -> str | None:

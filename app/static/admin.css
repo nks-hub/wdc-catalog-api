@@ -1158,6 +1158,15 @@ details > summary:hover { color: var(--accent-hover); }
   overflow-y: auto;
   white-space: pre;
 }
+/* JSON detail syntax tint — muted on purpose: the audit surface is
+   table-dominant, color here just helps scan keys vs values without
+   pulling the eye away from the row the user is actually on. */
+.json-tint .jsx-key { color: var(--accent); font-weight: 600; }
+.json-tint .jsx-str { color: var(--text); }
+.json-tint .jsx-num { color: var(--action); font-variant-numeric: tabular-nums; }
+.json-tint .jsx-lit { color: var(--warning); font-style: italic; }
+.json-tint .jsx-pun { color: var(--text-3); }
+.theme-dark .json-tint .jsx-str { color: var(--text-2); }
 
 /* --------------------------------------------------------------------------
    Misc utilities

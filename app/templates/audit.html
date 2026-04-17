@@ -47,7 +47,7 @@
         </td>
         <td class="muted">{{ e.ip or '—' }}</td>
         <td>
-          {% if e.detail %}<details><summary>view</summary><pre class="detail">{{ e.detail | tojson(indent=2) }}</pre></details>
+          {% if e.detail %}<details><summary>view</summary><pre class="detail json-tint">{{ e.detail | json_highlight }}</pre></details>
           {% else %}<span class="muted">—</span>{% endif %}
         </td>
       </tr>
