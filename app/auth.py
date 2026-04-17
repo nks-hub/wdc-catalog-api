@@ -71,9 +71,15 @@ def hash_password(plain: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
+    """Constant-time password check that never leaks exception details.
+
+    Broad ``except Exception`` deliberately swallows every failure mode
+    (malformed hash, encoding errors, upstream library changes) so a
+    corrupted row always reads as an auth failure rather than 500.
+    """
     try:
         return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("ascii"))
-    except ValueError:
+    except Exception:  # noqa: BLE001
         return False
 
 

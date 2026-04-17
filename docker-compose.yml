@@ -5,7 +5,10 @@ services:
     container_name: nks-wdc-catalog-api
     restart: unless-stopped
     ports:
-      - "8765:8765"
+      # Bind to loopback so a reverse proxy (Caddy/Traefik/nginx) owns
+      # TLS + auth. Remove the 127.0.0.1 prefix only if you are
+      # intentionally exposing the service to the public network.
+      - "127.0.0.1:8765:8765"
     environment:
       - NKS_WDC_CATALOG_STATE_DIR=/state
       - LOG_LEVEL=INFO

@@ -83,6 +83,10 @@ class PushConfigRequest(BaseModel):
     source_device_id: str
 
 
+class UpdateDeviceRequest(BaseModel):
+    name: str | None = Field(None, max_length=128)
+
+
 # ── JWT helpers ─────────────────────────────────────────────────────────
 
 def create_token(account_id: int, email: str, *, token_version: int = 1) -> str:
@@ -148,7 +152,11 @@ def optional_account(
         payload = decode_token(credentials.credentials)
         account_id = int(payload["sub"])
         return db.get(Account, account_id)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001
+        # Log at debug so operators can grep for clients that send
+        # invalid tokens to public endpoints — useful signal when
+        # diagnosing misbehaving desktop clients or probing traffic.
+        log.debug("optional_account rejected token: %s", exc)
         return None
 
 
@@ -269,15 +277,18 @@ def list_devices(
 @router.put("/devices/{device_id}")
 def update_device(
     device_id: str,
-    name: str | None = None,
+    body: UpdateDeviceRequest,
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
 ) -> dict:
+    """Update a device's user-visible name. Accepts a JSON body so the
+    value is never logged through access logs or reverse-proxy caches
+    (query parameters are indexed by most web servers)."""
     device = db.get(DeviceConfig, device_id)
     if device is None or device.user_id != account.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
-    if name is not None:
-        device.name = name
+    if body.name is not None:
+        device.name = body.name
     return {"ok": True, "device_id": device_id}
 
 
