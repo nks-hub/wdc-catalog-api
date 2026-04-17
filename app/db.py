@@ -164,6 +164,30 @@ class Account(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class IdempotencyRecord(Base):
+    """Cached response for ``Idempotency-Key``-tagged POST requests.
+
+    A hit returns the stored ``response_body`` + ``status_code`` verbatim
+    so a network retry lands on the same result without duplicating the
+    mutation (critical for snapshot create / invite mint / restore).
+    Old rows are pruned by the retention runner (``expires_at`` column).
+    """
+    __tablename__ = "idempotency_records"
+
+    key_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    account_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("accounts.id", ondelete="CASCADE"),
+        nullable=True, index=True,
+    )
+    method: Mapped[str] = mapped_column(String(8))
+    path: Mapped[str] = mapped_column(String(256))
+    status_code: Mapped[int] = mapped_column(Integer)
+    response_body: Mapped[bytes] = mapped_column(LargeBinary)
+    content_type: Mapped[str] = mapped_column(String(64), default="application/json")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
 class RevokedToken(Base):
     """Denylist of JWT jti values that must be rejected even if the
     signature + expiry check would otherwise pass. Populated on logout,

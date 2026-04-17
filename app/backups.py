@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import audit, snapshots
+from . import audit, idempotency, snapshots
 from .db import Account, DeviceConfig, DeviceSnapshot, get_session
 from .devices import get_current_account
 
@@ -141,7 +141,7 @@ def list_backups(
     )
 
 
-@router.post("", response_model=SnapshotMeta, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 def create_backup(
     device_id: str,
     body: CreateSnapshotRequest,
@@ -149,10 +149,12 @@ def create_backup(
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
     x_wdc_passphrase: Optional[str] = Header(default=None, alias="X-WDC-Passphrase"),
-) -> SnapshotMeta:
+) -> Response:
+    cached = idempotency.replay_if_present(db, request, account)
+    if cached is not None:
+        return cached
+
     dev = _owned_device(device_id, account, db)
-    # Payload fallback: snapshot the existing DeviceConfig.payload so
-    # clients can label the current state without re-uploading the blob.
     payload = body.payload if body.payload is not None else (dev.payload or {})
     try:
         snap = snapshots.create_snapshot(
@@ -169,14 +171,17 @@ def create_backup(
     except snapshots.PayloadTooLarge as exc:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, str(exc))
     except ValueError as exc:
-        # passphrase validation failures (too short, etc.)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     audit.emit(
         db, actor=account, action="backup.created", request=request,
         resource_type="snapshot", resource_id=snap.id,
         detail={"device_id": device_id, "kind": snap.kind, "label": snap.label},
     )
-    return _row(snap)
+    return idempotency.wrap_json(
+        db, request, account,
+        _row(snap).model_dump(),
+        status_code=status.HTTP_201_CREATED,
+    )
 
 
 @router.get("/diff", response_model=DiffResponse)
