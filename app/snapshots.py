@@ -334,9 +334,7 @@ def _decrypt_with_kid(
     from cryptography.exceptions import InvalidTag
 
     try:
-        return _crypto.decrypt_payload(
-            ciphertext, dek, aad=_aad_for(account_id, kid)
-        )
+        return _crypto.decrypt_payload(ciphertext, dek, aad=_aad_for(account_id, kid))
     except InvalidTag:
         legacy_aad = f"nks-wdc-snapshot-{account_id or 0}".encode("ascii")
         return _crypto.decrypt_payload(ciphertext, dek, aad=legacy_aad)

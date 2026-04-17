@@ -686,15 +686,30 @@ def logout() -> RedirectResponse:
 from .cookies import cookie_secure as _cookie_secure  # noqa: E402  — re-export for legacy callsites
 
 
+def _flash_signer():
+    """Reuse the session signer secret so flash cookies share a single
+    rotation key. ``max_age`` on the caller side enforces the 15 s TTL.
+    """
+    from itsdangerous import TimestampSigner
+
+    from .auth import _secret_key
+
+    return TimestampSigner(_secret_key(), salt="nks-wdc-flash-v1")
+
+
 def _redirect(
     url: str, flash_kind: str | None = None, flash_message: str | None = None
 ) -> RedirectResponse:
     response = RedirectResponse(url, status_code=status.HTTP_303_SEE_OTHER)
     if flash_kind and flash_message:
-        # Flash via short-lived cookie so the next GET picks it up.
+        # Flash via short-lived SIGNED cookie so a MITM or another cookie
+        # writer (same-site subdomain) can't inject messages rendered
+        # into the admin HTML. HttpOnly still prevents JS tampering; the
+        # signature prevents everything else.
+        signed = _flash_signer().sign(f"{flash_kind}|{flash_message}".encode("utf-8"))
         response.set_cookie(
             "flash",
-            f"{flash_kind}|{flash_message}",
+            signed.decode("ascii"),
             max_age=15,
             httponly=True,
             samesite="strict",
@@ -704,9 +719,22 @@ def _redirect(
 
 
 def _pop_flash(cookie: str | None) -> dict | None:
-    if not cookie or "|" not in cookie:
+    if not cookie:
         return None
-    kind, _, message = cookie.partition("|")
+    # Attempt signed verification first; fall back to legacy plain format
+    # so flashes set before the signing change don't vanish on upgrade.
+    from itsdangerous import BadSignature, SignatureExpired
+
+    try:
+        raw = _flash_signer().unsign(cookie.encode("ascii"), max_age=30).decode("utf-8")
+    except (BadSignature, SignatureExpired, UnicodeDecodeError):
+        if "|" in cookie:
+            raw = cookie  # legacy unsigned cookie, accept once during rollout
+        else:
+            return None
+    if "|" not in raw:
+        return None
+    kind, _, message = raw.partition("|")
     return {"kind": kind, "message": message}
 
 
