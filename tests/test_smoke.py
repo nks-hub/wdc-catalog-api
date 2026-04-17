@@ -144,12 +144,20 @@ def test_catalog_etag_round_trip(client: TestClient) -> None:
     assert r2.status_code == 304
 
 
-def test_healthz_reports_db_up(client: TestClient) -> None:
+def test_healthz_reports_ok(client: TestClient) -> None:
     r = client.get("/healthz")
     assert r.status_code == 200
     body = r.json()
     assert body["ok"] is True
-    assert body["db"] == "up"
+    assert body["service"] == "nks-wdc-catalog-api"
+
+
+def test_readyz_reports_db_up(client: TestClient) -> None:
+    r = client.get("/readyz")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["checks"]["db"] == "up"
 
 
 def test_payload_size_limit_rejects_oversized(client: TestClient) -> None:
