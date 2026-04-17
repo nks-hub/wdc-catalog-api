@@ -33,6 +33,10 @@
     {% endif %}
   </header>
 
+  {% if banner %}
+    <div class="banner">{{ banner }}</div>
+  {% endif %}
+
   <main class="container">
     {% if flash %}
       <div class="flash flash-{{ flash.kind }}">{{ flash.message }}</div>

@@ -1155,3 +1155,17 @@ details > summary:hover { color: var(--accent-hover); }
 @media (max-width: 400px) {
   .stat-grid { grid-template-columns: 1fr; }
 }
+
+.banner {
+  background: color-mix(in srgb, #f59e0b 18%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, #f59e0b 36%, transparent);
+  color: #78350f;
+  padding: var(--space-2) var(--space-4);
+  text-align: center;
+  font-size: 0.857rem;
+  font-weight: 500;
+  white-space: pre-line;
+}
+@media (prefers-color-scheme: dark) {
+  .banner { color: #fcd34d; }
+}
