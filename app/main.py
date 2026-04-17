@@ -231,6 +231,12 @@ app.include_router(sync_router)
 # Mount the accounts + devices router (JWT-authenticated endpoints)
 app.include_router(devices_router)
 
+# Personal access token management (/api/v1/auth/tokens*) — user-owned
+# API keys that authenticate alongside JWTs.
+from .api_pats import router as pats_router  # noqa: E402
+
+app.include_router(pats_router)
+
 # Mount the admin JSON API (role-gated endpoints for user management)
 from .admin_users import router as admin_users_router  # noqa: E402
 from .admin_audit import router as admin_audit_router  # noqa: E402

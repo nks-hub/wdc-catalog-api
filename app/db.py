@@ -266,6 +266,39 @@ class RevokedToken(Base):
     )
 
 
+class PersonalAccessToken(Base):
+    """User-owned API keys for CI/scripts that can't run the
+    interactive ``/auth/login`` flow.
+
+    The plaintext value is a URL-safe random string prefixed with
+    ``nks_pat_`` so the bearer-auth middleware can distinguish it from
+    JWTs at glance. Only the bcrypt hash is persisted; plaintext is
+    returned once at creation time and then discarded.
+    """
+
+    __tablename__ = "personal_access_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("accounts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    # Bcrypt hash of the plaintext token — verified on every request via
+    # ``bcrypt.checkpw``. Cost factor follows ``NKS_WDC_BCRYPT_ROUNDS``.
+    token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    # Short prefix (first 10 chars of plaintext) kept in clear so the UI
+    # can display an identifier even after revocation. Never enough to
+    # recover the full token.
+    token_prefix: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class ConsumedInvite(Base):
     """Tracks invite nonces that have been redeemed so the same signed
     token can never be replayed — even after the created account has

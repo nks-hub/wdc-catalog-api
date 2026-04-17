@@ -219,6 +219,18 @@ def get_current_account(
 ) -> Account:
     if credentials is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Authentication required")
+
+    # Personal Access Token shortcut — identified by the ``nks_pat_``
+    # prefix. Falls through to JWT validation otherwise.
+    from .pats import TOKEN_PREFIX, try_authenticate_pat
+
+    if credentials.credentials.startswith(TOKEN_PREFIX):
+        pat_account = try_authenticate_pat(db, credentials.credentials)
+        if pat_account is None:
+            _inc_auth_failure("invalid_pat")
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
+        return pat_account
+
     try:
         payload = decode_token(credentials.credentials)
         account_id = int(payload["sub"])
