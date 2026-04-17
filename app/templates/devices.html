@@ -26,7 +26,21 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="7" class="muted">No devices registered for this account yet.</td></tr>
+      <tr>
+        <td colspan="7">
+          <div class="empty-state">
+            <div class="empty-icon">📟</div>
+            <h3>No devices yet</h3>
+            <p>
+              Devices appear automatically after a client POSTs to
+              <code>/api/v1/sync/config</code> with a valid bearer token.
+              The device id auto-links to the authenticated account on
+              the first push.
+            </p>
+            <a class="btn btn-ghost" href="/docs#tag/sync" target="_blank" rel="noopener">API docs for sync →</a>
+          </div>
+        </td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>

@@ -52,7 +52,23 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="6" class="muted">No audit events match the filter.</td></tr>
+      <tr>
+        <td colspan="6">
+          <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            <h3>{% if action or resource_type or resource_id or actor_id %}No events match the filter{% else %}Audit log is empty{% endif %}</h3>
+            <p>
+              {% if action or resource_type or resource_id or actor_id %}
+                Try widening the filter or <a href="/admin/audit">clear it</a>.
+              {% else %}
+                Every admin mutation gets recorded here — user role changes,
+                invite redemptions, snapshot restores, RBAC denials, etc.
+                The log populates as operators use the panel.
+              {% endif %}
+            </p>
+          </div>
+        </td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>

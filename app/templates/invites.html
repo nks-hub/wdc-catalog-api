@@ -11,15 +11,18 @@
   <form method="post" action="/admin/invites" class="form-grid">
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     <label>Email
-      <input type="email" name="email" required autocomplete="off">
+      <input type="email" name="email" required autocomplete="off" placeholder="alice@example.com">
+      <span class="hint">Must not already have an account.</span>
     </label>
     <label>Role
       <select name="role">
         {% for r in roles %}<option value="{{ r }}" {% if r == 'user' %}selected{% endif %}>{{ r }}</option>{% endfor %}
       </select>
+      <span class="hint">Only owners can invite another owner.</span>
     </label>
     <label>TTL hours
       <input type="number" name="ttl_hours" value="48" min="1" max="168">
+      <span class="hint">1–168 hours. Shorter is safer.</span>
     </label>
     <button class="btn btn-primary">Mint invite</button>
   </form>

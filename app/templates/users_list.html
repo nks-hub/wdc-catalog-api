@@ -35,7 +35,26 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="6" class="muted">No users match the filter.</td></tr>
+      <tr>
+        <td colspan="6">
+          <div class="empty-state">
+            <div class="empty-icon">👥</div>
+            <h3>{% if q or role or suspended_only %}No matching users{% else %}No user accounts yet{% endif %}</h3>
+            <p>
+              {% if q or role or suspended_only %}
+                Try widening the filter or <a href="/admin/users">clear it</a>.
+              {% else %}
+                Users appear when someone registers via
+                <code>/api/v1/auth/register</code>, redeems an invite, or is
+                created by an operator.
+              {% endif %}
+            </p>
+            {% if not (q or role or suspended_only) %}
+              <a class="btn btn-ghost" href="/admin/invites">Mint an invite →</a>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>

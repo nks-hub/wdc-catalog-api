@@ -778,6 +778,59 @@ main.container {
   font-weight: 500;
   color: var(--text-2);
 }
+.form-grid label .hint {
+  font-size: 0.786rem;
+  font-weight: 400;
+  color: var(--text-3);
+  line-height: 1.4;
+}
+
+/* Fieldset-based grouping for long config forms (Settings + Retention).
+   Visually reads as a sub-card inside the form-grid card. */
+.form-fieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 var(--space-5) 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3) var(--space-4);
+}
+.form-fieldset > legend {
+  grid-column: 1 / -1;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: 0 0 var(--space-2) 0;
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  width: 100%;
+}
+
+/* Empty state blocks — icon + headline + supporting copy + CTA.
+   NN/g 2021: always give the user a next step, never leave them at
+   italic grey "No results." */
+.empty-state {
+  padding: var(--space-8) var(--space-5);
+  text-align: center;
+  color: var(--text-3);
+}
+.empty-state .empty-icon {
+  font-size: 2.5rem;
+  opacity: 0.5;
+  margin-bottom: var(--space-3);
+  line-height: 1;
+}
+.empty-state h3 {
+  font-size: 1.071rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 var(--space-2) 0;
+}
+.empty-state p {
+  max-width: 42ch;
+  margin: 0 auto var(--space-3) auto;
+  line-height: 1.5;
+}
 .form-grid input,
 .form-grid select {
   padding: 8px var(--space-3);
