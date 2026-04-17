@@ -1276,6 +1276,31 @@ details > summary:hover { color: var(--accent-hover); }
   .stat-grid { grid-template-columns: 1fr; }
 }
 
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-3);
+  font-size: 0.821rem;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-2);
+  text-decoration: none;
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+.chip:hover {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .sparkline {
   display: block;
   width: 100%;
