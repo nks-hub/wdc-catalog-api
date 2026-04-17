@@ -666,6 +666,45 @@ def admin_resume(
     return _redirect(f"/admin/users/{user_id}", "success", "Account resumed")
 
 
+@router.post("/admin/users/{user_id}/unlock", dependencies=[Depends(require_csrf)])
+def admin_unlock(
+    request: Request,
+    user_id: int,
+    username: Annotated[str, Depends(current_user)],
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Clear the failed-login counter + lockout timestamp on an account.
+
+    Distinct from ``/resume`` because that only applies to suspensions.
+    Lockout is an automatic anti-bruteforce measure from the login path
+    (5 failures → 1 min lock, 10 → 5 min, 15 → 30 min) and honest users
+    who get stuck in it need an operator to short-circuit the cooldown.
+    """
+    from . import audit as _audit
+    from .db import Account
+
+    acct = db.get(Account, user_id)
+    if acct is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    was_locked = acct.locked_until is not None or (acct.failed_login_count or 0) > 0
+    acct.failed_login_count = 0
+    acct.locked_until = None
+    if was_locked:
+        try:
+            _audit.emit(
+                db,
+                actor=None,
+                action="user.unlocked",
+                request=request,
+                resource_type="account",
+                resource_id=str(acct.id),
+                detail={"email": acct.email},
+            )
+        except Exception:  # noqa: BLE001
+            pass
+    return _redirect(f"/admin/users/{user_id}", "success", "Lockout cleared")
+
+
 @router.post(
     "/admin/users/{user_id}/reset-password", dependencies=[Depends(require_csrf)]
 )

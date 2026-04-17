@@ -75,6 +75,55 @@ def test_successful_login_clears_counter(client: TestClient) -> None:
         assert acct.locked_until is None
 
 
+def test_admin_can_clear_lockout(client: TestClient) -> None:
+    """The /unlock admin route resets counter + locked_until, so an
+    honest user stuck in a 30-min cooldown can retry immediately."""
+    email = "lockout-admin-clear@example.com"
+    _make_account(client, email, "correct-horse-battery")
+
+    for _ in range(5):
+        client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": "wrong"},
+        )
+
+    # Blocked right now.
+    r = client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": "correct-horse-battery"},
+    )
+    assert r.status_code == 423
+
+    # Sign in as admin + clear the lockout via the admin UI endpoint.
+    with session_factory() as db:
+        acct = db.scalar(select(Account).where(Account.email == email))
+        assert acct is not None
+        acct_id = acct.id
+
+    client.get("/login")
+    csrf = client.cookies.get("nks_wdc_csrf") or ""
+    r = client.post(
+        "/login",
+        data={"username": "admin", "password": "admin", "_csrf": csrf},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    csrf = client.cookies.get("nks_wdc_csrf") or ""
+    r = client.post(
+        f"/admin/users/{acct_id}/unlock",
+        data={"_csrf": csrf},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    # Valid password now works.
+    r = client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": "correct-horse-battery"},
+    )
+    assert r.status_code == 200
+
+
 def test_lockout_expires(client: TestClient) -> None:
     """Directly rewind ``locked_until`` to simulate the lock elapsing."""
     email = "lockout-expire@example.com"

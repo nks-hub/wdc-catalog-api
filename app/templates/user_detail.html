@@ -46,6 +46,13 @@
       </form>
     {% endif %}
 
+    {% if user.locked_until or user.failed_login_count %}
+    <form method="post" action="/admin/users/{{ user.id }}/unlock">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button class="btn">Clear lockout</button>
+    </form>
+    {% endif %}
+
     <form method="post" action="/admin/users/{{ user.id }}/revoke-tokens" onsubmit="return confirm('Invalidate every outstanding JWT for {{ user.email }}?');">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <button class="btn btn-warn">Revoke all tokens</button>
