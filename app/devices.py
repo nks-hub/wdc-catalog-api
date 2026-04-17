@@ -166,6 +166,8 @@ def login(
     account = db.scalar(select(Account).where(Account.email == email))
     if account is None or not verify_password(body.password, account.password_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
+    if account.suspended_at is not None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Account is suspended")
     account.last_login_at = datetime.now(timezone.utc)
     token = create_token(account.id, email)
     return TokenResponse(token=token, email=email)
