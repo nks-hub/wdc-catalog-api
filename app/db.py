@@ -68,6 +68,23 @@ _SessionLocal = sessionmaker(
 )
 
 
+# SQLite disables foreign-key enforcement by default, so all our
+# ``ondelete='SET NULL' / 'CASCADE'`` declarations would be silently
+# ignored. Turn it on for every new connection so deleting an account
+# actually nulls out ``audit_events.actor_id`` instead of leaving
+# dangling rows that point to nonexistent account ids.
+if "sqlite" in _database_url():
+    from sqlalchemy import event as _sa_event
+
+    @_sa_event.listens_for(_engine, "connect")
+    def _enable_sqlite_fk(dbapi_conn, _conn_record):  # type: ignore[no-redef]
+        cursor = dbapi_conn.cursor()
+        try:
+            cursor.execute("PRAGMA foreign_keys=ON")
+        finally:
+            cursor.close()
+
+
 class Base(DeclarativeBase):
     pass
 

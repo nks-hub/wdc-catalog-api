@@ -39,9 +39,7 @@ SESSION_MAX_AGE = int(os.environ.get("NKS_WDC_SESSION_MAX_AGE", 60 * 60 * 24))
 # if the absolute ``max_age`` window hasn't elapsed. Re-signing on
 # every request (see ``refresh_session``) keeps live sessions alive
 # without extending the dormant ones.
-SESSION_IDLE_TIMEOUT = int(
-    os.environ.get("NKS_WDC_SESSION_IDLE_TIMEOUT", 60 * 60 * 2)
-)
+SESSION_IDLE_TIMEOUT = int(os.environ.get("NKS_WDC_SESSION_IDLE_TIMEOUT", 60 * 60 * 2))
 
 
 _EPHEMERAL_DEV_KEY: str | None = None
