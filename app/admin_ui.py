@@ -1410,6 +1410,75 @@ def admin_device_import(
     )
 
 
+# ── Revoked-tokens viewer ───────────────────────────────────────────
+
+
+@router.get("/admin/revoked-tokens", response_class=HTMLResponse)
+def admin_revoked_tokens(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    reason: str = "",
+    account_id: int | None = None,
+    offset: int = 0,
+    limit: int = 50,
+    flash: Annotated[str | None, Cookie(alias="flash")] = None,
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    """Browse the JWT denylist.
+
+    Operators hit this after a mass-revoke event (account suspend, admin
+    panic button) to confirm the expected rows landed. Filters match the
+    columns so ``reason=logout`` or ``account_id=7`` narrow by cause.
+    """
+    from sqlalchemy import select as _sel
+
+    from .db import RevokedToken, count_query
+
+    stmt = _sel(RevokedToken)
+    if reason:
+        stmt = stmt.where(RevokedToken.reason == reason)
+    if account_id:
+        stmt = stmt.where(RevokedToken.account_id == account_id)
+    total = count_query(db, stmt)
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    rows = db.scalars(
+        stmt.order_by(RevokedToken.revoked_at.desc()).offset(offset).limit(limit)
+    ).all()
+    rows_view = [
+        {
+            "jti": r.jti,
+            "account_id": r.account_id,
+            "reason": r.reason,
+            "revoked_at": r.revoked_at.isoformat() if r.revoked_at else "",
+            "expires_at": r.expires_at.isoformat() if r.expires_at else None,
+        }
+        for r in rows
+    ]
+    qs_parts = []
+    if reason:
+        qs_parts.append(f"reason={reason}")
+    if account_id:
+        qs_parts.append(f"account_id={account_id}")
+    qs = ("&".join(qs_parts) + "&") if qs_parts else ""
+
+    ctx = base_context(
+        request,
+        username,
+        rows=rows_view,
+        total=total,
+        offset=offset,
+        limit=limit,
+        reason=reason,
+        account_id=account_id,
+        qs=qs,
+        flash=_pop_flash(flash),
+    )
+    response = templates.TemplateResponse(request, "revoked_tokens.html", ctx)
+    _clear_flash(response)
+    return response
+
+
 # ── Device snapshot ZIP export ──────────────────────────────────────
 
 

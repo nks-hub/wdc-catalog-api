@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Revoked tokens — NKS WDC{% endblock %}
+{% block content %}
+<section class="section">
+  <header class="section-head">
+    <h1>Revoked tokens ({{ total }})</h1>
+    <span class="muted">JWT denylist — explicit logout + admin revocation</span>
+  </header>
+
+  <p class="muted">
+    Active JWTs are stateless; they don't appear here. A token lands in this
+    list only when someone called <code>POST /auth/logout</code> or an admin
+    pressed "Revoke all tokens" on a user detail page. Expired rows are
+    cleared by the nightly retention sweep.
+  </p>
+
+  <form method="get" class="inline-form">
+    <input type="text" name="reason" placeholder="reason (e.g. logout, suspend)" value="{{ reason or '' }}">
+    <input type="number" name="account_id" placeholder="account id" value="{{ account_id or '' }}">
+    <button class="btn">Filter</button>
+    {% if reason or account_id %}
+      <a class="btn btn-ghost" href="/admin/revoked-tokens">clear</a>
+    {% endif %}
+  </form>
+
+  <table class="data compact">
+    <thead>
+      <tr><th>JTI</th><th>Account</th><th>Reason</th><th>Revoked at</th><th>Expires at</th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><code title="{{ r.jti }}">{{ r.jti[:16] }}…</code></td>
+        <td>
+          {% if r.account_id %}<a href="/admin/users/{{ r.account_id }}">#{{ r.account_id }}</a>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td>{% if r.reason %}<span class="pill">{{ r.reason }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="nowrap">{{ r.revoked_at }}</td>
+        <td class="nowrap">{{ r.expires_at or '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">No revoked tokens.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="pager">
+    {% if offset > 0 %}<a class="btn" href="?{{ qs }}offset={{ [offset - limit, 0]|max }}&limit={{ limit }}">← prev</a>{% endif %}
+    <span class="muted">{{ offset + 1 }}–{{ offset + rows|length }} of {{ total }}</span>
+    {% if offset + limit < total %}<a class="btn" href="?{{ qs }}offset={{ offset + limit }}&limit={{ limit }}">next →</a>{% endif %}
+  </div>
+</section>
+{% endblock %}

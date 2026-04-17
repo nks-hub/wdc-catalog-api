@@ -1,5 +1,50 @@
 # Changelog
 
+## v0.4.0 — 2026-04-17
+
+Full HTML admin panel — 16 working pages covering every backend feature.
+11 commits on top of v0.3.0.
+
+### New admin UI pages
+
+| Path | Purpose |
+|---|---|
+| `/admin` | Dashboard with live counters (catalog / users / devices / audit) |
+| `/admin/users` + `/admin/users/{id}` | User management: role change, suspend/resume, reset password, revoke all tokens, delete |
+| `/admin/audit` + `/admin/audit.csv` | Audit log browser with filters + CSV export |
+| `/admin/invites` + `/admin/invites/history` | Mint invites + redemption history |
+| `/admin/devices` + `/admin/devices/{id}` | Device list + detail with current payload |
+| `/admin/devices/{id}/snapshots` | Snapshot browser with kind + label filter |
+| `/admin/devices/{id}/snapshots/{sid}` | Snapshot detail with payload + RFC 6902 diff vs HEAD |
+| `/admin/devices/{id}/snapshots/export.zip` | Archive download of every snapshot |
+| `/admin/devices/{id}/import` | Paste JSON envelope to import a backup |
+| `/admin/retention` | Global + per-account retention policy editor |
+| `/admin/settings` | `GlobalPolicy` editor (banner, registration, defaults) |
+| `/admin/account` | Self-service password change |
+| `/admin/revoked-tokens` | JWT denylist browser |
+| `/admin/catalog` | Apps list (original) |
+
+### Infrastructure
+
+- **Auto-ALTER on startup**: `db.create_all` now `ALTER TABLE ADD COLUMN` for any columns missing on pre-existing tables. Fixes silent-drop of role system columns on legacy deployments.
+- **HTML/JSON content negotiation** on error handler: browser clients get templated error pages, `/api/v1/*` and machine endpoints keep Problem+JSON.
+- **Starlette 404 fallback**: router-level path misses (not just handler-raised) flow through the HTML handler.
+- **Banner**: `GlobalPolicy.banner_message` renders on every admin page.
+- **Active-nav highlighting** with path-based `.active` class.
+- **Signed flash cookies** (itsdangerous + session secret) — MITM can't inject flash messages.
+- **`scripts/deploy.sh`** — one-shot tarball upload + rebuild + volume chown fix for the non-git-tracked prod host.
+
+### Tests
+
+- 251 passing (+18 from v0.3.0 baseline of 233)
+- New suites: admin UI smoke (16 tests), account lockout, security regressions, audit FK integrity
+
+### Architecture (carried over)
+
+`app/main.py` final size: 317 lines. Seven router modules mounted:
+`api_catalog.py`, `api_health.py`, `api_sync.py`, `api_auth_ui.py`,
+`admin_ui.py`, `templating.py`, `device_ids.py`.
+
 ## v0.3.0 — 2026-04-17
 
 Major security hardening + performance + architecture refactor. 40 commits

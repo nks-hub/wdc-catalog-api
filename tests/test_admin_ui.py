@@ -47,6 +47,7 @@ def admin_client() -> TestClient:
         ("/admin/retention", "Retention"),
         ("/admin/settings", "Global settings"),
         ("/admin/account", "My account"),
+        ("/admin/revoked-tokens", "Revoked tokens"),
     ],
 )
 def test_admin_page_renders(admin_client: TestClient, path: str, marker: str) -> None:
