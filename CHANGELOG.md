@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.8.0 — 2026-04-18
+
+Two-factor authentication for the admin UI.
+
+- **TOTP core** (`app/totp.py`) — RFC 6238 HMAC-SHA1 TOTP implemented
+  inline (no pyotp dep). 160-bit base32 secrets, ±1 window drift
+  tolerance, constant-time verify. Confusable-free 10-char recovery
+  codes (`abcde-fghij`). 12 unit tests incl. RFC 6238 Appendix B
+  reference vectors.
+- **Account schema** — `totp_enabled`, `totp_secret`,
+  `totp_recovery_hashes` (newline-joined bcrypt hashes),
+  `totp_enabled_at`. Auto-ALTER on startup handles legacy DBs.
+- **Admin UI** — `/admin/account/totp/{setup,confirm,disable}`. Setup
+  renders a hero token block with the `otpauth://` URI + raw base32
+  secret so any authenticator app pairs in one paste. Confirm mints
+  8 one-time recovery codes, shown once in a hero copy block.
+  Disable requires a live TOTP code or a recovery code.
+- **Login flow** — `/login` now redirects to `/login/2fa` for 2FA-
+  enabled accounts via a short-lived (5 min) signed pending cookie;
+  session cookie is only minted after the second factor verifies.
+  Recovery codes accepted on `/login/2fa` and burned on use.
+- **Audit events** — `totp.setup_started`, `totp.enabled`,
+  `totp.disabled`, `totp.login_ok`, `totp.login_failed`. The
+  `used_recovery` detail flag marks recovery-code-based auths.
+- **Flash cookie fix** — `_redirect()` now base64-wraps signed flash
+  bytes so non-ASCII message text (arrows, em-dashes) doesn't crash
+  cookie serialization.
+
+12 commits · 12 new tests (5 admin + 7 login flow) · total 297 tests passing.
+
 ## v0.7.2 — 2026-04-17
 
 P1 design polish — fieldset-grouped configuration forms, dashboard
