@@ -25,7 +25,6 @@ NKS_WDC_CATALOG_ALLOW_CORS   — "1" to enable permissive CORS
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -343,15 +342,17 @@ def api_get_catalog(request: Request, db: Session = Depends(get_session)) -> Res
         import hashlib
 
         doc = build_catalog_document(db)
-        apps_dump = doc.model_dump(by_alias=True, include={"apps", "schema_version"})
-        etag_seed = json.dumps(apps_dump, sort_keys=True, separators=(",", ":")).encode(
-            "utf-8"
-        )
-        etag = '"' + hashlib.sha256(etag_seed).hexdigest()[:16] + '"'
+        # ETag is derived from the content *excluding* ``generated_at``
+        # (that timestamp intentionally stays stable across rebuilds with
+        # identical catalog state — see M7). Use ``model_dump_json`` with
+        # ``exclude={"generated_at"}`` which is a single pydantic walk
+        # over the doc; we then call ``model_dump_json`` once more with
+        # the now-stable ``generated_at`` for the response body.
+        etag_bytes = doc.model_dump_json(
+            by_alias=True, exclude={"generated_at"}
+        ).encode("utf-8")
+        etag = '"' + hashlib.sha256(etag_bytes).hexdigest()[:16] + '"'
 
-        # Reuse previous ``generated_at`` when content didn't change —
-        # the TTL window is about cache freshness, not about resource
-        # modification time.
         stable = catalog_response_cache.get("stable")
         if stable is not None and stable["etag"] == etag:
             doc.generated_at = stable["generated_at"]
