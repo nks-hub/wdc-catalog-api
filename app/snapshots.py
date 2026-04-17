@@ -233,6 +233,11 @@ def _active_key(
     dek = _crypto.generate_dek()
     salt = os.urandom(16)
     if passphrase is not None:
+        # Enforce the current length policy only when *minting* a new
+        # key. Reuse of an existing passphrase-derived key lives in the
+        # ``row is not None`` short-circuit above and doesn't hit this
+        # branch, so users on older 8-char passphrases aren't evicted.
+        _crypto.validate_passphrase_for_encrypt(passphrase)
         kek = _crypto.derive_key_from_passphrase(passphrase, salt)
         wrapped_core = _crypto.wrap_dek_with_kek(dek, kek, account_id)
         kek_source = "password-derived"

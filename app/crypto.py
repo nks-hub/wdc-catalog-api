@@ -148,16 +148,37 @@ def decrypt_payload(
 # server derives once, wraps the DEK, and zeroes the KEK from memory as
 # soon as the response is returned.
 
-ARGON2_TIME_COST = 3
+# Argon2id parameters — bumped from t=3 to t=4 to keep pace with GPU
+# clusters. 64 MiB memory + 4 passes ≈ ~400 ms on a modern CPU core,
+# which is fine for snapshot create/restore (interactive bound is
+# generally <1s) while making offline brute-force substantially harder
+# per candidate.
+ARGON2_TIME_COST = 4
 ARGON2_MEMORY_KB = 64 * 1024  # 64 MiB
 ARGON2_PARALLELISM = 4
+
+# Enforce the OWASP 2024 passphrase baseline (≥ 12 chars) for *new*
+# passphrase-derived keys. Decrypting snapshots created under the older
+# 8-char minimum still works — we only validate on the encrypt path via
+# ``validate_passphrase_for_encrypt``.
+MIN_PASSPHRASE_CHARS = 12
+
+
+def validate_passphrase_for_encrypt(passphrase: str) -> None:
+    """Gate new-passphrase acceptance behind the current length policy."""
+    if not passphrase or len(passphrase) < MIN_PASSPHRASE_CHARS:
+        raise ValueError(
+            f"Passphrase must be at least {MIN_PASSPHRASE_CHARS} characters"
+        )
 
 
 def derive_key_from_passphrase(passphrase: str, salt: bytes) -> bytes:
     """Argon2id-derive a 32-byte KEK from ``passphrase`` + per-account ``salt``.
 
-    Raises ``ValueError`` when the passphrase is trivially short; callers
-    should also enforce a UX-level minimum before reaching this layer.
+    Kept permissive on the decrypt path — existing snapshots created
+    when the minimum was 8 characters must keep decrypting after the
+    policy bump. Enforce ``validate_passphrase_for_encrypt`` at the
+    *encrypt* call-site instead.
     """
     if not passphrase or len(passphrase) < 8:
         raise ValueError("Passphrase must be at least 8 characters")
