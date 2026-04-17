@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.7.2 — 2026-04-17
+
+P1 design polish — fieldset-grouped configuration forms, dashboard
+hero KPI card, hero token block with copy button.
+
+- **Fieldset-grouped settings + retention forms** — Global settings
+  now splits into "Access / Snapshot defaults / Quotas / Admin UI"
+  fieldset cards; retention splits its policy editor and "add device
+  override" form similarly. Each input gets a `<span class="hint">`
+  explainer below (Gestalt: labels name, hints reduce ambiguity).
+  Primary action lives in a `.form-actions` row with top border,
+  matching Linear / Stripe's modern config surface pattern.
+- **Dashboard hero KPI** — full-width card leads the page with a
+  2.5 rem mono "events last 24h" figure and a 96 px-tall area-fill
+  sparkline. Supporting Catalog / Users / Devices stats sit in a 3-col
+  grid beneath. Bottom wide card adds a horizontal bar chart for
+  top-8 actions in the last 24h.
+- **Hero token block + copy button** — minting a PAT or invite now
+  renders a visually loud success card: dashed mono token field,
+  "Copy token" button (clipboard API with select-all fallback),
+  success-tinted gradient, explicit "shown once" warning.
+  Implemented via a CSP-safe external `/static/admin.js` progressive
+  enhancement (no inline scripts).
+
 ## v0.7.1 — 2026-04-17
 
 P2 design-review polish. 5 commits on top of v0.7.0.
