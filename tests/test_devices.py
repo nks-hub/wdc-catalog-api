@@ -165,6 +165,64 @@ def test_push_config_between_devices(client: TestClient, auth_token: str) -> Non
     assert r2.json()["payload"]["settings"]["sync.deviceName"] == "Test PC"
 
 
+class TestSyncOwnershipGuards:
+    """Regression tests for F-11: anonymous/cross-account overwrite of owned device."""
+
+    def test_anonymous_cannot_overwrite_owned_device(
+        self, client: TestClient, auth_token: str
+    ) -> None:
+        """Anonymous POST /sync/config must not overwrite an owned device."""
+        device_id = "ownership-guard-test-dev"
+        # Owner establishes the device
+        r = client.post(
+            "/api/v1/sync/config",
+            json={"device_id": device_id, "payload": {"k": "owner"}},
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+        assert r.status_code == 200
+        # Anonymous attempts overwrite
+        r2 = client.post(
+            "/api/v1/sync/config",
+            json={"device_id": device_id, "payload": {"k": "attacker"}},
+        )
+        assert r2.status_code == 403
+        # Original payload must survive
+        r3 = client.get(
+            f"/api/v1/devices/{device_id}/config",
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+        assert r3.status_code == 200
+        assert r3.json()["payload"] == {"k": "owner"}
+
+    def test_other_account_cannot_overwrite_owned_device(
+        self, client: TestClient, auth_token: str
+    ) -> None:
+        """A different account's token must also be rejected."""
+        import uuid
+        other_email = f"other-{uuid.uuid4().hex[:8]}@nks-wdc.dev"
+        reg = client.post(
+            "/api/v1/auth/register",
+            json={"email": other_email, "password": "otherpass12345"},
+        )
+        assert reg.status_code == 200
+        other_token = reg.json()["token"]
+
+        device_id = "ownership-guard-cross"
+        r = client.post(
+            "/api/v1/sync/config",
+            json={"device_id": device_id, "payload": {"k": "owner"}},
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+        assert r.status_code == 200
+
+        r2 = client.post(
+            "/api/v1/sync/config",
+            json={"device_id": device_id, "payload": {"k": "attacker"}},
+            headers={"Authorization": f"Bearer {other_token}"},
+        )
+        assert r2.status_code == 403
+
+
 def test_delete_device(client: TestClient, auth_token: str) -> None:
     r = client.delete(
         "/api/v1/devices/test-device-002",
@@ -175,4 +233,5 @@ def test_delete_device(client: TestClient, auth_token: str) -> None:
 
     # Should be gone from fleet
     r2 = client.get("/api/v1/devices", headers={"Authorization": f"Bearer {auth_token}"})
-    assert len(r2.json()) == 1
+    device_ids = {d["device_id"] for d in r2.json()}
+    assert "test-device-002" not in device_ids

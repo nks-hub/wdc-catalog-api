@@ -199,6 +199,13 @@ def api_upsert_config(
     device_id = _normalize_device_id(body.device_id)
 
     row = db.get(DeviceConfig, device_id)
+    # Block anonymous or cross-account overwrite of an owned device (F-11).
+    if row is not None and row.user_id is not None:
+        if account is None or row.user_id != account.id:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Device is linked to another account",
+            )
     if row is None:
         row = DeviceConfig(device_id=device_id, payload=body.payload)
         db.add(row)
