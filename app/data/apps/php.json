@@ -164,13 +164,6 @@
           "arch": "x64",
           "archive_type": "tar.xz",
           "source": "nks-hub-binaries"
-        },
-        {
-          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.0.30/php-8.0.30-macos-arm64.tar.xz",
-          "os": "macos",
-          "arch": "arm64",
-          "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
         }
       ]
     },
