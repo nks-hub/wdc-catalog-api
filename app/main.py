@@ -394,14 +394,27 @@ def api_upsert_config(
 
     device_id = _normalize_device_id(body.device_id)
 
+    # Writes require authentication. Anonymous upsert let an attacker
+    # squat any device_id (pre-register a row with ``user_id IS NULL``)
+    # so a later legitimate push from that device would be treated as a
+    # "first auth push" and auto-linked to whoever's token happened to
+    # hit the endpoint. Requiring auth for every write closes the vector
+    # and matches the pattern every other mutation on this service uses.
+    if account is None:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            "Authentication required to push device config",
+        )
+
     row = db.get(DeviceConfig, device_id)
-    # Block anonymous or cross-account overwrite of an owned device (F-11).
-    if row is not None and row.user_id is not None:
-        if account is None or row.user_id != account.id:
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                "Device is linked to another account",
-            )
+    # Cross-account overwrite of a linked device remains a separate 403
+    # (owned by another user) rather than 401 — the caller IS
+    # authenticated, just not as the owner.
+    if row is not None and row.user_id is not None and row.user_id != account.id:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Device is linked to another account",
+        )
     if row is None:
         row = DeviceConfig(device_id=device_id, payload=body.payload)
         db.add(row)

@@ -198,7 +198,9 @@ class TestSyncOwnershipGuards:
     def test_anonymous_cannot_overwrite_owned_device(
         self, client: TestClient, auth_token: str
     ) -> None:
-        """Anonymous POST /sync/config must not overwrite an owned device."""
+        """Anonymous POST /sync/config must be rejected outright — used to
+        require auth only to protect owned rows, now required for every
+        write to close the device-id squat vector (M9)."""
         device_id = "ownership-guard-test-dev"
         # Owner establishes the device
         r = client.post(
@@ -207,12 +209,12 @@ class TestSyncOwnershipGuards:
             headers={"Authorization": f"Bearer {auth_token}"},
         )
         assert r.status_code == 200
-        # Anonymous attempts overwrite
+        # Anonymous attempts overwrite → 401 (no token), not 403.
         r2 = client.post(
             "/api/v1/sync/config",
             json={"device_id": device_id, "payload": {"k": "attacker"}},
         )
-        assert r2.status_code == 403
+        assert r2.status_code == 401
         # Original payload must survive
         r3 = client.get(
             f"/api/v1/devices/{device_id}/config",
