@@ -97,7 +97,13 @@ class DiffResponse(BaseModel):
 
 
 def _owned_device(device_id: str, account: Account, db: Session) -> DeviceConfig:
-    dev = db.get(DeviceConfig, device_id.lower())
+    # Lazy import avoids the main.py ↔ backups.py cycle. Re-using the
+    # canonical normalizer means a malformed path param returns 400 here
+    # with the exact same shape as the rest of the device endpoints.
+    from .main import _normalize_device_id
+
+    normalized = _normalize_device_id(device_id)
+    dev = db.get(DeviceConfig, normalized)
     if dev is None or dev.user_id != account.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
     return dev

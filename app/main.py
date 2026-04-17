@@ -101,6 +101,7 @@ _SEED_DIR = _APP_DIR / "data" / "apps"
 async def lifespan(_app: FastAPI) -> Iterator[None]:
     create_all()
     ensure_admin_user()
+    _warn_if_dev_in_prod()
     with session_factory() as db:
         count = seed_from_json(db, _SEED_DIR)
         if count:
@@ -112,6 +113,37 @@ async def lifespan(_app: FastAPI) -> Iterator[None]:
         yield
     finally:
         _retention.stop_scheduler()
+
+
+def _warn_if_dev_in_prod() -> None:
+    """Emit a *very loud* banner when DEV=1 flags look suspicious.
+
+    Dev-mode unlocks:
+    - admin/admin bootstrap password
+    - ephemeral master + JWT + session keys
+    - short NKS_WDC_MASTER_KEY accepted with sha256 padding
+    Shipping any of these to a public-facing deployment is a foot-gun.
+    We refuse to start when DEV=1 is combined with an explicit
+    ``NKS_WDC_ENV=production`` signal, and otherwise just log prominently.
+    """
+    if os.environ.get("NKS_WDC_CATALOG_DEV") != "1":
+        return
+    env_label = (os.environ.get("NKS_WDC_ENV") or "").strip().lower()
+    if env_label == "production":
+        raise RuntimeError(
+            "Refusing to start: NKS_WDC_CATALOG_DEV=1 together with "
+            "NKS_WDC_ENV=production. Unset the DEV flag in production "
+            "deployments — it disables several security guardrails."
+        )
+    banner = "=" * 72
+    log.warning(banner)
+    log.warning("NKS_WDC_CATALOG_DEV=1 — DEVELOPMENT MODE IS ACTIVE")
+    log.warning(
+        "  • admin/admin fallback enabled  • ephemeral signing keys  "
+        "• short master keys accepted"
+    )
+    log.warning("  DO NOT use this flag in public-facing deployments.")
+    log.warning(banner)
 
 
 app = FastAPI(
