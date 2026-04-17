@@ -109,6 +109,60 @@ def test_short_key_rejected(client: TestClient):
     assert r.status_code == 400
 
 
+def test_restore_replays_to_same_result(client: TestClient):
+    token, dev = _setup(client)
+    auth = {"Authorization": f"Bearer {token}"}
+    # Need two snapshots so restore has a target
+    client.post(
+        f"/api/v1/devices/{dev}/backups",
+        json={"kind": "manual", "label": "restore-src", "payload": {"k": 1}},
+        headers=auth,
+    )
+    lst = client.get(f"/api/v1/devices/{dev}/backups", headers=auth).json()
+    target = lst["items"][0]["id"]
+    client.post(
+        "/api/v1/sync/config",
+        json={"device_id": dev, "payload": {"k": 2}},
+        headers=auth,
+    )
+    key = uuid.uuid4().hex
+    r1 = client.post(
+        f"/api/v1/devices/{dev}/backups/restore",
+        json={"snapshot_id": target},
+        headers={**auth, "Idempotency-Key": key},
+    )
+    r2 = client.post(
+        f"/api/v1/devices/{dev}/backups/restore",
+        json={"snapshot_id": target},
+        headers={**auth, "Idempotency-Key": key},
+    )
+    assert r1.status_code == 200 and r2.status_code == 200
+    assert r2.headers.get("idempotency-replay") == "true"
+
+
+def test_import_replays_to_same_result(client: TestClient):
+    token, dev = _setup(client)
+    auth = {"Authorization": f"Bearer {token}"}
+    envelope = {
+        "schema": "nks-wdc-snapshot-v1",
+        "payload": {"imported": True},
+    }
+    key = uuid.uuid4().hex
+    r1 = client.post(
+        f"/api/v1/devices/{dev}/backups/import",
+        json=envelope,
+        headers={**auth, "Idempotency-Key": key},
+    )
+    r2 = client.post(
+        f"/api/v1/devices/{dev}/backups/import",
+        json=envelope,
+        headers={**auth, "Idempotency-Key": key},
+    )
+    assert r1.status_code == 201 and r2.status_code == 201
+    assert r2.headers.get("idempotency-replay") == "true"
+    assert r1.json()["id"] == r2.json()["id"]
+
+
 def test_different_accounts_have_separate_keyspace(client: TestClient):
     shared_key = uuid.uuid4().hex
     t1, d1 = _setup(client)

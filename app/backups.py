@@ -281,18 +281,21 @@ def delete_backup(
     db.delete(snap)
 
 
-@router.post("/import", response_model=SnapshotMeta, status_code=status.HTTP_201_CREATED)
+@router.post("/import", status_code=status.HTTP_201_CREATED)
 def import_backup(
     device_id: str,
     body: ImportSnapshotRequest,
     request: Request,
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
-) -> SnapshotMeta:
+) -> Response:
     """Import a snapshot envelope (e.g. produced by ``/download`` on
-    another instance) onto the target device. The imported snapshot is
-    recorded with ``kind='import'`` and a ``label`` that defaults to
-    ``"imported-<original_id>"`` so it's visible in retention filters."""
+    another instance) onto the target device. Accepts ``Idempotency-Key``
+    so repeat uploads from a flaky client land on the same row."""
+    cached = idempotency.replay_if_present(db, request, account)
+    if cached is not None:
+        return cached
+
     _owned_device(device_id, account, db)
     label = body.label or (
         f"imported-from-{body.original_device_id}-#{body.original_id}"
@@ -321,19 +324,29 @@ def import_backup(
             "label": label,
         },
     )
-    return _row(snap)
+    return idempotency.wrap_json(
+        db, request, account,
+        _row(snap).model_dump(),
+        status_code=status.HTTP_201_CREATED,
+    )
 
 
-@router.post("/restore", response_model=SnapshotMeta)
+@router.post("/restore")
 def restore_backup(
     device_id: str,
     body: RestoreRequest,
     request: Request,
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
-) -> SnapshotMeta:
-    """Move HEAD to a prior snapshot. We emit a ``pre_restore`` audit
-    snapshot of the current HEAD first so restore is reversible."""
+) -> Response:
+    """Move HEAD to a prior snapshot. Emits a ``pre_restore`` snapshot
+    of the current HEAD first so restore is reversible. Honours
+    ``Idempotency-Key`` so a retried restore doesn't double-stack
+    ``pre_restore`` rows."""
+    cached = idempotency.replay_if_present(db, request, account)
+    if cached is not None:
+        return cached
+
     _owned_device(device_id, account, db)
     target = db.get(DeviceSnapshot, body.snapshot_id)
     if target is None or target.device_id != device_id.lower() or target.account_id != account.id:
@@ -354,7 +367,11 @@ def restore_backup(
         resource_type="snapshot", resource_id=target.id,
         detail={"device_id": device_id, "from_head": current.id if current else None},
     )
-    return _row(target)
+    return idempotency.wrap_json(
+        db, request, account,
+        _row(target).model_dump(),
+        status_code=status.HTTP_200_OK,
+    )
 
 
 __all__ = ["router"]

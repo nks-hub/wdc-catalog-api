@@ -23,7 +23,9 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import audit
+from fastapi.responses import Response as _FastAPIResponse
+
+from . import audit, idempotency
 from .auth import _secret_key, hash_password
 from .db import Account, get_session
 from .devices import create_token
@@ -70,14 +72,22 @@ class AcceptInviteResponse(BaseModel):
 
 # ── Admin endpoints ─────────────────────────────────────────────────────
 
-@admin_router.post("", response_model=CreateInviteResponse)
+@admin_router.post("")
 def create_invite(
     body: CreateInviteRequest,
     request: Request,
     caller: Account = Depends(require_role(Role.admin)),
     db: Session = Depends(get_session),
-) -> CreateInviteResponse:
-    """Mint a signed invite token. Only ``owner`` may invite another owner."""
+) -> _FastAPIResponse:
+    """Mint a signed invite token. Only ``owner`` may invite another owner.
+    Honours ``Idempotency-Key`` so a retried invite doesn't mint two
+    distinct tokens for the same email (only the first succeeds; the
+    second would 409 on email-already-exists anyway, but replay is
+    cleaner)."""
+    cached = idempotency.replay_if_present(db, request, caller)
+    if cached is not None:
+        return cached
+
     email = body.email.strip().lower()
     if not email or "@" not in email or len(email) < 5:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid email")
@@ -104,11 +114,15 @@ def create_invite(
         detail={"role": body.role.value, "expires_at": expires.isoformat()},
     )
 
-    return CreateInviteResponse(
-        token=token,
-        email=email,
-        role=body.role.value,
-        expires_at=expires.isoformat(),
+    return idempotency.wrap_json(
+        db, request, caller,
+        CreateInviteResponse(
+            token=token,
+            email=email,
+            role=body.role.value,
+            expires_at=expires.isoformat(),
+        ).model_dump(),
+        status_code=status.HTTP_200_OK,
     )
 
 
