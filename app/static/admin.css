@@ -8,23 +8,25 @@
    Design tokens — light mode
    -------------------------------------------------------------------------- */
 :root {
-  /* Surface */
-  --bg:           #f4f5f7;
+  /* Surface — brighter/whiter per user feedback. The old #f4f5f7 bg
+     looked dim next to white cards; now the body matches a cooler
+     off-white and cards sit a hair deeper so card boundaries still
+     read without a heavy border. */
+  --bg:           #fbfcfd;
   --surface:      #ffffff;
-  --surface-2:    #f0f1f4;
+  --surface-2:    #f3f4f7;
   --surface-3:    #e6e8ed;
 
-  /* Borders */
-  --border:       #dde0e8;
-  --border-strong:#b8bdd0;
+  /* Borders — bump visible edge so cards pop against the lighter bg. */
+  --border:       #d1d5db;
+  --border-strong:#9ca3af;
 
-  /* Text — bumped contrast of --text-3 from #6b7280 → #4b5563 and
-     --text-4 from #9ca3af → #6b7280 so "muted" labels still read
-     WCAG-AA against the light surface. */
-  --text:         #0f172a;
-  --text-2:       #1f2937;
-  --text-3:       #4b5563;
-  --text-4:       #6b7280;
+  /* Text — pushed darker so "muted" copy reads at ≥4.5:1 against the
+     bright light surface (WCAG AA body text). */
+  --text:         #0b1220;
+  --text-2:       #1e293b;
+  --text-3:       #334155;
+  --text-4:       #475569;
 
   /* Accent — indigo */
   --accent:       #4f46e5;
@@ -135,8 +137,13 @@ html.theme-light {
   color-scheme: light;
 }
 
+/* Dark mode is OPT-IN only. The OS preference is respected only when
+   the user additionally flips the theme toggle (explicit cookie). The
+   primary design target is the light palette; "too dark / too low
+   contrast" was user feedback on the default looking gloomy on Macs
+   whose OS setting is dark. */
 @media (prefers-color-scheme: dark) {
-  html:not(.theme-light) {
+  html.theme-auto-dark {
     --bg:           #0d0f14;
     --surface:      #151820;
     --surface-2:    #1c2030;
