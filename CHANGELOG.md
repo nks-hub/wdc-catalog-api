@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.8.1 — 2026-04-18
+
+Observability + audit coverage follow-up to v0.8.0.
+
+- **Saved audit-query presets** — per-account named filter presets at
+  `/admin/audit`. Save current filter with one click, re-apply with
+  another, delete inline. Active preset renders as a filled-accent
+  chip. Unique `(account_id, name)` so re-saving under the same label
+  upserts. 8 new e2e tests.
+- **PAT audit events** — `pat.created` + `pat.revoked` now fire from
+  both the admin UI and the JSON API (`POST/DELETE /api/v1/auth/tokens`).
+  Previously a PAT mint on a compromised admin account left zero
+  audit trail — real security-observability gap. Detail payload
+  carries the token name and prefix. New "PATs" quick-filter chip.
+- **Ops artifacts** — `ops/prometheus/alerts.yml` (7 rules: 5xx
+  spike, p99 latency, admin-idle detection, auth-failure + RBAC-denial
+  spikes, blob-orphan growth, retention-runner stall),
+  `ops/grafana/dashboard.json` (4 KPI stats + 4 timeseries + top-10
+  routes table), `ops/README.md` with setup instructions and metric
+  catalogue.
+
+3 new test files · 11 new tests · total 308 tests passing.
+
 ## v0.8.0 — 2026-04-18
 
 Two-factor authentication for the admin UI.
