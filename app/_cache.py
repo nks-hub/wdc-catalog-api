@@ -64,6 +64,12 @@ class TTLCache:
 catalog_response_cache = TTLCache(ttl_seconds=30.0)
 stats_overview_cache = TTLCache(ttl_seconds=30.0)
 
+# Short positive+negative cache for JWT jti revocation lookups. Every
+# authenticated request hits the DB otherwise; at typical sync cadence
+# that dominates auth-path latency. TTL kept low so ``POST /auth/logout``
+# is visible to other workers within a few seconds.
+revoked_token_cache = TTLCache(ttl_seconds=30.0)
+
 
 def invalidate_catalog() -> None:
     catalog_response_cache.invalidate()
@@ -73,10 +79,16 @@ def invalidate_stats() -> None:
     stats_overview_cache.invalidate()
 
 
+def invalidate_revoked(jti: Optional[str] = None) -> None:
+    revoked_token_cache.invalidate(jti)
+
+
 __all__ = [
     "TTLCache",
     "catalog_response_cache",
     "stats_overview_cache",
+    "revoked_token_cache",
     "invalidate_catalog",
     "invalidate_stats",
+    "invalidate_revoked",
 ]

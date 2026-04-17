@@ -146,6 +146,22 @@ def decode_token(token: str) -> dict:
     return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
 
 
+def _is_revoked(db: Session, jti: str) -> bool:
+    """Revocation check with short TTL cache to keep the auth hot-path off
+    the DB. Negative results (not revoked) are cached too — worst case a
+    freshly-logged-out token stays valid for up to ``TTL`` seconds on a
+    given worker, which is acceptable vs the per-request DB round-trip.
+    """
+    from ._cache import revoked_token_cache
+
+    hit = revoked_token_cache.get(jti)
+    if hit is not None:
+        return bool(hit)
+    revoked = db.get(RevokedToken, jti) is not None
+    revoked_token_cache.set(jti, revoked)
+    return revoked
+
+
 # ── Dependencies ────────────────────────────────────────────────────────
 
 
@@ -164,7 +180,7 @@ def get_current_account(
     except (JWTError, KeyError, ValueError) as exc:
         log.info("JWT decode failed: %s", exc)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
-    if jti and db.get(RevokedToken, jti) is not None:
+    if jti and _is_revoked(db, jti):
         log.info("JWT %s is revoked — rejecting", jti)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token has been revoked")
     account = db.get(Account, account_id)
@@ -277,6 +293,9 @@ def logout(
                 expires_at=expires_at,
             )
         )
+    from ._cache import invalidate_revoked
+
+    invalidate_revoked(jti)
     return {"ok": True, "revoked": True, "jti": jti}
 
 

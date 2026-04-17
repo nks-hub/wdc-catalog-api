@@ -162,7 +162,19 @@ def _route_template(request: Request) -> str:
 # ── /metrics endpoint ──────────────────────────────────────────────────
 
 
-def metrics_endpoint() -> Response:
+def metrics_endpoint(request: Request) -> Response:
+    """Prometheus scrape endpoint.
+
+    When ``NKS_WDC_METRICS_TOKEN`` is set, callers must present it as a
+    bearer token; scraping without the header returns 401. Unset (dev /
+    trusted-network) means the endpoint is open, preserving backward
+    compatibility.
+    """
+    expected = os.environ.get("NKS_WDC_METRICS_TOKEN")
+    if expected:
+        auth = request.headers.get("authorization", "")
+        if not auth.startswith("Bearer ") or auth[7:] != expected:
+            return Response(status_code=401)
     return Response(
         content=generate_latest(),
         media_type=CONTENT_TYPE_LATEST,
