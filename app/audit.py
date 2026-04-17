@@ -9,12 +9,15 @@ very end of the handler right before ``db.commit()``.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
 
 from fastapi import Request
 from sqlalchemy.orm import Session
 
 from .db import Account, AuditEvent
+
+log = logging.getLogger(__name__)
 
 
 def emit(
@@ -50,6 +53,25 @@ def emit(
     )
     db.add(event)
     db.flush()
+
+    try:
+        from . import event_bus
+
+        payload = {
+            "id": event.id,
+            "created_at": event.created_at.isoformat() if event.created_at else None,
+            "actor_id": event.actor_id,
+            "actor_email": event.actor_email,
+            "action": event.action,
+            "resource_type": event.resource_type,
+            "resource_id": event.resource_id,
+            "ip": event.ip,
+            "detail": event.detail,
+        }
+        event_bus.publish(payload)
+    except Exception as exc:
+        log.warning("event_bus publish failed: %s", exc)
+
     return event
 
 
