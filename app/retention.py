@@ -75,71 +75,64 @@ def _resolve_policy(db: Session, account_id: int) -> ResolvedPolicy:
     return DEFAULT_POLICY
 
 
-def run_retention(db: Optional[Session] = None) -> dict:
-    """Iterate every account and apply their resolved policy.
-
-    Returns a summary dict: ``{"accounts": N, "deleted": total_rows}``.
-    Safe to call concurrently (relies on DB-level row deletion; no
-    shared in-memory state).
-    """
-    close_after = db is None
-    session = db or session_factory()
+def _do_retention(session: Session) -> dict:
+    """Snapshot purge + idempotency + revoked-token sweeps, all against
+    a single session. Caller decides whether to commit (manual admin
+    run uses the request session; the scheduler opens its own)."""
     deleted_total = 0
     account_ids = [a.id for a in session.scalars(select(Account)).all()]
-    try:
-        for acc_id in account_ids:
-            policy = _resolve_policy(session, acc_id)
-            deleted_total += purge_auto_older_than(
-                session,
-                account_id=acc_id,
-                keep_last_n=policy.keep_last_n_auto,
-                auto_expire_days=policy.auto_expire_days,
-                keep_labeled=policy.keep_labeled_forever,
-            )
-        session.commit()
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        if close_after:
-            session.close()
+    for acc_id in account_ids:
+        policy = _resolve_policy(session, acc_id)
+        deleted_total += purge_auto_older_than(
+            session,
+            account_id=acc_id,
+            keep_last_n=policy.keep_last_n_auto,
+            auto_expire_days=policy.auto_expire_days,
+            keep_labeled=policy.keep_labeled_forever,
+        )
 
-    # Sweep expired idempotency records + stale revoked tokens — bounded
-    # housekeeping that keeps the DB small without needing a second cron.
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    idempotency_purged = 0
-    revoked_purged = 0
-    session_b = db or session_factory()
-    try:
-        res = session_b.execute(
-            delete(IdempotencyRecord).where(IdempotencyRecord.expires_at <= now)
+    idem_res = session.execute(
+        delete(IdempotencyRecord).where(IdempotencyRecord.expires_at <= now)
+    )
+    rev_res = session.execute(
+        delete(RevokedToken).where(
+            RevokedToken.expires_at.is_not(None),
+            RevokedToken.expires_at <= now,
         )
-        idempotency_purged = res.rowcount or 0
-        res = session_b.execute(
-            delete(RevokedToken).where(
-                RevokedToken.expires_at.is_not(None),
-                RevokedToken.expires_at <= now,
-            )
-        )
-        revoked_purged = res.rowcount or 0
-        session_b.commit()
-    except Exception:
-        session_b.rollback()
-        raise
-    finally:
-        if close_after:
-            session_b.close()
-
-    summary = {
+    )
+    return {
         "accounts": len(account_ids),
         "deleted": deleted_total,
-        "idempotency_purged": idempotency_purged,
-        "revoked_tokens_purged": revoked_purged,
+        "idempotency_purged": idem_res.rowcount or 0,
+        "revoked_tokens_purged": rev_res.rowcount or 0,
     }
-    log.info("retention pass: %s", summary)
+
+
+def run_retention(db: Optional[Session] = None) -> dict:
+    """Iterate every account and apply their resolved retention policy.
+
+    When *db* is supplied (manual admin run) the caller owns the commit
+    lifecycle — we only flush. When *db* is None (scheduler) a fresh
+    session is opened, committed, and closed exactly once.
+    """
+    if db is not None:
+        summary = _do_retention(db)
+        db.flush()
+    else:
+        session = session_factory()
+        try:
+            summary = _do_retention(session)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
     try:
         from .observability import RETENTION_DELETED
-        RETENTION_DELETED.inc(deleted_total)
+        RETENTION_DELETED.inc(summary["deleted"])
     except Exception:
         pass
     return summary

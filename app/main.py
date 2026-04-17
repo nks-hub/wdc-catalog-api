@@ -395,8 +395,14 @@ def api_upsert_config(
                 kind="auto",
                 created_by_ip=None,
             )
-        except _snap.PayloadTooLarge:
-            pass  # legacy clients pre-date payload ceiling; skip history.
+        except _snap.PayloadTooLarge as exc:
+            # Legacy clients pre-date the snapshot size ceiling. Skip the
+            # versioned write but leave a footprint so operators can
+            # detect a growing cohort of oversized syncs.
+            log.warning(
+                "sync bridge skipped snapshot for device=%s: %s",
+                device_id, exc,
+            )
 
     return ConfigSyncEntry(
         device_id=row.device_id,

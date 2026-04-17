@@ -168,7 +168,7 @@ def _active_key(
     row = AccountEncryptionKey(
         kid=kid,
         account_id=account_id,
-        wrapped_dek=wrapped_core + b"||SALT||" + salt,
+        wrapped_dek=_pack_wrapped_dek(wrapped_core, salt),
         wrap_algo="aes-256-gcm",
         kek_source=kek_source,
     )
@@ -177,8 +177,35 @@ def _active_key(
     return row
 
 
+# ── Wrapped DEK binary format ──────────────────────────────────────────
+# v1: ``b"v1" + uint32_be(len_wrapped) + wrapped + salt`` — explicit
+# length prefix eliminates the old ``||SALT||`` separator which could
+# collide with random GCM ciphertext bytes (~1 in 7.2e16 per row).
+# Legacy rows without the ``v1`` magic keep working via the partition
+# fallback branch in ``_unpack_wrapped_dek``.
+
+_WRAPPED_DEK_MAGIC = b"v1"
+_LEGACY_SEP = b"||SALT||"
+
+
+def _pack_wrapped_dek(wrapped: bytes, salt: bytes) -> bytes:
+    return _WRAPPED_DEK_MAGIC + len(wrapped).to_bytes(4, "big") + wrapped + salt
+
+
+def _unpack_wrapped_dek(blob: bytes) -> tuple[bytes, bytes]:
+    if blob.startswith(_WRAPPED_DEK_MAGIC):
+        body = blob[len(_WRAPPED_DEK_MAGIC):]
+        n = int.from_bytes(body[:4], "big")
+        return body[4:4 + n], body[4 + n:]
+    # Legacy rows written before the v1 magic — fall back to the old
+    # separator-based partition. New writes always go through the
+    # length-prefixed format, so this branch is read-only.
+    wrapped, _, salt = blob.partition(_LEGACY_SEP)
+    return wrapped, salt
+
+
 def _unwrap(row: AccountEncryptionKey, *, passphrase: Optional[str] = None) -> bytes:
-    wrapped, _, salt = row.wrapped_dek.partition(b"||SALT||")
+    wrapped, salt = _unpack_wrapped_dek(row.wrapped_dek)
     if row.kek_source == "password-derived":
         if not passphrase:
             raise PermissionError(
@@ -374,18 +401,19 @@ def purge_auto_older_than(
     if auto_expire_days is not None:
         cutoff = datetime.now(timezone.utc) - timedelta(days=auto_expire_days)
 
+    # Delete when EITHER quota exceeded OR past the TTL — classic OR
+    # semantics. Previously used AND, which silently kept rows that
+    # matched only one axis.
+    cutoff_naive = cutoff.replace(tzinfo=None) if cutoff is not None else None
     deleted = 0
     for _device_id, rows in by_device.items():
         for idx, snap in enumerate(rows):
             if snap.id in head_ids:
                 continue
-            if idx < keep_last_n:
+            too_many = idx >= keep_last_n
+            too_old = cutoff_naive is not None and snap.created_at <= cutoff_naive
+            if not (too_many or too_old):
                 continue
-            if cutoff is not None and snap.created_at > cutoff.replace(tzinfo=None):
-                continue
-            # External blobs are orphaned if we only DELETE the row — free
-            # them first. Failures are swallowed so a transient S3 hiccup
-            # doesn't block local cleanup.
             if snap.blob_uri:
                 try:
                     from . import blob_store
