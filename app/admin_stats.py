@@ -69,43 +69,73 @@ def overview(
     cached = stats_overview_cache.get("overview")
     if cached is not None:
         return cached
+
+    now = datetime.now(timezone.utc)
+    five_min_ago = now - timedelta(minutes=5)
+    day_ago = now - timedelta(hours=24)
+
+    # Catalog counters — one round-trip with scalar subqueries so
+    # Postgres can parallelize the three table counts.
+    catalog_row = db.execute(
+        select(
+            select(func.count(App.id)).scalar_subquery().label("apps"),
+            select(func.count(Release.id)).scalar_subquery().label("releases"),
+            select(func.count(Download.id)).scalar_subquery().label("downloads"),
+        )
+    ).one()
     catalog = CatalogStats(
-        apps=db.scalar(select(func.count(App.id))) or 0,
-        releases=db.scalar(select(func.count(Release.id))) or 0,
-        downloads=db.scalar(select(func.count(Download.id))) or 0,
+        apps=catalog_row.apps or 0,
+        releases=catalog_row.releases or 0,
+        downloads=catalog_row.downloads or 0,
     )
+
+    # Account counters — total + suspended in one query.
+    # ``count(col)`` counts non-NULL values, so ``count(suspended_at)``
+    # gives us the suspended-count for free.
+    acct_row = db.execute(
+        select(
+            func.count(Account.id).label("total"),
+            func.count(Account.suspended_at).label("suspended"),
+        )
+    ).one()
 
     by_role_rows = db.execute(
         select(Account.role, func.count(Account.id)).group_by(Account.role)
     ).all()
     by_role = {role: count for role, count in by_role_rows}
 
-    five_min_ago = datetime.now(timezone.utc) - timedelta(minutes=5)
-    users = UserStats(
-        accounts_total=db.scalar(select(func.count(Account.id))) or 0,
-        accounts_suspended=db.scalar(
-            select(func.count(Account.id)).where(Account.suspended_at.is_not(None))
+    # Device counters. ``nullif(predicate, False)`` returns NULL when the
+    # predicate is False, so the surrounding COUNT skips it — giving a
+    # portable conditional count without Postgres-only FILTER.
+    dev_row = db.execute(
+        select(
+            func.count(DeviceConfig.device_id).label("total"),
+            func.count(DeviceConfig.user_id).label("linked"),
+            func.count(
+                func.nullif(DeviceConfig.last_seen_at > five_min_ago, False)
+            ).label("online"),
         )
-        or 0,
+    ).one()
+
+    users = UserStats(
+        accounts_total=acct_row.total or 0,
+        accounts_suspended=acct_row.suspended or 0,
         accounts_by_role=by_role,
         admin_ui_users=db.scalar(select(func.count(User.id))) or 0,
-        devices=db.scalar(select(func.count(DeviceConfig.device_id))) or 0,
-        devices_linked=db.scalar(
-            select(func.count(DeviceConfig.device_id)).where(
-                DeviceConfig.user_id.is_not(None)
-            )
-        )
-        or 0,
-        devices_online_recent=db.scalar(
-            select(func.count(DeviceConfig.device_id)).where(
-                DeviceConfig.last_seen_at.is_not(None),
-                DeviceConfig.last_seen_at > five_min_ago,
-            )
-        )
-        or 0,
+        devices=dev_row.total or 0,
+        devices_linked=dev_row.linked or 0,
+        devices_online_recent=dev_row.online or 0,
     )
 
-    day_ago = datetime.now(timezone.utc) - timedelta(hours=24)
+    # Audit totals + last-24h in one query.
+    audit_row = db.execute(
+        select(
+            func.count(AuditEvent.id).label("total"),
+            func.count(func.nullif(AuditEvent.created_at > day_ago, False)).label(
+                "last_24h"
+            ),
+        )
+    ).one()
     top_actions_rows = db.execute(
         select(AuditEvent.action, func.count(AuditEvent.id))
         .group_by(AuditEvent.action)
@@ -113,11 +143,8 @@ def overview(
         .limit(10)
     ).all()
     audit_stats = AuditStats(
-        events_total=db.scalar(select(func.count(AuditEvent.id))) or 0,
-        events_last_24h=db.scalar(
-            select(func.count(AuditEvent.id)).where(AuditEvent.created_at > day_ago)
-        )
-        or 0,
+        events_total=audit_row.total or 0,
+        events_last_24h=audit_row.last_24h or 0,
         top_actions=[{"action": a, "count": c} for a, c in top_actions_rows],
     )
 
