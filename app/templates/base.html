@@ -9,20 +9,30 @@
 <body>
   <header class="topbar">
     <a href="/admin" class="brand">NKS WDC Catalog</a>
-    <nav class="nav">
-      {% set path = request.url.path %}
-      <a href="/admin" class="{% if path == '/admin' %}active{% endif %}">Dashboard</a>
-      <a href="/admin/catalog" class="{% if path.startswith('/admin/catalog') or path.startswith('/admin/apps') or path == '/admin/new' %}active{% endif %}">Apps</a>
-      <a href="/admin/users" class="{% if path.startswith('/admin/users') %}active{% endif %}">Users</a>
-      <a href="/admin/invites" class="{% if path.startswith('/admin/invites') %}active{% endif %}">Invites</a>
-      <a href="/admin/devices" class="{% if path.startswith('/admin/devices') %}active{% endif %}">Devices</a>
-      <a href="/admin/retention" class="{% if path.startswith('/admin/retention') %}active{% endif %}">Retention</a>
-      <a href="/admin/audit" class="{% if path.startswith('/admin/audit') %}active{% endif %}">Audit</a>
-      <a href="/admin/revoked-tokens" class="{% if path.startswith('/admin/revoked-tokens') %}active{% endif %}">Revoked</a>
-      <a href="/admin/settings" class="{% if path.startswith('/admin/settings') %}active{% endif %}">Settings</a>
-      <a href="/api/v1/catalog" target="_blank" rel="noopener">JSON</a>
-      <a href="/docs" target="_blank" rel="noopener">API docs</a>
-    </nav>
+    {% set path = request.url.path %}
+    {# <details> wraps the nav so phones get a tap-to-open drawer without
+       any JS (CSP stays strict). On >=720px the toggle is hidden and the
+       nav flows inline as usual. #}
+    <details class="nav-drawer">
+      <summary class="nav-toggle" aria-label="Toggle navigation">
+        <span class="nav-toggle-bar"></span>
+        <span class="nav-toggle-bar"></span>
+        <span class="nav-toggle-bar"></span>
+      </summary>
+      <nav class="nav">
+        <a href="/admin" class="{% if path == '/admin' %}active{% endif %}">Dashboard</a>
+        <a href="/admin/catalog" class="{% if path.startswith('/admin/catalog') or path.startswith('/admin/apps') or path == '/admin/new' %}active{% endif %}">Apps</a>
+        <a href="/admin/users" class="{% if path.startswith('/admin/users') %}active{% endif %}">Users</a>
+        <a href="/admin/invites" class="{% if path.startswith('/admin/invites') %}active{% endif %}">Invites</a>
+        <a href="/admin/devices" class="{% if path.startswith('/admin/devices') %}active{% endif %}">Devices</a>
+        <a href="/admin/retention" class="{% if path.startswith('/admin/retention') %}active{% endif %}">Retention</a>
+        <a href="/admin/audit" class="{% if path.startswith('/admin/audit') %}active{% endif %}">Audit</a>
+        <a href="/admin/revoked-tokens" class="{% if path.startswith('/admin/revoked-tokens') %}active{% endif %}">Revoked</a>
+        <a href="/admin/settings" class="{% if path.startswith('/admin/settings') %}active{% endif %}">Settings</a>
+        <a href="/api/v1/catalog" target="_blank" rel="noopener">JSON</a>
+        <a href="/docs" target="_blank" rel="noopener">API docs</a>
+      </nav>
+    </details>
     {% if username %}
       <div class="user">
         <form method="post" action="/admin/theme" class="inline" title="Toggle light/dark theme">
