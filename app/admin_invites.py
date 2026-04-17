@@ -26,7 +26,7 @@ from fastapi.responses import Response as _FastAPIResponse
 
 from . import audit, idempotency
 from .auth import _secret_key, hash_password
-from .db import Account, get_session
+from .db import Account, ConsumedInvite, get_session
 from .devices import create_token
 from .permissions import require_role
 from .ratelimit import limiter
@@ -106,6 +106,10 @@ def create_invite(
         "email": email,
         "role": body.role.value,
         "nonce": uuid.uuid4().hex,
+        # Embed exp explicitly so the accept handler enforces the
+        # admin-chosen TTL. itsdangerous' max_age alone would clamp
+        # every invite to the module default.
+        "exp": int(expires.timestamp()),
     }
     token = _serializer().dumps(payload)
 
@@ -144,13 +148,29 @@ def accept_invite(
     db: Session = Depends(get_session),
 ) -> AcceptInviteResponse:
     """Create an account from a valid invite token."""
-    max_age = DEFAULT_INVITE_TTL_HOURS * 3600
+    # Outer cap guards against signer fallbacks for legacy tokens with no
+    # embedded ``exp``; the inner ``exp`` enforces the admin-chosen TTL
+    # for new tokens.
+    max_age = 168 * 3600  # matches upper bound on ttl_hours
     try:
         payload = _serializer().loads(body.token, max_age=max_age)
     except SignatureExpired:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invite has expired")
     except BadSignature:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invite is invalid")
+
+    exp_claim = payload.get("exp")
+    if exp_claim is not None:
+        try:
+            exp_dt = datetime.fromtimestamp(int(exp_claim), tz=timezone.utc)
+        except (TypeError, ValueError, OSError):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invite is invalid")
+        if exp_dt <= datetime.now(timezone.utc):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invite has expired")
+
+    nonce = payload.get("nonce")
+    if nonce and db.get(ConsumedInvite, nonce) is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Invite has already been used")
 
     email = str(payload.get("email", "")).strip().lower()
     try:
@@ -170,6 +190,8 @@ def accept_invite(
     )
     db.add(account)
     db.flush()
+    if nonce:
+        db.add(ConsumedInvite(nonce=nonce, email=email, account_id=account.id))
     account.last_login_at = datetime.now(timezone.utc)
     audit.emit(
         db,

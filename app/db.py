@@ -234,6 +234,28 @@ class RevokedToken(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class ConsumedInvite(Base):
+    """Tracks invite nonces that have been redeemed so the same signed
+    token can never be replayed — even after the created account has
+    been deleted by an admin.
+
+    The invite token itself is a signed blob with a ``nonce`` UUID; we
+    persist that nonce on successful ``accept-invite`` so future attempts
+    with the same token hit this row and 409 out.
+    """
+
+    __tablename__ = "consumed_invites"
+
+    nonce: Mapped[str] = mapped_column(String(64), primary_key=True)
+    email: Mapped[str] = mapped_column(String(128), index=True)
+    consumed_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
+    account_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("accounts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+
 class GlobalPolicy(Base):
     """Singleton settings row (``id=1``) holding instance-wide policy
     defaults. Seeded with a conservative baseline on first startup."""
