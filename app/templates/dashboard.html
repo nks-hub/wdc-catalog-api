@@ -4,7 +4,63 @@
 <section class="section">
   <h1>Dashboard</h1>
 
-  <div class="stat-grid">
+  {# Hero KPI — 24h audit activity is the operational heartbeat, so it
+     gets a full-width card with 2.5rem mono KPI + big sparkline. The
+     rest of the stats live in the 3-col grid below. #}
+  <div class="stat-hero">
+    <div class="stat-hero-figure">
+      <span class="stat-hero-label">Audit events · last 24h</span>
+      <b class="stat-hero-kpi">{{ stats.audit.events_last_24h }}</b>
+      <span class="stat-hero-sub">of {{ stats.audit.events_total }} total</span>
+    </div>
+    {% if sparkline %}
+    {# Hero sparkline — same polyline/area-fill composition, scaled up
+       to 96 px tall × ~600 px wide. Each hour is 25 px wide with 5 px
+       padding so the stroke doesn't clip at the edges. #}
+    {% set _slw = (sparkline|length - 1) * 25 + 10 %}
+    {% set _slh = 96 %}
+    {% set _slb = 92 %}
+    {% set _sla = 86 %}
+    {% set _sl_points = [] %}
+    {% for b in sparkline %}
+      {% set x = loop.index0 * 25 + 5 %}
+      {% set y = _slb - ((b.count / sparkline_max * _sla) if sparkline_max else 0) %}
+      {% set _ = _sl_points.append(x ~ "," ~ y) %}
+    {% endfor %}
+    <svg class="sparkline sparkline-hero" viewBox="0 0 {{ _slw }} {{ _slh + 4 }}" preserveAspectRatio="none"
+         xmlns="http://www.w3.org/2000/svg"
+         aria-label="Events per hour, last 24h">
+      <line x1="0" y1="{{ _slb }}" x2="{{ _slw }}" y2="{{ _slb }}"
+            stroke="currentColor" stroke-width="1" stroke-dasharray="2 3"
+            opacity="0.12"/>
+      <polygon points="5,{{ _slb }} {{ _sl_points | join(' ') }} {{ 5 + (sparkline|length - 1) * 25 }},{{ _slb }}"
+               fill="currentColor" opacity="0.12"/>
+      <polyline points="{{ _sl_points | join(' ') }}"
+                fill="none" stroke="currentColor" stroke-width="1.75"
+                stroke-linejoin="round" stroke-linecap="round"/>
+      {% for b in sparkline %}
+        {% set cx = loop.index0 * 25 + 5 %}
+        {% set cy = _slb - ((b.count / sparkline_max * _sla) if sparkline_max else 0) %}
+        <circle cx="{{ cx }}" cy="{{ cy }}" r="6" fill="transparent">
+          <title>{{ b.hour }}: {{ b.count }} event{{ 's' if b.count != 1 else '' }}</title>
+        </circle>
+      {% endfor %}
+      {% set last = sparkline[-1] %}
+      {% set ex = (sparkline|length - 1) * 25 + 5 %}
+      {% set ey = _slb - ((last.count / sparkline_max * _sla) if sparkline_max else 0) %}
+      <circle cx="{{ ex }}" cy="{{ ey }}" r="4" fill="currentColor"/>
+      <circle cx="{{ ex }}" cy="{{ ey }}" r="7" fill="none"
+              stroke="currentColor" stroke-width="1" opacity="0.4"/>
+    </svg>
+    <div class="spark-axis spark-axis-hero">
+      <span>{{ sparkline[0].hour }}</span>
+      <span class="muted">events per hour</span>
+      <span>{{ sparkline[-1].hour }}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="stat-grid stat-grid-3">
     <div class="stat-card">
       <h3>Catalog</h3>
       <div class="stat-row"><span>Apps</span><b>{{ stats.catalog.apps }}</b></div>
@@ -30,69 +86,24 @@
       <div class="stat-row"><span>Linked to accounts</span><b>{{ stats.users.devices_linked }}</b></div>
       <div class="stat-row"><span>Online (last 5 min)</span><b>{{ stats.users.devices_online_recent }}</b></div>
     </div>
-
-    <div class="stat-card">
-      <h3>Audit</h3>
-      <div class="stat-row"><span>Total events</span><b>{{ stats.audit.events_total }}</b></div>
-      <div class="stat-row"><span>Last 24h</span><b>{{ stats.audit.events_last_24h }}</b></div>
-      {% if sparkline %}
-      {# Build polyline points + area-fill polygon for the hourly sparkline.
-         Each hour maps to 10 px wide, 64 px tall canvas with 2 px top/bottom
-         padding so the stroke doesn't clip. #}
-      {% set _sl_points = [] %}
-      {% for b in sparkline %}
-        {% set x = loop.index0 * 10 + 5 %}
-        {% set y = 62 - ((b.count / sparkline_max * 58) if sparkline_max else 0) %}
-        {% set _ = _sl_points.append(x ~ "," ~ y) %}
-      {% endfor %}
-      <svg class="sparkline" viewBox="0 0 245 68" preserveAspectRatio="none"
-           xmlns="http://www.w3.org/2000/svg"
-           aria-label="Events per hour, last 24h">
-        {# dotted baseline #}
-        <line x1="0" y1="62" x2="245" y2="62"
-              stroke="currentColor" stroke-width="1" stroke-dasharray="2 3"
-              opacity="0.12"/>
-        {# area fill — closed polygon running line → right edge → left edge #}
-        <polygon points="5,62 {{ _sl_points | join(' ') }} {{ 5 + (sparkline|length - 1) * 10 }},62"
-                 fill="currentColor" opacity="0.12"/>
-        {# stroke on top #}
-        <polyline points="{{ _sl_points | join(' ') }}"
-                  fill="none" stroke="currentColor" stroke-width="1.5"
-                  stroke-linejoin="round" stroke-linecap="round"/>
-        {# per-hour tooltip targets (transparent hit areas with native <title>) #}
-        {% for b in sparkline %}
-          {% set cx = loop.index0 * 10 + 5 %}
-          {% set cy = 62 - ((b.count / sparkline_max * 58) if sparkline_max else 0) %}
-          <circle cx="{{ cx }}" cy="{{ cy }}" r="4" fill="transparent">
-            <title>{{ b.hour }}: {{ b.count }} event{{ 's' if b.count != 1 else '' }}</title>
-          </circle>
-        {% endfor %}
-        {# end-dot marker — marks "now" end of the trend #}
-        {% set last = sparkline[-1] %}
-        {% set ex = (sparkline|length - 1) * 10 + 5 %}
-        {% set ey = 62 - ((last.count / sparkline_max * 58) if sparkline_max else 0) %}
-        <circle cx="{{ ex }}" cy="{{ ey }}" r="3" fill="currentColor"/>
-        <circle cx="{{ ex }}" cy="{{ ey }}" r="5" fill="none"
-                stroke="currentColor" stroke-width="1" opacity="0.4"/>
-      </svg>
-      <div class="spark-axis">
-        <span>{{ sparkline[0].hour }}</span>
-        <span class="muted">24h events/hour</span>
-        <span>{{ sparkline[-1].hour }}</span>
-      </div>
-      {% endif %}
-      {% if stats.audit.top_actions %}
-      <div class="stat-sub">
-        <div class="muted">Top actions (24h):</div>
-        <ul class="compact">
-          {% for row in stats.audit.top_actions[:5] %}
-            <li><code>{{ row.action }}</code> <span class="muted">×{{ row.count }}</span></li>
-          {% endfor %}
-        </ul>
-      </div>
-      {% endif %}
-    </div>
   </div>
+
+  {% if stats.audit.top_actions %}
+  <div class="stat-card stat-card-wide">
+    <h3>Top actions · last 24h</h3>
+    <ul class="top-actions">
+      {% for row in stats.audit.top_actions[:8] %}
+        <li>
+          <code>{{ row.action }}</code>
+          <span class="top-actions-bar" aria-hidden="true">
+            <span style="width: {{ (row.count / stats.audit.top_actions[0].count * 100)|round(0, 'floor') }}%"></span>
+          </span>
+          <b>{{ row.count }}</b>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
 
   <p class="muted">Generated at {{ stats.generated_at }} (in-process cache, 30 s TTL)</p>
 

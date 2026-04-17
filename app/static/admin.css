@@ -557,6 +557,145 @@ main.container {
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: var(--space-4);
 }
+.stat-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* Hero KPI card — the dashboard now leads with one full-width card
+   so the 24h activity pulse doesn't share visual weight with "total
+   apps" etc. Figure sits left, sparkline fills the remaining width. */
+.stat-hero {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) 1fr;
+  grid-template-rows: auto auto;
+  align-items: end;
+  gap: var(--space-4) var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5) var(--space-6);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--space-4);
+  transition: box-shadow var(--t-base), border-color var(--t-base);
+}
+.stat-hero:hover {
+  box-shadow: var(--shadow);
+  border-color: var(--border-strong);
+}
+.stat-hero-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-self: center;
+  grid-row: 1 / span 2;
+}
+.stat-hero-label {
+  font-size: 0.786rem;
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: 0.01em;
+}
+.stat-hero-kpi {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+.stat-hero-sub {
+  font-size: 0.786rem;
+  color: var(--text-3);
+}
+.sparkline-hero {
+  height: 96px;
+  width: 100%;
+  color: var(--accent);
+  grid-column: 2;
+  grid-row: 1;
+  overflow: visible;
+}
+.spark-axis-hero {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-3);
+}
+
+/* Top actions — horizontal bar chart using <span> width. Gives a quick
+   visual rank that a pure list doesn't. */
+.stat-card-wide {
+  grid-column: 1 / -1;
+  margin-top: var(--space-4);
+}
+.top-actions {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.top-actions li {
+  display: grid;
+  grid-template-columns: minmax(140px, 22ch) 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: 0.857rem;
+}
+.top-actions li code {
+  font-size: 0.786rem;
+  color: var(--text-2);
+  background: var(--surface-2);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.top-actions-bar {
+  height: 8px;
+  background: var(--accent-subtle);
+  border-radius: 4px;
+  overflow: hidden;
+  min-width: 40px;
+}
+.top-actions-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width var(--t-base);
+}
+.top-actions li b {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 3ch;
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  .stat-hero {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+  .stat-hero-figure {
+    grid-row: auto;
+  }
+  .sparkline-hero { grid-column: 1; grid-row: auto; }
+  .spark-axis-hero { grid-column: 1; grid-row: auto; }
+  .stat-grid-3 { grid-template-columns: 1fr 1fr; }
+  .top-actions li { grid-template-columns: minmax(100px, 18ch) 1fr auto; }
+}
+@media (max-width: 480px) {
+  .stat-grid-3 { grid-template-columns: 1fr; }
+  .stat-hero-kpi { font-size: 2rem; }
+}
 
 .stat-card {
   background: var(--surface);
