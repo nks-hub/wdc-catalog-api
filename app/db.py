@@ -547,23 +547,58 @@ class AccountEncryptionKey(Base):
 
 
 def create_all() -> None:
-    """Idempotent schema creation — run on app startup.
+    """Idempotent schema creation + auto-ALTER on startup.
 
-    Uses ``checkfirst=True`` (the SQLAlchemy default) so ``CREATE TABLE``
-    is skipped when the table already exists. Wrapped in a catch-all
-    because some SQLite builds or concurrent-startup races can still
-    raise ``OperationalError: table X already exists`` even with
-    checkfirst — treating it as benign is the safest recovery since
-    the table is already there.
+    ``Base.metadata.create_all(checkfirst=True)`` only creates missing
+    *tables* — it does not add new *columns* to tables that predate them.
+    On long-lived deployments (where the DB file was created before the
+    role system existed) this left ``accounts.role`` etc. missing, and
+    routes that referenced the new columns 500'd at query time.
+
+    This helper diffs declared vs actual columns on every existing table
+    and emits ``ALTER TABLE … ADD COLUMN`` for anything missing. SQLite +
+    Postgres both handle it; MySQL would need minor tweaks we don't run.
     """
+    import logging
+
+    log = logging.getLogger(__name__)
+
     try:
         Base.metadata.create_all(_engine, checkfirst=True)
     except Exception as exc:
-        import logging
-
-        logging.getLogger(__name__).warning(
+        log.warning(
             "create_all raised (likely tables already exist, continuing): %s", exc
         )
+
+    # Column-level upgrade — add any missing columns to existing tables.
+    # Only additive changes are safe to auto-apply; drops/renames still
+    # require an explicit Alembic migration.
+    from sqlalchemy import inspect, text
+    from sqlalchemy.schema import CreateColumn
+
+    try:
+        insp = inspect(_engine)
+        existing_tables = set(insp.get_table_names())
+        with _engine.begin() as conn:
+            for table_name, table in Base.metadata.tables.items():
+                if table_name not in existing_tables:
+                    continue
+                actual_cols = {c["name"] for c in insp.get_columns(table_name)}
+                for col in table.columns:
+                    if col.name in actual_cols:
+                        continue
+                    ddl = str(
+                        CreateColumn(col).compile(dialect=_engine.dialect)
+                    ).strip()
+                    log.warning(
+                        "auto-ALTER: adding %s.%s (%s)",
+                        table_name,
+                        col.name,
+                        col.type,
+                    )
+                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {ddl}"))
+    except Exception as exc:  # noqa: BLE001
+        log.warning("column auto-upgrade skipped: %s", exc)
 
 
 def get_session() -> Iterator[Session]:
