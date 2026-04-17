@@ -1,0 +1,138 @@
+# Prometheus alerting rules for nks-wdc-catalog-api.
+#
+# Drop this file into your Prometheus ``rule_files`` path and reload.
+# All rules are grouped by concern (HTTP, auth, retention, storage) so
+# alertmanager routing can fan out to the right on-call teams.
+#
+# Metric names: nks_wdc_* (see app/observability.py)
+# Evaluation cadence: every 30 s (the default — no need to override)
+#
+groups:
+  - name: nks-wdc-http
+    interval: 30s
+    rules:
+      - alert: WDCCatalogHTTP5xxSpike
+        expr: |
+          (
+            sum(rate(nks_wdc_http_requests_total{status=~"5.."}[5m]))
+            /
+            sum(rate(nks_wdc_http_requests_total[5m]))
+          ) > 0.02
+        for: 5m
+        labels:
+          severity: critical
+          service: nks-wdc-catalog-api
+        annotations:
+          summary: "WDC catalog serving >2% 5xx for 5m"
+          description: |
+            {{ $value | humanizePercentage }} of requests are failing
+            server-side over the last 5 minutes. Check the container
+            logs (docker compose logs nks-wdc-catalog-api) and
+            ``/readyz`` for the health probe.
+          runbook_url: "https://github.com/nks-hub/wdc-catalog-api/blob/main/docs/deploy.md#5xx-spike"
+
+      - alert: WDCCatalogHTTPLatencyP99High
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (route, le) (rate(nks_wdc_http_request_duration_seconds_bucket[5m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+          service: nks-wdc-catalog-api
+        annotations:
+          summary: "p99 latency > 2s on {{ $labels.route }}"
+          description: |
+            The 99th percentile latency for ``{{ $labels.route }}`` has
+            sat above 2 s for 10 minutes. Usually either the catalog
+            cache is cold or Postgres/SQLite is under contention.
+
+      - alert: WDCCatalogNoTrafficForAdminPanel
+        # Distinguishes "everything is fine, admin panel idle" from
+        # "admin-panel middleware broke". Fires only during business
+        # hours (UTC 06-20 weekdays) so we don't page someone at 3am
+        # because nobody's logged in.
+        expr: |
+          sum(rate(nks_wdc_http_requests_total{route=~"/admin.*"}[15m])) == 0
+          and ON() hour() >= 6 and ON() hour() < 20
+          and ON() day_of_week() > 0 and ON() day_of_week() < 6
+        for: 30m
+        labels:
+          severity: warning
+          service: nks-wdc-catalog-api
+        annotations:
+          summary: "No /admin traffic for 30m during business hours"
+          description: |
+            Either every admin is on vacation or the admin UI is wedged.
+            Hit https://wdc.nks-hub.cz/admin manually to check.
+
+  - name: nks-wdc-auth
+    interval: 30s
+    rules:
+      - alert: WDCCatalogAuthFailureSpike
+        # Tracks credential-stuffing + token-replay attempts. Baseline
+        # under light use is a handful per hour; a spike to >10/min is
+        # almost always automated.
+        expr: sum(rate(nks_wdc_auth_failures_total[5m])) > 0.17
+        for: 5m
+        labels:
+          severity: warning
+          service: nks-wdc-catalog-api
+          category: security
+        annotations:
+          summary: "Auth failure rate > 10/min for 5m"
+          description: |
+            Reason breakdown: {{ range $k, $v := query (printf "sum by (reason) (rate(nks_wdc_auth_failures_total[5m]))" $labels.instance) }}{{ $v.Labels.reason }}={{ $v.Value | printf "%.2f" }}/s, {{ end }}
+          runbook_url: "https://github.com/nks-hub/wdc-catalog-api/blob/main/docs/deploy.md#credential-stuffing"
+
+      - alert: WDCCatalogPermissionDeniedSpike
+        # RBAC denials that aren't accidental typos — lateral movement
+        # or privilege-escalation attempts show up here.
+        expr: sum(rate(nks_wdc_auth_failures_total{reason="permission_denied"}[10m])) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+          service: nks-wdc-catalog-api
+          category: security
+        annotations:
+          summary: "Sustained RBAC denials > 3/min"
+          description: |
+            A principal is repeatedly hitting resources outside their
+            role. Cross-ref with /admin/audit?action=permission.denied.
+
+  - name: nks-wdc-storage
+    interval: 1m
+    rules:
+      - alert: WDCCatalogBlobOrphanGrowing
+        # If MinIO/S3 deletes start failing during retention, the
+        # counter ticks. Anything above zero for 15 minutes = bucket or
+        # credentials problem, not transient.
+        expr: increase(nks_wdc_blob_orphan_total[15m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: nks-wdc-catalog-api
+          category: storage
+        annotations:
+          summary: "Retention failing to delete blobs from object store"
+          description: |
+            {{ $value }} orphaned blobs accumulated in the last 15 min.
+            Check MinIO/S3 credentials + bucket policy; the rows were
+            deleted from the catalog but the actual bytes weren't.
+
+      - alert: WDCCatalogRetentionStalled
+        # Retention runs nightly at 03:00 UTC. If 26 h pass with zero
+        # deletions the scheduler likely isn't firing.
+        expr: increase(nks_wdc_retention_deleted_total[26h]) == 0
+        for: 1h
+        labels:
+          severity: warning
+          service: nks-wdc-catalog-api
+          category: storage
+        annotations:
+          summary: "Retention runner produced zero deletes in 26h"
+          description: |
+            Either the snapshot population is small enough that nothing
+            is up for GC, or APScheduler didn't fire. Check scheduler
+            log line ``retention sweep`` timestamps.
