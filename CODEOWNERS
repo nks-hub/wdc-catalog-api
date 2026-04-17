@@ -1,0 +1,6 @@
+* @nks-hub/backend
+
+/.github/ @nks-hub/ops
+/Dockerfile @nks-hub/ops
+/docker-compose.yml @nks-hub/ops
+/alembic/ @nks-hub/backend

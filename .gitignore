@@ -1,12 +1,48 @@
-.venv/
-venv/
+# Python
 __pycache__/
 *.pyc
 *.pyo
-state/
+*.egg-info/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Virtualenvs
+.venv/
+venv/
+
+# Build artifacts
 build/
 dist/
-*.egg-info/
+
+# Runtime state
+state/
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor/IDE local configs
+.[a-z]*/
+!.git/
+!.github/
+!.gitignore
+!.dockerignore
+/[A-Z]*.md
+!/README.md
+!/LICENSE
+!/SECURITY.md
+!/CODEOWNERS
+!/CHANGELOG.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# OpenAPI artifact (generated in CI)
+openapi.json

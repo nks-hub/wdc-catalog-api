@@ -44,7 +44,6 @@ NKS_WDC_CATALOG_DEV=1 uvicorn app.main:app --host 127.0.0.1 --port 8765
 ## Quickstart (Docker)
 
 ```bash
-cd services/catalog-api
 docker compose up -d
 ```
 
@@ -52,12 +51,15 @@ Service listens on `http://localhost:8765`. Catalog data mounts from
 `./app/data/apps` so you can edit JSONs and `POST /api/v1/catalog/reload`
 without rebuilding.
 
+Pre-built images are published to GHCR on every tag:
+`ghcr.io/nks-hub/wdc-catalog-api:latest`.
+
 ## Pointing NKS WDC at this service
 
 In NKS WebDev Console → Settings → Advanced:
 
 - **Catalog URL**: `http://127.0.0.1:8765` (local)
-  or `https://catalog.wdc.nks-hub.cz` (when deployed)
+  or `https://wdc.nks-hub.cz` (public NKS instance)
 
 Or via env var when launching the daemon:
 
