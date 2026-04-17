@@ -61,7 +61,9 @@ def list_events(
     total = count_query(db, stmt)
 
     rows = db.scalars(
-        stmt.order_by(AuditEvent.created_at.desc()).offset(max(0, offset)).limit(limit)
+        stmt.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+        .offset(max(0, offset))
+        .limit(limit)
     ).all()
 
     return AuditEventList(

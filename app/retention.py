@@ -159,7 +159,11 @@ def _try_acquire_leader_lock(session: Session) -> bool:
     """
     from sqlalchemy import text
 
-    dialect = session.bind.dialect.name if session.bind else ""
+    try:
+        bind = session.get_bind()
+    except Exception:
+        return True
+    dialect = bind.dialect.name if bind is not None else ""
     if dialect != "postgresql":
         return True
     result = session.execute(

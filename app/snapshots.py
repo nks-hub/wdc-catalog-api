@@ -64,6 +64,16 @@ JSON configs with only ~3 % worse compression ratio. Bump via env when
 storage cost dominates CPU.
 """
 
+_ZSTD_CMP = zstd.ZstdCompressor(level=ZSTD_LEVEL)
+_ZSTD_CMP_HIGH = zstd.ZstdCompressor(level=10)
+_ZSTD_DEC = zstd.ZstdDecompressor()
+"""Module-level compressors/decompressor — reused across requests.
+
+zstandard compressors are thread-safe for ``.compress()``/``.decompress()``
+calls, so a single instance avoids the allocation+teardown of a fresh C
+context on every snapshot.
+"""
+
 
 def _pack_from_raw(
     raw: bytes,
@@ -84,7 +94,7 @@ def _pack_from_raw(
             size_bytes=len(raw),
             checksum=checksum,
         )
-    compressed = zstd.ZstdCompressor(level=ZSTD_LEVEL).compress(raw)
+    compressed = _ZSTD_CMP.compress(raw)
     if len(compressed) <= BLOB_THRESHOLD:
         return PackedPayload(
             column="payload_blob",
@@ -127,7 +137,7 @@ def pack_payload(payload: dict, *, account_id: Optional[int] = None) -> PackedPa
             size_bytes=len(raw),
             checksum=checksum,
         )
-    compressed = zstd.ZstdCompressor(level=ZSTD_LEVEL).compress(raw)
+    compressed = _ZSTD_CMP.compress(raw)
     if len(compressed) <= BLOB_THRESHOLD:
         return PackedPayload(
             column="payload_blob",
@@ -185,7 +195,7 @@ def unpack_payload(
             passphrase=passphrase,
         )
     if snap.compression == "zstd":
-        raw = zstd.ZstdDecompressor().decompress(raw)
+        raw = _ZSTD_DEC.decompress(raw)
     return json.loads(raw)
 
 
@@ -345,7 +355,7 @@ def create_snapshot(
         key_row = _active_key(db, account_id, passphrase=passphrase)
         encryption_kid = key_row.kid
         raw = _canonical_bytes(payload)
-        compressed = zstd.ZstdCompressor(level=10).compress(raw)
+        compressed = _ZSTD_CMP_HIGH.compress(raw)
         dek = _unwrap(key_row, passphrase=passphrase)
         aad = f"nks-wdc-snapshot-{account_id}".encode("ascii")
         envelope = _crypto.encrypt_payload(compressed, dek, aad=aad)
