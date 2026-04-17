@@ -1,47 +1,51 @@
 /* ==========================================================================
    NKS WebDev Console — Admin UI
-   Light-mode by default · Dark-mode via prefers-color-scheme
-   Palette: cool slate grays + indigo accent + semantic role colors
+   Light-mode by default · Dark-mode via class or prefers-color-scheme
+   Palette: warm white + violet-indigo accent + crisp semantic colours
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
    Design tokens — light mode
    -------------------------------------------------------------------------- */
 :root {
-  /* Surface — brighter/whiter per user feedback. The old #f4f5f7 bg
-     looked dim next to white cards; now the body matches a cooler
-     off-white and cards sit a hair deeper so card boundaries still
-     read without a heavy border. */
-  --bg:           #fbfcfd;
+  /* Surfaces — pure white cards on a very-slightly-warm off-white page */
+  --bg:           #f6f7fb;
   --surface:      #ffffff;
-  --surface-2:    #f3f4f7;
-  --surface-3:    #e6e8ed;
+  --surface-2:    #f0f1f8;
+  --surface-3:    #e4e6f0;
 
-  /* Borders — bump visible edge so cards pop against the lighter bg. */
-  --border:       #d1d5db;
-  --border-strong:#9ca3af;
+  /* Borders */
+  --border:       #dde0ea;
+  --border-strong:#b0b8cc;
 
-  /* Text — pushed darker so "muted" copy reads at ≥4.5:1 against the
-     bright light surface (WCAG AA body text). */
-  --text:         #0b1220;
+  /* Text — deep navy-slate for maximum contrast */
+  --text:         #0f172a;
   --text-2:       #1e293b;
-  --text-3:       #334155;
-  --text-4:       #475569;
+  --text-3:       #3e4d6c;
+  --text-4:       #64748b;
 
-  /* Accent — indigo */
+  /* Accent — vivid indigo-violet */
   --accent:       #4f46e5;
-  --accent-hover: #4338ca;
+  --accent-hover: #3730a3;
   --accent-subtle:#eef2ff;
-  --accent-text:  #3730a3;
+  --accent-text:  #312e81;
+
+  /* Topbar */
+  --topbar-bg:    #1e1b4b;
+  --topbar-text:  #e0e7ff;
+  --topbar-text-muted: #a5b4fc;
+  --topbar-active-bg:  rgba(255,255,255,0.12);
+  --topbar-hover-bg:   rgba(255,255,255,0.07);
+  --topbar-border:     rgba(255,255,255,0.08);
 
   /* Semantic */
-  --success:      #16a34a;
+  --success:      #15803d;
   --success-bg:   #f0fdf4;
   --success-border:#bbf7d0;
 
   --warning:      #b45309;
   --warning-bg:   #fffbeb;
-  --warning-border:#fde68a;
+  --warning-border:#fcd34d;
 
   --danger:       #dc2626;
   --danger-bg:    #fef2f2;
@@ -51,10 +55,10 @@
   --info-bg:      #f0f9ff;
   --info-border:  #bae6fd;
 
-  /* Role pill colors (readonly → owner, ascending loudness) */
-  --role-readonly:        #6b7280;
-  --role-readonly-bg:     #f3f4f6;
-  --role-readonly-border: #d1d5db;
+  /* Role pills */
+  --role-readonly:        #64748b;
+  --role-readonly-bg:     #f1f5f9;
+  --role-readonly-border: #cbd5e1;
 
   --role-user:        #0369a1;
   --role-user-bg:     #e0f2fe;
@@ -89,7 +93,7 @@
   --warn-bg:         #fef3c7;
   --warn-border:     #fcd34d;
 
-  /* Spacing scale */
+  /* Spacing */
   --space-1:  4px;
   --space-2:  8px;
   --space-3:  12px;
@@ -103,13 +107,12 @@
   --radius-sm:  4px;
   --radius:     6px;
   --radius-md:  8px;
-  --radius-lg:  12px;
+  --radius-lg:  14px;
 
-  /* Shadows */
-  /* Bumped shadow so cards separate cleanly from the lighter body
-     without leaning on heavy borders. */
-  --shadow-sm:  0 1px 2px rgba(15,23,42,.06), 0 2px 4px rgba(15,23,42,.04);
-  --shadow:     0 4px 12px rgba(15,23,42,.06), 0 2px 4px rgba(15,23,42,.04);
+  /* Shadows — layered, softer */
+  --shadow-sm:  0 1px 3px rgba(15,23,42,.07), 0 1px 2px rgba(15,23,42,.04);
+  --shadow:     0 4px 16px rgba(15,23,42,.08), 0 1px 4px rgba(15,23,42,.05);
+  --shadow-md:  0 8px 24px rgba(15,23,42,.10), 0 2px 6px rgba(15,23,42,.06);
 
   /* Typography */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
@@ -118,157 +121,142 @@
                "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   /* Topbar */
-  --topbar-h: 52px;
+  --topbar-h: 54px;
 
   /* Transitions */
   --t-fast: 0.1s ease;
-  --t-base: 0.15s ease;
+  --t-base: 0.18s ease;
 }
 
 /* --------------------------------------------------------------------------
-   Dark mode overrides
+   Dark mode — media query (auto, for OS preference)
    -------------------------------------------------------------------------- */
-/* Dark-mode tokens as a reusable mixin. Both the media-query block and
-   the explicit html.theme-dark override below point at this ruleset, so
-   the manual cookie toggle beats prefers-color-scheme while the default
-   OS preference still works when no cookie is set. */
-html.theme-dark {
-  color-scheme: dark;
-}
-html.theme-light {
-  color-scheme: light;
-}
-
-/* Dark mode is OPT-IN only. The OS preference is respected only when
-   the user additionally flips the theme toggle (explicit cookie). The
-   primary design target is the light palette; "too dark / too low
-   contrast" was user feedback on the default looking gloomy on Macs
-   whose OS setting is dark. */
 @media (prefers-color-scheme: dark) {
   html.theme-auto-dark {
-    --bg:           #0d0f14;
-    --surface:      #151820;
-    --surface-2:    #1c2030;
-    --surface-3:    #232840;
+    --bg:           #0d1117;
+    --surface:      #161b22;
+    --surface-2:    #1c2333;
+    --surface-3:    #21283a;
 
-    --border:       rgba(255,255,255,0.09);
-    --border-strong:rgba(255,255,255,0.22);
+    --border:       rgba(255,255,255,0.08);
+    --border-strong:rgba(255,255,255,0.20);
 
-    --text:         #e8eaf0;
-    --text-2:       #b8bdd0;
-    --text-3:       #7880a0;
-    --text-4:       #4b5168;
+    --text:         #e6edf3;
+    --text-2:       #b0bec5;
+    --text-3:       #768390;
+    --text-4:       #3d444d;
 
     --accent:       #818cf8;
     --accent-hover: #a5b4fc;
     --accent-subtle:#1e1b4b;
     --accent-text:  #a5b4fc;
 
-    --success:      #4ade80;
-    --success-bg:   #052e16;
-    --success-border:#14532d;
+    --topbar-bg:    #0d1117;
+    --topbar-text:  #e6edf3;
+    --topbar-text-muted: #768390;
+    --topbar-active-bg:  rgba(255,255,255,0.10);
+    --topbar-hover-bg:   rgba(255,255,255,0.05);
+    --topbar-border:     rgba(255,255,255,0.06);
 
-    --warning:      #fbbf24;
-    --warning-bg:   #1c0f00;
-    --warning-border:#78350f;
+    --success:      #3fb950;
+    --success-bg:   #0d2a16;
+    --success-border:#1a3d24;
 
-    --danger:       #f87171;
-    --danger-bg:    #1a0000;
-    --danger-border:#7f1d1d;
+    --warning:      #d29922;
+    --warning-bg:   #2a1f0a;
+    --warning-border:#4a3000;
 
-    --info:         #38bdf8;
-    --info-bg:      #0c1a24;
-    --info-border:  #0c4a6e;
+    --danger:       #f85149;
+    --danger-bg:    #2a0d0d;
+    --danger-border:#4d1a1a;
 
-    --role-readonly:        #9ca3af;
-    --role-readonly-bg:     #1f2937;
-    --role-readonly-border: #374151;
+    --info:         #58a6ff;
+    --info-bg:      #0d1f33;
+    --info-border:  #1a3d5c;
 
-    --role-user:        #38bdf8;
-    --role-user-bg:     #0c1a24;
-    --role-user-border: #0c4a6e;
+    --role-readonly:#768390; --role-readonly-bg:#1c2333; --role-readonly-border:#2d3748;
+    --role-user:#58a6ff; --role-user-bg:#0d1f33; --role-user-border:#1a3d5c;
+    --role-support:#2dd4bf; --role-support-bg:#0a2320; --role-support-border:#134e4a;
+    --role-operator:#c4b5fd; --role-operator-bg:#1e0d40; --role-operator-border:#3b0d6e;
+    --role-admin:#d29922; --role-admin-bg:#2a1f0a; --role-admin-border:#4a3000;
+    --role-owner:#f85149; --role-owner-bg:#2a0d0d; --role-owner-border:#4d1a1a;
 
-    --role-support:        #2dd4bf;
-    --role-support-bg:     #042f2e;
-    --role-support-border: #134e4a;
+    --ok-color:#3fb950; --ok-bg:#0d2a16; --ok-border:#1a3d24;
+    --suspended-color:#f85149; --suspended-bg:#2a0d0d; --suspended-border:#4d1a1a;
+    --warn-color:#d29922; --warn-bg:#2a1f0a; --warn-border:#4a3000;
 
-    --role-operator:        #c4b5fd;
-    --role-operator-bg:     #2e1065;
-    --role-operator-border: #4c1d95;
-
-    --role-admin:        #fbbf24;
-    --role-admin-bg:     #1c0f00;
-    --role-admin-border: #78350f;
-
-    --role-owner:        #f87171;
-    --role-owner-bg:     #1a0000;
-    --role-owner-border: #7f1d1d;
-
-    --ok-color:        #4ade80;
-    --ok-bg:           #052e16;
-    --ok-border:       #14532d;
-
-    --suspended-color: #f87171;
-    --suspended-bg:    #1a0000;
-    --suspended-border:#7f1d1d;
-
-    --warn-color:      #fbbf24;
-    --warn-bg:         #1c0f00;
-    --warn-border:     #78350f;
-
-    --shadow-sm:  0 1px 2px rgba(0,0,0,.4);
-    --shadow:     0 2px 8px rgba(0,0,0,.5);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,.5);
+    --shadow:    0 4px 16px rgba(0,0,0,.6);
+    --shadow-md: 0 8px 24px rgba(0,0,0,.7);
   }
 }
 
-/* Explicit opt-in dark (cookie-set) — same tokens, independent of OS
-   preference. Duplicated because CSS can't inherit custom-property
-   blocks; in practice operators edit tokens rarely and both blocks
-   stay in sync via the same color ladder. */
+/* --------------------------------------------------------------------------
+   Dark mode — explicit opt-in (cookie/toggle)
+   -------------------------------------------------------------------------- */
 html.theme-dark {
-  --bg:           #0d0f14;
-  --surface:      #151820;
-  --surface-2:    #1c2030;
-  --surface-3:    #232840;
-  --border:       rgba(255,255,255,0.09);
-  --border-strong:rgba(255,255,255,0.22);
-  --text:         #e8eaf0;
-  --text-2:       #b8bdd0;
-  --text-3:       #7880a0;
-  --text-4:       #4b5168;
+  color-scheme: dark;
+
+  --bg:           #0d1117;
+  --surface:      #161b22;
+  --surface-2:    #1c2333;
+  --surface-3:    #21283a;
+  --border:       rgba(255,255,255,0.08);
+  --border-strong:rgba(255,255,255,0.20);
+  --text:         #e6edf3;
+  --text-2:       #b0bec5;
+  --text-3:       #768390;
+  --text-4:       #3d444d;
   --accent:       #818cf8;
   --accent-hover: #a5b4fc;
   --accent-subtle:#1e1b4b;
   --accent-text:  #a5b4fc;
-  --success:      #4ade80;
-  --success-bg:   #052e16;
-  --success-border:#14532d;
-  --warning:      #fbbf24;
-  --warning-bg:   #1c0f00;
-  --warning-border:#78350f;
-  --danger:       #f87171;
-  --danger-bg:    #1a0000;
-  --danger-border:#7f1d1d;
-  --info:         #38bdf8;
-  --info-bg:      #0c1a24;
-  --info-border:  #0c4a6e;
-  --role-readonly:#9ca3af; --role-readonly-bg:#1f2937; --role-readonly-border:#374151;
-  --role-user:#38bdf8; --role-user-bg:#0c1a24; --role-user-border:#0c4a6e;
-  --role-support:#2dd4bf; --role-support-bg:#042f2e; --role-support-border:#134e4a;
-  --role-operator:#c4b5fd; --role-operator-bg:#2e1065; --role-operator-border:#4c1d95;
-  --role-admin:#fbbf24; --role-admin-bg:#1c0f00; --role-admin-border:#78350f;
-  --role-owner:#f87171; --role-owner-bg:#1a0000; --role-owner-border:#7f1d1d;
-  --ok-color:#4ade80; --ok-bg:#052e16; --ok-border:#14532d;
-  --suspended-color:#f87171;
-  --warn-color:#fbbf24; --warn-bg:#1c0f00; --warn-border:#78350f;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
-  --shadow:    0 2px 8px rgba(0,0,0,.5);
+
+  --topbar-bg:    #0d1117;
+  --topbar-text:  #e6edf3;
+  --topbar-text-muted: #768390;
+  --topbar-active-bg:  rgba(255,255,255,0.10);
+  --topbar-hover-bg:   rgba(255,255,255,0.05);
+  --topbar-border:     rgba(255,255,255,0.06);
+
+  --success:#3fb950; --success-bg:#0d2a16; --success-border:#1a3d24;
+  --warning:#d29922; --warning-bg:#2a1f0a; --warning-border:#4a3000;
+  --danger:#f85149;  --danger-bg:#2a0d0d;  --danger-border:#4d1a1a;
+  --info:#58a6ff;    --info-bg:#0d1f33;    --info-border:#1a3d5c;
+
+  --role-readonly:#768390; --role-readonly-bg:#1c2333; --role-readonly-border:#2d3748;
+  --role-user:#58a6ff; --role-user-bg:#0d1f33; --role-user-border:#1a3d5c;
+  --role-support:#2dd4bf; --role-support-bg:#0a2320; --role-support-border:#134e4a;
+  --role-operator:#c4b5fd; --role-operator-bg:#1e0d40; --role-operator-border:#3b0d6e;
+  --role-admin:#d29922; --role-admin-bg:#2a1f0a; --role-admin-border:#4a3000;
+  --role-owner:#f85149; --role-owner-bg:#2a0d0d; --role-owner-border:#4d1a1a;
+
+  --ok-color:#3fb950; --ok-bg:#0d2a16; --ok-border:#1a3d24;
+  --suspended-color:#f85149; --suspended-bg:#2a0d0d; --suspended-border:#4d1a1a;
+  --warn-color:#d29922; --warn-bg:#2a1f0a; --warn-border:#4a3000;
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.5);
+  --shadow:    0 4px 16px rgba(0,0,0,.6);
+  --shadow-md: 0 8px 24px rgba(0,0,0,.7);
 }
 
+html.theme-light { color-scheme: light; }
+
+/* --------------------------------------------------------------------------
+   Theme toggle
+   -------------------------------------------------------------------------- */
 .theme-toggle {
   font-size: 1rem;
   line-height: 1;
   padding: var(--space-1) var(--space-2);
+  /* In dark topbar context, override btn-ghost colours */
+  color: var(--topbar-text-muted) !important;
+  border-color: transparent !important;
+  background: transparent !important;
+}
+.theme-toggle:hover {
+  background: var(--topbar-hover-bg) !important;
+  color: var(--topbar-text) !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -294,7 +282,7 @@ body {
 h1, h2, h3, h4 {
   margin: 0;
   line-height: 1.2;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
   color: var(--text);
 }
 
@@ -314,8 +302,8 @@ code, pre {
 }
 
 code {
-  padding: 1px 5px;
-  background: var(--surface-2);
+  padding: 2px 6px;
+  background: var(--accent-subtle);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--accent-text);
@@ -326,7 +314,7 @@ pre {
   padding: var(--space-4);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   overflow-x: auto;
   color: var(--text-2);
   line-height: 1.6;
@@ -338,33 +326,33 @@ select, input, textarea, button {
 }
 
 /* --------------------------------------------------------------------------
-   Layout: Topbar
+   Layout: Topbar — dark indigo bar, high contrast
    -------------------------------------------------------------------------- */
 .topbar {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--space-5);
   height: var(--topbar-h);
   padding: 0 var(--space-6);
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: var(--topbar-bg);
+  border-bottom: 1px solid var(--topbar-border);
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 0 var(--topbar-border), 0 2px 8px rgba(0,0,0,.15);
 }
 
 .brand {
-  font-size: 0.857rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-size: 0.786rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text) !important;
+  color: #fff !important;
   text-decoration: none !important;
   white-space: nowrap;
   flex-shrink: 0;
 }
-.brand:hover { color: var(--accent) !important; }
+.brand:hover { color: #c7d2fe !important; }
 
 .nav {
   display: flex;
@@ -383,9 +371,9 @@ select, input, textarea, button {
 }
 
 .nav a {
-  padding: var(--space-1) var(--space-3);
+  padding: 5px var(--space-3);
   border-radius: var(--radius);
-  color: var(--text-3);
+  color: var(--topbar-text-muted);
   font-size: 0.857rem;
   font-weight: 500;
   white-space: nowrap;
@@ -393,12 +381,12 @@ select, input, textarea, button {
   text-decoration: none !important;
 }
 .nav a:hover {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--topbar-hover-bg);
+  color: var(--topbar-text);
 }
 .nav a.active {
-  background: var(--accent-soft, color-mix(in srgb, var(--accent) 18%, transparent));
-  color: var(--accent);
+  background: var(--topbar-active-bg);
+  color: #fff;
   font-weight: 600;
 }
 
@@ -410,8 +398,23 @@ select, input, textarea, button {
 }
 .user-name {
   font-size: 0.786rem;
-  color: var(--text-3);
+  color: var(--topbar-text-muted);
   white-space: nowrap;
+  text-decoration: none !important;
+  transition: color var(--t-fast);
+}
+.user-name:hover { color: var(--topbar-text); }
+
+/* Log out btn in dark topbar */
+.topbar .btn-ghost {
+  color: var(--topbar-text-muted) !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  font-size: 0.786rem;
+}
+.topbar .btn-ghost:hover {
+  background: var(--topbar-hover-bg) !important;
+  color: var(--topbar-text) !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -419,14 +422,14 @@ select, input, textarea, button {
    -------------------------------------------------------------------------- */
 main.container {
   flex: 1;
-  max-width: 1160px;
+  max-width: 1180px;
   width: 100%;
   margin: 0 auto;
   padding: var(--space-8) var(--space-6);
 }
 
 .footer {
-  padding: var(--space-5) var(--space-6);
+  padding: var(--space-4) var(--space-6);
   text-align: center;
   color: var(--text-4);
   font-size: 0.75rem;
@@ -440,18 +443,20 @@ main.container {
 .section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-6);
 }
 
 .section h1 {
-  font-size: 1.5rem;
+  font-size: 1.6rem;
   font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .section h2 {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 600;
-  padding-top: var(--space-3);
+  color: var(--text-2);
+  padding-top: var(--space-4);
   border-top: 1px solid var(--border);
   margin-top: var(--space-2);
 }
@@ -464,8 +469,9 @@ main.container {
   gap: var(--space-4);
 }
 .section-head h1 {
-  font-size: 1.5rem;
+  font-size: 1.6rem;
   font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 /* --------------------------------------------------------------------------
@@ -473,7 +479,7 @@ main.container {
    -------------------------------------------------------------------------- */
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: var(--space-4);
 }
 
@@ -486,17 +492,22 @@ main.container {
   flex-direction: column;
   gap: var(--space-3);
   box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--t-base), border-color var(--t-base);
+}
+.stat-card:hover {
+  box-shadow: var(--shadow);
+  border-color: var(--border-strong);
 }
 
 .stat-card h3 {
-  font-size: 0.714rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--text-3);
+  color: var(--accent);
   margin: 0;
   padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid var(--accent-subtle);
 }
 
 .stat-row {
@@ -507,7 +518,7 @@ main.container {
 }
 .stat-row span { color: var(--text-3); }
 .stat-row b {
-  font-size: 1.15rem;
+  font-size: 1.2rem;
   font-weight: 700;
   color: var(--text);
   font-variant-numeric: tabular-nums;
@@ -525,7 +536,7 @@ main.container {
 }
 
 /* --------------------------------------------------------------------------
-   Action grid (user detail)
+   Action grid
    -------------------------------------------------------------------------- */
 .action-grid {
   display: flex;
@@ -555,13 +566,14 @@ main.container {
 .meta {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
   font-size: 0.857rem;
   color: var(--text-2);
-  padding: var(--space-4);
+  padding: var(--space-4) var(--space-5);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 .meta strong { color: var(--text-3); font-weight: 600; }
 
@@ -590,7 +602,8 @@ main.container {
   cursor: pointer;
   text-decoration: none !important;
   white-space: nowrap;
-  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast), box-shadow var(--t-fast);
+  transition: background var(--t-fast), border-color var(--t-fast),
+              color var(--t-fast), box-shadow var(--t-fast);
   line-height: 1.4;
   -webkit-user-select: none;
   user-select: none;
@@ -601,23 +614,22 @@ main.container {
   color: var(--text);
   box-shadow: var(--shadow-sm);
 }
-.btn:active { opacity: 0.85; }
+.btn:active { opacity: 0.82; }
 
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
   font-weight: 600;
-  /* Raised appearance to reinforce primary-action hierarchy. */
-  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.15),
-              0 2px 6px rgba(79, 70, 229, 0.12);
+  box-shadow: 0 1px 3px rgba(79,70,229,.20),
+              0 2px 8px rgba(79,70,229,.15);
 }
 .btn-primary:hover {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
   color: #fff;
-  box-shadow: 0 2px 4px rgba(79, 70, 229, 0.25),
-              0 4px 12px rgba(79, 70, 229, 0.18);
+  box-shadow: 0 2px 6px rgba(79,70,229,.30),
+              0 4px 16px rgba(79,70,229,.20);
 }
 .btn-primary:active { transform: translateY(1px); }
 
@@ -659,8 +671,6 @@ main.container {
 /* --------------------------------------------------------------------------
    Forms
    -------------------------------------------------------------------------- */
-
-/* .form — vertical stack (login, app form) */
 .form {
   display: flex;
   flex-direction: column;
@@ -671,26 +681,26 @@ main.container {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  font-size: 0.786rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 700;
   color: var(--text-3);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 .form label span {
-  font-size: 0.786rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 700;
   color: var(--text-3);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 
 .form input,
 .form select,
 .form textarea {
-  padding: 8px var(--space-3);
+  padding: 9px var(--space-3);
   background: var(--surface);
-  border: 1px solid var(--border-strong);
+  border: 1.5px solid var(--border-strong);
   border-radius: var(--radius);
   color: var(--text);
   font-size: 0.929rem;
@@ -705,7 +715,7 @@ main.container {
 .form textarea:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+  box-shadow: 0 0 0 3px rgba(79,70,229,.14);
 }
 .form input[readonly] {
   background: var(--surface-2);
@@ -713,19 +723,16 @@ main.container {
 }
 .form textarea { resize: vertical; min-height: 80px; }
 
-/* .form-grid — responsive multi-column form. Auto-fit with a sane
-   minimum so labels never collapse to 1-word-per-line, and fields
-   stack into a single column on narrow viewports instead of trying to
-   cram 4 columns into 600 px. */
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--space-3) var(--space-4);
   align-items: end;
-  padding: var(--space-4);
+  padding: var(--space-5);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 .form-grid .span-all { grid-column: 1 / -1; }
 .form-grid button[type="submit"],
@@ -752,17 +759,17 @@ main.container {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  font-size: 0.786rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 700;
   color: var(--text-3);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 .form-grid input,
 .form-grid select {
   padding: 8px var(--space-3);
   background: var(--surface);
-  border: 1px solid var(--border-strong);
+  border: 1.5px solid var(--border-strong);
   border-radius: var(--radius);
   color: var(--text);
   font-size: 0.929rem;
@@ -773,13 +780,12 @@ main.container {
 .form-grid select:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+  box-shadow: 0 0 0 3px rgba(79,70,229,.14);
 }
 @media (max-width: 700px) {
   .form-grid { grid-template-columns: 1fr; }
 }
 
-/* .inline-form — horizontal filter bar */
 .inline-form {
   display: flex;
   flex-wrap: wrap;
@@ -788,14 +794,15 @@ main.container {
   padding: var(--space-3) var(--space-4);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 .inline-form input[type="text"],
 .inline-form input[type="number"],
 .inline-form select {
   padding: 6px var(--space-3);
   background: var(--surface-2);
-  border: 1px solid var(--border-strong);
+  border: 1.5px solid var(--border-strong);
   border-radius: var(--radius);
   color: var(--text);
   font-size: 0.857rem;
@@ -806,13 +813,11 @@ main.container {
 .inline-form select:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+  box-shadow: 0 0 0 3px rgba(79,70,229,.14);
 }
 
-/* .inline — inline form / element */
 .inline { display: inline; }
 
-/* .checkbox label */
 .checkbox {
   display: flex !important;
   flex-direction: row !important;
@@ -851,13 +856,8 @@ main.container {
 
 .data thead tr {
   background: var(--surface-2);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid var(--border);
 }
-/* Sticky header — stays pinned under the topbar on long audit/user
-   tables so column labels are always readable. ``.topbar`` is ~56 px
-   tall; offset the header by that much so it doesn't hide underneath.
-   The sticky cell needs its own background (not inherited from the
-   row) or table rows scroll through it visibly in Chrome. */
 .data thead th {
   position: sticky;
   top: 56px;
@@ -867,9 +867,9 @@ main.container {
 .data th {
   padding: var(--space-3) var(--space-4);
   text-align: left;
-  font-size: 0.714rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-3);
   white-space: nowrap;
@@ -880,13 +880,12 @@ main.container {
   border-top: 1px solid var(--border);
   color: var(--text-2);
   vertical-align: middle;
-  transition: background 120ms ease;
+  transition: background 100ms ease;
 }
 .data tbody tr:first-child td { border-top: none; }
 .data tbody tr:hover td { background: var(--surface-2); }
 .data tbody tr:focus-within td { background: var(--accent-subtle); }
 
-/* Compact table variant — tighter rows */
 .data.compact th { padding: var(--space-2) var(--space-4); }
 .data.compact td { padding: var(--space-2) var(--space-4); font-size: 0.821rem; }
 
@@ -894,7 +893,6 @@ main.container {
 .nowrap   { white-space: nowrap; }
 .actions  { text-align: right; white-space: nowrap; }
 
-/* Empty table state */
 .data td[colspan] {
   text-align: center;
   padding: var(--space-8) var(--space-4);
@@ -933,20 +931,19 @@ ul.compact li { color: var(--text-2); }
 .pill {
   display: inline-flex;
   align-items: center;
-  padding: 2px var(--space-2);
+  padding: 2px 8px;
   border-radius: 99px;
   font-size: 0.714rem;
   font-weight: 600;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   white-space: nowrap;
   background: var(--surface-3);
   color: var(--text-3);
   border: 1px solid var(--border);
   text-transform: lowercase;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
-/* Role pills — readonly → user → support → operator → admin → owner */
 .pill-role-readonly {
   background: var(--role-readonly-bg);
   color:      var(--role-readonly);
@@ -979,7 +976,6 @@ ul.compact li { color: var(--text-2); }
   font-weight: 700;
 }
 
-/* Status pills */
 .pill-ok {
   background:   var(--ok-bg);
   color:        var(--ok-color);
@@ -1001,7 +997,7 @@ ul.compact li { color: var(--text-2); }
    -------------------------------------------------------------------------- */
 .flash {
   padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   font-size: 0.857rem;
   font-weight: 500;
   border: 1px solid;
@@ -1028,11 +1024,11 @@ ul.compact li { color: var(--text-2); }
 }
 
 /* --------------------------------------------------------------------------
-   Callouts (inline, persistent notices)
+   Callouts
    -------------------------------------------------------------------------- */
 .callout {
   padding: var(--space-4);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--surface-2);
   display: flex;
@@ -1057,7 +1053,7 @@ ul.compact li { color: var(--text-2); }
 details > summary {
   cursor: pointer;
   font-size: 0.786rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--accent);
   list-style: none;
   display: inline-flex;
@@ -1089,9 +1085,8 @@ details > summary:hover { color: var(--accent-hover); }
 /* --------------------------------------------------------------------------
    Misc utilities
    -------------------------------------------------------------------------- */
-.muted { color: var(--text-3); }
+.muted { color: var(--text-4); }
 
-/* .selectable — pre/code blocks users should triple-click to copy */
 .selectable {
   cursor: text;
   user-select: all;
@@ -1102,7 +1097,7 @@ details > summary:hover { color: var(--accent-hover); }
   white-space: pre-wrap;
   color: var(--accent-text);
   background: var(--accent-subtle);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   border-radius: var(--radius);
   padding: var(--space-3) var(--space-4);
   display: block;
@@ -1114,7 +1109,7 @@ details > summary:hover { color: var(--accent-hover); }
 }
 
 /* --------------------------------------------------------------------------
-   Card (app_form.html uses .form.card / .card-body / .card-footer)
+   Card
    -------------------------------------------------------------------------- */
 .card {
   background: var(--surface);
@@ -1132,10 +1127,10 @@ details > summary:hover { color: var(--accent-hover); }
   border-bottom: 1px solid var(--border);
 }
 .card-header h2 {
-  font-size: 0.786rem;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   color: var(--text-3);
 }
 .card-body {
@@ -1148,22 +1143,22 @@ details > summary:hover { color: var(--accent-hover); }
   display: flex;
   flex-direction: column;
   gap: 5px;
-  font-size: 0.786rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 700;
   color: var(--text-3);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 .card-body label span {
-  font-size: 0.786rem;
+  font-size: 0.75rem;
   color: var(--text-3);
 }
 .card-body input,
 .card-body select,
 .card-body textarea {
-  padding: 8px var(--space-3);
+  padding: 9px var(--space-3);
   background: var(--surface);
-  border: 1px solid var(--border-strong);
+  border: 1.5px solid var(--border-strong);
   border-radius: var(--radius);
   color: var(--text);
   font-size: 0.929rem;
@@ -1178,7 +1173,7 @@ details > summary:hover { color: var(--accent-hover); }
 .card-body textarea:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+  box-shadow: 0 0 0 3px rgba(79,70,229,.14);
 }
 .card-body input[readonly] {
   background: var(--surface-2);
@@ -1195,27 +1190,29 @@ details > summary:hover { color: var(--accent-hover); }
 }
 
 /* --------------------------------------------------------------------------
-   Login page — isolated, centered, focused
+   Login page — centered, refined card
    -------------------------------------------------------------------------- */
 .login-card {
-  max-width: 380px;
+  max-width: 390px;
   margin: var(--space-10) auto 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: var(--space-8);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-md);
 }
 
 .login-card h1 {
-  font-size: 1.35rem;
+  font-size: 1.4rem;
   font-weight: 700;
+  letter-spacing: -0.02em;
   margin-bottom: var(--space-1);
   color: var(--text);
 }
 .login-card .muted {
   font-size: 0.857rem;
-  margin-bottom: var(--space-5);
+  color: var(--text-4);
+  margin-bottom: var(--space-6);
   display: block;
 }
 .login-card .flash {
@@ -1226,27 +1223,31 @@ details > summary:hover { color: var(--accent-hover); }
 }
 .login-card .btn-primary {
   width: 100%;
-  padding: 9px;
+  padding: 10px;
   font-size: 0.929rem;
   letter-spacing: 0.01em;
   justify-content: center;
-  margin-top: var(--space-1);
+  margin-top: var(--space-2);
+  border-radius: var(--radius-md);
 }
 
-/* Subtle branding strip above the login card */
 .login-card::before {
   content: 'NKS WebDev Console';
-  display: block;
-  font-size: 0.714rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--text-4);
+  color: var(--accent);
   margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--accent-subtle);
 }
 
 /* --------------------------------------------------------------------------
-   Page-head (app_form back-link area)
+   Page-head
    -------------------------------------------------------------------------- */
 .page-head {
   display: flex;
@@ -1256,8 +1257,9 @@ details > summary:hover { color: var(--accent-hover); }
   margin-bottom: var(--space-4);
 }
 .page-head h1 {
-  font-size: 1.5rem;
+  font-size: 1.6rem;
   font-weight: 700;
+  letter-spacing: -0.02em;
   margin-top: var(--space-1);
 }
 
@@ -1266,7 +1268,7 @@ details > summary:hover { color: var(--accent-hover); }
    -------------------------------------------------------------------------- */
 @media (max-width: 600px) {
   main.container { padding: var(--space-5) var(--space-4); }
-  .topbar { padding: 0 var(--space-4); gap: var(--space-4); }
+  .topbar { padding: 0 var(--space-4); gap: var(--space-3); }
   .stat-grid { grid-template-columns: 1fr 1fr; }
   .form-grid { grid-template-columns: 1fr; }
   .section-head { flex-direction: column; }
@@ -1276,6 +1278,9 @@ details > summary:hover { color: var(--accent-hover); }
   .stat-grid { grid-template-columns: 1fr; }
 }
 
+/* --------------------------------------------------------------------------
+   Filter chips
+   -------------------------------------------------------------------------- */
 .filter-chips {
   display: flex;
   flex-wrap: wrap;
@@ -1293,7 +1298,9 @@ details > summary:hover { color: var(--accent-hover); }
   border-radius: 999px;
   color: var(--text-2);
   text-decoration: none;
-  transition: background var(--t-fast), border-color var(--t-fast);
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+  font-size: 0.786rem;
+  font-weight: 500;
 }
 .chip:hover {
   background: var(--accent-subtle);
@@ -1301,6 +1308,9 @@ details > summary:hover { color: var(--accent-hover); }
   color: var(--accent);
 }
 
+/* --------------------------------------------------------------------------
+   Sparkline
+   -------------------------------------------------------------------------- */
 .sparkline {
   display: block;
   width: 100%;
@@ -1316,6 +1326,9 @@ details > summary:hover { color: var(--accent-hover); }
   margin-top: 2px;
 }
 
+/* --------------------------------------------------------------------------
+   Error page
+   -------------------------------------------------------------------------- */
 .section-error {
   text-align: center;
   padding: var(--space-5) var(--space-3);
@@ -1323,8 +1336,8 @@ details > summary:hover { color: var(--accent-hover); }
 .error-hero { margin-bottom: var(--space-4); }
 .error-code {
   font-size: 5rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-weight: 800;
+  letter-spacing: -0.03em;
   color: var(--accent);
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -1332,9 +1345,12 @@ details > summary:hover { color: var(--accent-hover); }
 .section-error h1 { margin-top: var(--space-2); }
 .section-error .action-grid { display: inline-flex; gap: var(--space-2); }
 
+/* --------------------------------------------------------------------------
+   Banner
+   -------------------------------------------------------------------------- */
 .banner {
-  background: color-mix(in srgb, #f59e0b 18%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, #f59e0b 36%, transparent);
+  background: color-mix(in srgb, #f59e0b 15%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, #f59e0b 30%, transparent);
   color: #78350f;
   padding: var(--space-2) var(--space-4);
   text-align: center;
@@ -1342,6 +1358,7 @@ details > summary:hover { color: var(--accent-hover); }
   font-weight: 500;
   white-space: pre-line;
 }
+html.theme-dark .banner { color: #fcd34d; }
 @media (prefers-color-scheme: dark) {
-  .banner { color: #fcd34d; }
+  html.theme-auto-dark .banner { color: #fcd34d; }
 }
