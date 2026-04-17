@@ -31,8 +31,12 @@ def emit(
     ip = None
     user_agent = None
     if request is not None:
-        client = request.client
-        ip = client.host if client else None
+        # Honour the same trusted-proxy logic as the rate limiter so the
+        # audit record reflects the *real* client IP rather than the
+        # reverse-proxy loopback address.
+        from .ratelimit import client_ip
+
+        ip = client_ip(request)
         user_agent = request.headers.get("user-agent")
     event = AuditEvent(
         actor_id=actor.id if actor else None,
