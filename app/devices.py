@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from jwt import InvalidTokenError as JWTError
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -53,12 +53,12 @@ security = HTTPBearer(auto_error=False)
 # ── Schemas ─────────────────────────────────────────────────────────────
 
 class RegisterRequest(BaseModel):
-    email: str
-    password: str
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
 
 
 class LoginRequest(BaseModel):
-    email: str
+    email: EmailStr
     password: str
 
 
@@ -159,11 +159,9 @@ def optional_account(
 def register(
     request: Request, body: RegisterRequest, db: Session = Depends(get_session)
 ) -> TokenResponse:
+    # EmailStr + min_length=8 already validated by Pydantic; we only
+    # need to normalize casing here.
     email = body.email.strip().lower()
-    if not email or len(email) < 5:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid email")
-    if len(body.password) < 8:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Password must be at least 8 characters")
     existing = db.scalar(select(Account).where(Account.email == email))
     if existing:
         raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")

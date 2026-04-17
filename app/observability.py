@@ -28,7 +28,11 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
-from pythonjsonlogger import jsonlogger
+try:
+    # python-json-logger >= 3.0 moved the module.
+    from pythonjsonlogger.json import JsonFormatter  # type: ignore
+except ImportError:  # pragma: no cover - legacy path
+    from pythonjsonlogger.jsonlogger import JsonFormatter  # type: ignore
 
 
 REQUEST_ID_HEADER = "x-request-id"
@@ -77,7 +81,7 @@ def configure_logging() -> None:
     if getattr(root, "_nks_configured", False):
         return
     handler = logging.StreamHandler()
-    fmt = jsonlogger.JsonFormatter(
+    fmt = JsonFormatter(
         "%(asctime)s %(name)s %(levelname)s %(message)s %(request_id)s",
         rename_fields={"asctime": "ts", "levelname": "level"},
     )
