@@ -21,6 +21,7 @@
       <a class="btn btn-sm" href="/admin/apps/{{ app.id }}/edit">Edit</a>
       {% if has_generator %}
         <form method="post" action="/admin/apps/{{ app.id }}/auto-generate" class="inline">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
           <input type="hidden" name="limit" value="5">
           <button class="btn btn-primary" type="submit">
             Auto-generate from upstream
@@ -29,6 +30,7 @@
       {% endif %}
       <form method="post" action="/admin/apps/{{ app.id }}/delete" class="inline"
             onsubmit="return confirm('Delete {{ app.id }} and all releases?')">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <button class="btn btn-danger" type="submit">Delete app</button>
       </form>
     </div>
@@ -52,6 +54,7 @@
             </h3>
             <form method="post" action="/admin/releases/{{ release.id }}/delete" class="inline"
                   onsubmit="return confirm('Delete release {{ release.version }}?')">
+              <input type="hidden" name="_csrf" value="{{ csrf_token }}">
               <button class="btn btn-sm btn-danger" type="submit">Remove</button>
             </form>
           </header>
@@ -78,6 +81,7 @@
                   <td class="muted">{{ dl.source }}</td>
                   <td>
                     <form method="post" action="/admin/downloads/{{ dl.id }}/delete" class="inline">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
                       <button class="btn btn-xs btn-danger" type="submit">×</button>
                     </form>
                   </td>
@@ -89,6 +93,7 @@
           <details class="add-download">
             <summary>+ Add download</summary>
             <form method="post" action="/admin/releases/{{ release.id }}/downloads" class="form-inline">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
               <select name="os">
                 <option value="windows">windows</option>
                 <option value="linux">linux</option>
@@ -124,6 +129,7 @@
     </header>
     <div class="card-body">
       <form method="post" action="/admin/apps/{{ app.id }}/releases" class="form-inline">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <input type="text" name="version" placeholder="1.2.3" required>
         <input type="text" name="channel" value="stable" placeholder="stable">
         <input type="date" name="released_at">

@@ -32,6 +32,8 @@ from pathlib import Path
 from typing import Annotated, Iterator
 
 from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request, Response, status
+
+from .csrf import require_csrf
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -158,7 +160,15 @@ async def _limit_payload_size(request: Request, call_next):
                 )
         except ValueError:
             pass
-    return await call_next(request)
+    response = await call_next(request)
+    # Keep the CSRF cookie fresh on every admin-UI HTML response so forms
+    # always have a valid token paired with the session. Ignored by JSON
+    # API consumers (they don't render HTML and don't inspect it).
+    if request.url.path.startswith(("/admin", "/login")) and "text/html" in response.headers.get("content-type", ""):
+        from .csrf import ensure_csrf_cookie
+        existing = request.cookies.get("nks_wdc_csrf")
+        ensure_csrf_cookie(response, existing)
+    return response
 
 # Mount the accounts + devices router (JWT-authenticated endpoints)
 app.include_router(devices_router)
@@ -194,8 +204,20 @@ templates = Jinja2Templates(directory=_APP_DIR / "templates")
 
 
 def _base_context(request: Request, username: str | None, **extra) -> dict:
-    """Shared template context — version always present so base.html renders."""
-    ctx = {"request": request, "username": username, "version": __version__, "flash": None}
+    """Shared template context — version always present so base.html renders.
+
+    Includes the active CSRF token so admin templates can embed it as a
+    hidden input on every form. The cookie itself is refreshed by the
+    GET handler right before the template renders.
+    """
+    csrf = request.cookies.get("nks_wdc_csrf") or ""
+    ctx = {
+        "request": request,
+        "username": username,
+        "version": __version__,
+        "flash": None,
+        "csrf_token": csrf,
+    }
     ctx.update(extra)
     return ctx
 
@@ -462,7 +484,7 @@ def login_form(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "login.html", _base_context(request, None))
 
 
-@app.post("/login", include_in_schema=False)
+@app.post("/login", include_in_schema=False, dependencies=[Depends(require_csrf)])
 def login_submit(
     request: Request,
     username: Annotated[str, Form()],
@@ -490,7 +512,7 @@ def login_submit(
     return response
 
 
-@app.post("/logout", include_in_schema=False)
+@app.post("/logout", include_in_schema=False, dependencies=[Depends(require_csrf)])
 def logout() -> RedirectResponse:
     response = RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
     response.delete_cookie(SESSION_COOKIE)
@@ -566,7 +588,7 @@ def admin_new_app(
     )
 
 
-@app.post("/admin/new", include_in_schema=False)
+@app.post("/admin/new", include_in_schema=False, dependencies=[Depends(require_csrf)])
 def admin_create_app(
     username: Annotated[str, Depends(current_user)],
     id: Annotated[str, Form()],
@@ -635,7 +657,7 @@ def admin_edit_app(
     )
 
 
-@app.post("/admin/apps/{app_id}/edit", include_in_schema=False)
+@app.post("/admin/apps/{app_id}/edit", include_in_schema=False, dependencies=[Depends(require_csrf)])
 def admin_save_app(
     app_id: str,
     username: Annotated[str, Depends(current_user)],
@@ -659,7 +681,7 @@ def admin_save_app(
     return _redirect(f"/admin/apps/{app_row.id}", "success", "Saved")
 
 
-@app.post("/admin/apps/{app_id}/delete", include_in_schema=False)
+@app.post("/admin/apps/{app_id}/delete", include_in_schema=False, dependencies=[Depends(require_csrf)])
 def admin_delete_app(
     app_id: str,
     username: Annotated[str, Depends(current_user)],
@@ -669,7 +691,7 @@ def admin_delete_app(
     return _redirect("/admin", "success", f"Deleted {app_id}")
 
 
-@app.post("/admin/apps/{app_id}/releases", include_in_schema=False)
+@app.post("/admin/apps/{app_id}/releases", include_in_schema=False, dependencies=[Depends(require_csrf)])
 def admin_add_release(
     app_id: str,
     username: Annotated[str, Depends(current_user)],
@@ -688,7 +710,7 @@ def admin_add_release(
     return _redirect(f"/admin/apps/{app_id}", "success", f"Added {version}")
 
 
-@app.post("/admin/releases/{release_id}/delete", include_in_schema=False)
+@app.post("/admin/releases/{release_id}/delete", include_in_schema=False, dependencies=[Depends(require_csrf)])
 def admin_delete_release(
     release_id: int,
     username: Annotated[str, Depends(current_user)],
@@ -702,7 +724,7 @@ def admin_delete_release(
     return _redirect(f"/admin/apps/{app_id}" if app_id else "/admin", "success", "Release removed")
 
 
-@app.post("/admin/releases/{release_id}/downloads", include_in_schema=False)
+@app.post("/admin/releases/{release_id}/downloads", include_in_schema=False, dependencies=[Depends(require_csrf)])
 def admin_add_download(
     release_id: int,
     username: Annotated[str, Depends(current_user)],
@@ -725,7 +747,7 @@ def admin_add_download(
     return _redirect(f"/admin/apps/{rel.app_id}", "success", "Download added")
 
 
-@app.post("/admin/downloads/{download_id}/delete", include_in_schema=False)
+@app.post("/admin/downloads/{download_id}/delete", include_in_schema=False, dependencies=[Depends(require_csrf)])
 def admin_delete_download(
     download_id: int,
     username: Annotated[str, Depends(current_user)],
@@ -742,7 +764,7 @@ def admin_delete_download(
     return _redirect(f"/admin/apps/{app_id}" if app_id else "/admin", "success", "Download removed")
 
 
-@app.post("/admin/apps/{app_id}/auto-generate", include_in_schema=False)
+@app.post("/admin/apps/{app_id}/auto-generate", include_in_schema=False, dependencies=[Depends(require_csrf)])
 def admin_auto_generate(
     app_id: str,
     username: Annotated[str, Depends(current_user)],

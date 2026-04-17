@@ -8,6 +8,7 @@
       <div class="flash flash-error">{{ error }}</div>
     {% endif %}
     <form method="post" action="/login" class="form">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <label>
         <span>Username</span>
         <input type="text" name="username" autocomplete="username" required autofocus>

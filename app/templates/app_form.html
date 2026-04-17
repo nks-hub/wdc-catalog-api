@@ -11,6 +11,7 @@
   <form method="post"
         action="{{ '/admin/apps/' + app.id + '/edit' if app else '/admin/new' }}"
         class="form card">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     <div class="card-body">
       <label>
         <span>ID (lowercase, no spaces) — e.g. <code>cloudflared</code></span>
