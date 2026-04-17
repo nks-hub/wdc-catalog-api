@@ -31,14 +31,17 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["accounts", "devices"])
 
-JWT_SECRET = os.environ.get("NKS_WDC_CATALOG_SECRET", "")
+JWT_SECRET = os.environ.get("NKS_WDC_JWT_SECRET") or os.environ.get("NKS_WDC_CATALOG_SECRET", "")
 if not JWT_SECRET:
     if os.environ.get("NKS_WDC_CATALOG_DEV") == "1":
-        JWT_SECRET = "dev-only-jwt-secret-change-in-prod"
-        log.warning("NKS_WDC_CATALOG_DEV=1 → using insecure JWT secret")
+        import secrets as _secrets
+        JWT_SECRET = _secrets.token_urlsafe(32)
+        log.warning("NKS_WDC_CATALOG_DEV=1 → ephemeral JWT secret (tokens invalid after restart)")
     else:
-        JWT_SECRET = "dev-only-jwt-secret-change-in-prod"
-        log.warning("NKS_WDC_CATALOG_SECRET not set — using insecure default. Set it in production!")
+        raise RuntimeError(
+            "NKS_WDC_JWT_SECRET (or legacy NKS_WDC_CATALOG_SECRET) must be set in production. "
+            "Set NKS_WDC_CATALOG_DEV=1 for local development."
+        )
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_DAYS = 30
 

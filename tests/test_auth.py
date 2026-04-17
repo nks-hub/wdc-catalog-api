@@ -1,7 +1,36 @@
 """Tests for auth utilities — password hashing + verification + JWT."""
 
+import importlib
+
+import pytest
+
 from app.auth import hash_password, verify_password
 from app.devices import create_token, decode_token
+
+
+class TestStartupSecretValidation:
+    def test_auth_signer_fails_without_secret_in_prod(self, monkeypatch):
+        """Session signer must refuse to initialize without explicit secret."""
+        monkeypatch.delenv("NKS_WDC_SESSION_SECRET", raising=False)
+        monkeypatch.delenv("NKS_WDC_CATALOG_SECRET", raising=False)
+        monkeypatch.delenv("NKS_WDC_CATALOG_DEV", raising=False)
+        import app.auth as auth_module
+        with pytest.raises(RuntimeError, match="NKS_WDC_SESSION_SECRET"):
+            importlib.reload(auth_module)
+        # Restore for subsequent tests
+        monkeypatch.setenv("NKS_WDC_CATALOG_DEV", "1")
+        importlib.reload(auth_module)
+
+    def test_devices_module_fails_without_secret_in_prod(self, monkeypatch):
+        """JWT secret must refuse to initialize without explicit secret."""
+        monkeypatch.delenv("NKS_WDC_JWT_SECRET", raising=False)
+        monkeypatch.delenv("NKS_WDC_CATALOG_SECRET", raising=False)
+        monkeypatch.delenv("NKS_WDC_CATALOG_DEV", raising=False)
+        import app.devices as devices_module
+        with pytest.raises(RuntimeError, match="NKS_WDC_JWT_SECRET"):
+            importlib.reload(devices_module)
+        monkeypatch.setenv("NKS_WDC_CATALOG_DEV", "1")
+        importlib.reload(devices_module)
 
 
 class TestPasswordHashing:

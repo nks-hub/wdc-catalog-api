@@ -35,11 +35,18 @@ SESSION_MAX_AGE = 60 * 60 * 24 * 7  # 1 week
 
 
 def _secret_key() -> str:
-    env = os.environ.get("NKS_WDC_CATALOG_SECRET")
+    env = os.environ.get("NKS_WDC_SESSION_SECRET") or os.environ.get("NKS_WDC_CATALOG_SECRET")
     if env:
         return env
-    # Dev fallback — persist so restarts don't log everyone out.
-    return "dev-only-secret-change-me-in-production-32-chars"
+    if os.environ.get("NKS_WDC_CATALOG_DEV") == "1":
+        import secrets as _secrets
+        key = _secrets.token_urlsafe(32)
+        log.warning("NKS_WDC_CATALOG_DEV=1 → ephemeral session signer (cookies invalid after restart)")
+        return key
+    raise RuntimeError(
+        "NKS_WDC_SESSION_SECRET (or legacy NKS_WDC_CATALOG_SECRET) must be set in production. "
+        "Set NKS_WDC_CATALOG_DEV=1 for local development."
+    )
 
 
 _signer = TimestampSigner(_secret_key())
