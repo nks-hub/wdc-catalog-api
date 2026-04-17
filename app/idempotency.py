@@ -27,6 +27,7 @@ from typing import Optional
 
 from fastapi import HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .db import Account, IdempotencyRecord
@@ -80,18 +81,22 @@ def persist(
     body: bytes,
     content_type: str = "application/json",
 ) -> None:
-    """Store a response under the Idempotency-Key if the client sent one."""
+    """Store a response under the Idempotency-Key if the client sent one.
+
+    Uses INSERT-and-rollback to handle the concurrent-writer race: two
+    requests with the same key may both land here when the first's
+    ``replay_if_present`` miss hadn't yet committed. We attempt the
+    INSERT inside a SAVEPOINT so an ``IntegrityError`` (PK collision)
+    leaves the outer transaction intact and the loser just drops their
+    row — the first writer's response remains authoritative.
+    """
     key = request.headers.get(IDEMPOTENCY_HEADER)
     if not key:
         return
     account_id = account.id if account else None
     key_hash = _hash_key(account_id, request.method, request.url.path, key)
     expires = datetime.now(timezone.utc) + timedelta(seconds=IDEMPOTENCY_TTL_SECONDS)
-    existing = db.get(IdempotencyRecord, key_hash)
-    if existing is not None:
-        # A concurrent writer beat us; keep the first-write-wins row.
-        return
-    db.add(IdempotencyRecord(
+    row = IdempotencyRecord(
         key_hash=key_hash,
         account_id=account_id,
         method=request.method.upper(),
@@ -100,8 +105,15 @@ def persist(
         response_body=body,
         content_type=content_type,
         expires_at=expires.replace(tzinfo=None),
-    ))
-    db.flush()
+    )
+    try:
+        with db.begin_nested():  # SAVEPOINT — auto-rollback on IntegrityError
+            db.add(row)
+            db.flush()
+    except IntegrityError:
+        # Another concurrent writer persisted the same key first.
+        # First-write-wins — keep outer transaction alive.
+        pass
 
 
 def wrap_json(

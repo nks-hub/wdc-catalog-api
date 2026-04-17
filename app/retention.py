@@ -75,6 +75,36 @@ def _resolve_policy(db: Session, account_id: int) -> ResolvedPolicy:
     return DEFAULT_POLICY
 
 
+_SQLITE_BATCH_SIZE = int(os.environ.get("NKS_WDC_RETENTION_BATCH", "1000"))
+
+
+def _batched_delete(session: Session, model, filter_expr) -> int:
+    """Delete matching rows in ``_SQLITE_BATCH_SIZE`` chunks.
+
+    SQLite holds an exclusive lock for the duration of a DELETE; at
+    100k+ expired rows that's seconds of downtime for writers. Batching
+    lets readers + writers make progress between chunks. Postgres
+    handles the unbatched path fine, but the code costs nothing to keep
+    uniform across both engines.
+    """
+    total = 0
+    while True:
+        # Pick a page of primary keys matching the predicate, then delete
+        # only those (portable across both sqlite + pg without relying on
+        # LIMIT inside DELETE).
+        pk_col = list(model.__table__.primary_key.columns)[0]
+        ids = [row[0] for row in session.execute(
+            select(pk_col).where(filter_expr).limit(_SQLITE_BATCH_SIZE)
+        ).all()]
+        if not ids:
+            break
+        res = session.execute(delete(model).where(pk_col.in_(ids)))
+        total += res.rowcount or 0
+        if len(ids) < _SQLITE_BATCH_SIZE:
+            break
+    return total
+
+
 def _do_retention(session: Session) -> dict:
     """Snapshot purge + idempotency + revoked-token sweeps, all against
     a single session. Caller decides whether to commit (manual admin
@@ -92,20 +122,19 @@ def _do_retention(session: Session) -> dict:
         )
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    idem_res = session.execute(
-        delete(IdempotencyRecord).where(IdempotencyRecord.expires_at <= now)
+    idempotency_purged = _batched_delete(
+        session, IdempotencyRecord,
+        IdempotencyRecord.expires_at <= now,
     )
-    rev_res = session.execute(
-        delete(RevokedToken).where(
-            RevokedToken.expires_at.is_not(None),
-            RevokedToken.expires_at <= now,
-        )
+    revoked_purged = _batched_delete(
+        session, RevokedToken,
+        (RevokedToken.expires_at.is_not(None)) & (RevokedToken.expires_at <= now),
     )
     return {
         "accounts": len(account_ids),
         "deleted": deleted_total,
-        "idempotency_purged": idem_res.rowcount or 0,
-        "revoked_tokens_purged": rev_res.rowcount or 0,
+        "idempotency_purged": idempotency_purged,
+        "revoked_tokens_purged": revoked_purged,
     }
 
 

@@ -163,6 +163,54 @@ def test_import_replays_to_same_result(client: TestClient):
     assert r1.json()["id"] == r2.json()["id"]
 
 
+def test_persist_swallows_integrity_error_on_race(client: TestClient):
+    """Two concurrent writers with the same key → loser's SAVEPOINT
+    rolls back without bubbling an IntegrityError to the handler."""
+    from app import idempotency
+    from app.db import IdempotencyRecord, get_session
+
+    key_hash = "test-race-" + uuid.uuid4().hex
+    expires = __import__("datetime").datetime.now().replace(microsecond=0)
+    # Pre-seed the collision row so the next insert hits PK conflict.
+    db = next(get_session())
+    try:
+        db.add(IdempotencyRecord(
+            key_hash=key_hash,
+            account_id=None,
+            method="POST",
+            path="/api/v1/test-race",
+            status_code=201,
+            response_body=b'{"first": true}',
+            content_type="application/json",
+            expires_at=expires,
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    # Now call persist() which will try the same key via the hashing
+    # path — monkeypatch _hash_key to force collision.
+    import unittest.mock
+    fake_request = unittest.mock.MagicMock()
+    fake_request.headers = {"Idempotency-Key": "collision-test-key"}
+    fake_request.method = "POST"
+    fake_request.url.path = "/api/v1/test-race"
+
+    db = next(get_session())
+    try:
+        with unittest.mock.patch.object(
+            idempotency, "_hash_key", return_value=key_hash
+        ):
+            # Must not raise — SAVEPOINT rollback absorbs the duplicate.
+            idempotency.persist(
+                db, fake_request, None,
+                status_code=201, body=b'{"second": true}',
+            )
+            db.commit()  # outer transaction stays alive
+    finally:
+        db.close()
+
+
 def test_different_accounts_have_separate_keyspace(client: TestClient):
     shared_key = uuid.uuid4().hex
     t1, d1 = _setup(client)
