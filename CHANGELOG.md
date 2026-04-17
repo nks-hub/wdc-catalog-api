@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.7.1 — 2026-04-17
+
+P2 design-review polish. 5 commits on top of v0.7.0.
+
+- **Login brand moment** — real SVG logomark, tagline ("Catalog &
+  config sync"), warm radial gradient behind the card, topbar/footer
+  hidden on login surface. First-impression moment matters (Lindgaard
+  et al., 2006: 50 ms credibility judgement).
+- **Mobile nav drawer** (<720 px) — no-JS `<details>` hamburger drawer
+  drops down from topbar; CSP stays strict.
+- **Active chip state** — filter chips at `/admin/audit` render filled
+  accent when the current query matches, instead of only hover color.
+- **`prefers-reduced-motion` guard** — transitions and button-active
+  translateY skip for users who asked the OS for reduced motion.
+- **JSON syntax tinting** in audit details — server-side Jinja filter
+  tokenises the JSON and wraps keys/strings/numbers/literals in
+  `<span class="jsx-*">`. Keys get accent-indigo, numbers burnt orange,
+  booleans/null warning-yellow italic. HTML and XSS payloads in
+  detail bodies are escaped (4 new tests lock it in).
+
 ## v0.7.0 — 2026-04-18
 
 Design review implementation — warm palette, refined tables, friendlier
