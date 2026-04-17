@@ -65,7 +65,6 @@ from .db import Account, DeviceConfig, User, create_all, get_session, session_fa
 from .devices import router as devices_router, optional_account, get_current_account
 from .generators import GENERATORS, run_generator
 from .schemas import (
-    AppDoc,
     ConfigSyncEntry,
     ConfigSyncListResponse,
     ConfigSyncUploadRequest,
@@ -74,13 +73,11 @@ from .service import (
     add_download,
     add_release,
     apply_generated_releases,
-    build_catalog_document,
     create_app as svc_create_app,
     delete_app as svc_delete_app,
     delete_download,
     delete_release,
     get_app,
-    get_app_document,
     list_apps,
     seed_from_json,
     update_app,
@@ -245,6 +242,14 @@ async def _limit_payload_size(request: Request, call_next):
     return response
 
 
+# Health + catalog read endpoints — extracted to keep this module
+# focused on wiring, middleware, and the HTML admin UI.
+from .api_catalog import router as catalog_router  # noqa: E402
+from .api_health import router as health_router  # noqa: E402
+
+app.include_router(health_router)
+app.include_router(catalog_router)
+
 # Mount the accounts + devices router (JWT-authenticated endpoints)
 app.include_router(devices_router)
 
@@ -309,69 +314,7 @@ def _base_context(request: Request, username: str | None, **extra) -> dict:
 # ─────────────────────────────────────────────────────────────────────────
 
 
-@app.get("/healthz", tags=["health"])
-def healthz() -> JSONResponse:
-    """Liveness probe — succeeds as long as the process is running.
-
-    Deliberately does *not* hit the DB: a transient connection blip
-    shouldn't kill the pod. Kubernetes liveness failures trigger a
-    container restart; we want that reserved for real deadlocks.
-    Readiness (route traffic or not) belongs on ``/readyz``.
-    """
-    return JSONResponse(
-        {"ok": True, "service": "nks-wdc-catalog-api", "version": __version__}
-    )
-
-
-@app.get("/readyz", tags=["health"])
-def readyz(db: Session = Depends(get_session)) -> JSONResponse:
-    """Readiness probe — verifies every upstream the service depends on.
-
-    Checks:
-    - DB round-trip (``SELECT 1``) — the catalog can't serve without it.
-    - Blob backend (when configured) — optional, but catalog storage
-      tiering needs S3/MinIO for large payloads.
-
-    Failures return 503 with a per-dependency status so operators can
-    see *which* dep is unhappy from a curl.
-    """
-    checks: dict[str, str] = {}
-    overall_ok = True
-
-    try:
-        db.execute(select(1)).scalar()
-        checks["db"] = "up"
-    except Exception as exc:  # noqa: BLE001
-        log.warning("readyz db probe failed: %s", exc)
-        checks["db"] = "down"
-        overall_ok = False
-
-    from . import blob_store
-
-    if blob_store.is_configured():
-        try:
-            # head_bucket is a cheap no-op — we only care whether the
-            # endpoint is reachable with the configured credentials.
-            client, cfg = blob_store._client()  # noqa: SLF001
-            client.head_bucket(Bucket=cfg.bucket)
-            checks["blob"] = "up"
-        except Exception as exc:  # noqa: BLE001
-            log.warning("readyz blob probe failed: %s", exc)
-            checks["blob"] = "down"
-            overall_ok = False
-
-    body = {
-        "ok": overall_ok,
-        "service": "nks-wdc-catalog-api",
-        "version": __version__,
-        "checks": checks,
-    }
-    return JSONResponse(
-        body,
-        status_code=(
-            status.HTTP_200_OK if overall_ok else status.HTTP_503_SERVICE_UNAVAILABLE
-        ),
-    )
+# Health probes extracted to ``app.api_health`` — mounted below.
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -381,66 +324,9 @@ def readyz(db: Session = Depends(get_session)) -> JSONResponse:
 _CATALOG_CACHE_SECONDS = int(os.environ.get("NKS_WDC_CATALOG_CACHE_SECONDS", "60"))
 
 
-@app.get("/api/v1/catalog", tags=["catalog"])
-def api_get_catalog(request: Request, db: Session = Depends(get_session)) -> Response:
-    """Public JSON catalog with ETag + Cache-Control.
-
-    Hot path: an in-process TTL cache (``_cache.catalog_response_cache``)
-    stores the serialized body + ETag + the ``generated_at`` timestamp
-    keyed by content hash. A cache refresh whose hash matches the prior
-    build reuses the prior timestamp — so clients doing naïve JSON diff
-    don't see the catalog "change" every TTL window (code-review M7).
-
-    Admin mutations invalidate the cache via ``invalidate_catalog()``.
-    """
-    from ._cache import catalog_response_cache
-
-    cached = catalog_response_cache.get("catalog")
-    if cached is None:
-        import hashlib
-
-        doc = build_catalog_document(db)
-        # ETag is derived from the content *excluding* ``generated_at``
-        # (that timestamp intentionally stays stable across rebuilds with
-        # identical catalog state — see M7). Use ``model_dump_json`` with
-        # ``exclude={"generated_at"}`` which is a single pydantic walk
-        # over the doc; we then call ``model_dump_json`` once more with
-        # the now-stable ``generated_at`` for the response body.
-        etag_bytes = doc.model_dump_json(
-            by_alias=True, exclude={"generated_at"}
-        ).encode("utf-8")
-        etag = '"' + hashlib.sha256(etag_bytes).hexdigest()[:16] + '"'
-
-        stable = catalog_response_cache.get("stable")
-        if stable is not None and stable["etag"] == etag:
-            doc.generated_at = stable["generated_at"]
-        else:
-            catalog_response_cache.set(
-                "stable",
-                {"etag": etag, "generated_at": doc.generated_at},
-                ttl=24 * 3600,
-            )
-        body = doc.model_dump_json(by_alias=True)
-        cached = (etag, body)
-        catalog_response_cache.set("catalog", cached)
-    etag, body = cached
-    headers = {
-        "ETag": etag,
-        "Cache-Control": f"public, max-age={_CATALOG_CACHE_SECONDS}, stale-while-revalidate=300",
-        "Vary": "Accept-Encoding",
-        "CDN-Cache-Control": f"public, max-age={_CATALOG_CACHE_SECONDS * 10}",
-    }
-    if request.headers.get("if-none-match") == etag:
-        return Response(status_code=304, headers=headers)
-    return Response(content=body, media_type="application/json", headers=headers)
-
-
-@app.get("/api/v1/catalog/{app_name}", response_model=AppDoc, tags=["catalog"])
-def api_get_app(app_name: str, db: Session = Depends(get_session)) -> AppDoc:
-    doc = get_app_document(db, app_name)
-    if doc is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Unknown app '{app_name}'")
-    return doc
+# Public catalog read endpoints live in ``app.api_catalog`` — mounted
+# above via ``app.include_router``. Keeping them out of this module
+# makes it easier to eventually front them with a dedicated CDN worker.
 
 
 # ─────────────────────────────────────────────────────────────────────────
