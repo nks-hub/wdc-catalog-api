@@ -466,16 +466,28 @@ def list_snapshots(
     if kind:
         stmt = stmt.where(DeviceSnapshot.kind == kind)
     if label_like:
-        stmt = stmt.where(DeviceSnapshot.label.like(f"%{label_like}%"))
-    from .db import count_query
+        # Escape SQL LIKE wildcards inside user input so ``%foo%`` matches
+        # the literal substring, not arbitrary wildcard positions.
+        safe = label_like.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        stmt = stmt.where(DeviceSnapshot.label.like(f"%{safe}%", escape="\\"))
+    page_size = max(1, min(limit, 200))
+    page_off = max(0, offset)
+    rows = list(
+        db.scalars(
+            stmt.order_by(DeviceSnapshot.created_at.desc())
+            .offset(page_off)
+            .limit(page_size)
+        ).all()
+    )
+    # Skip the count round-trip when we already know the full size: page
+    # 1 returned fewer rows than its limit, so nothing follows.
+    if page_off == 0 and len(rows) < page_size:
+        total = len(rows)
+    else:
+        from .db import count_query
 
-    total = count_query(db, stmt)
-    rows = db.scalars(
-        stmt.order_by(DeviceSnapshot.created_at.desc())
-        .offset(max(0, offset))
-        .limit(max(1, min(limit, 200)))
-    ).all()
-    return list(rows), total
+        total = count_query(db, stmt)
+    return rows, total
 
 
 def diff(
