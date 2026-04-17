@@ -26,7 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .auth import hash_password, verify_password
-from .db import Account, DeviceConfig, get_session
+from .db import Account, DeviceConfig, RevokedToken, get_session
 from .ratelimit import limiter
 
 log = logging.getLogger(__name__)
@@ -85,10 +85,21 @@ class PushConfigRequest(BaseModel):
 
 # ── JWT helpers ─────────────────────────────────────────────────────────
 
-def create_token(account_id: int, email: str) -> str:
+def create_token(account_id: int, email: str, *, token_version: int = 1) -> str:
+    """Mint a JWT with ``jti`` + account ``tv`` (token version).
+
+    Individual tokens can be added to ``revoked_tokens`` via logout;
+    bumping ``Account.token_version`` invalidates every outstanding
+    token for the account in one shot — cheap bulk revocation without
+    tracking each jti.
+    """
     expire = datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRE_DAYS)
+    jti = __import__("uuid").uuid4().hex
     return jwt.encode(
-        {"sub": str(account_id), "email": email, "exp": expire},
+        {
+            "sub": str(account_id), "email": email,
+            "exp": expire, "jti": jti, "tv": token_version,
+        },
         JWT_SECRET,
         algorithm=JWT_ALGORITHM,
     )
@@ -109,12 +120,21 @@ def get_current_account(
     try:
         payload = decode_token(credentials.credentials)
         account_id = int(payload["sub"])
+        jti = payload.get("jti")
     except (JWTError, KeyError, ValueError) as exc:
         log.info("JWT decode failed: %s", exc)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
+    if jti and db.get(RevokedToken, jti) is not None:
+        log.info("JWT %s is revoked — rejecting", jti)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token has been revoked")
     account = db.get(Account, account_id)
     if account is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Account not found")
+    token_version = payload.get("tv", 1)
+    if token_version != account.token_version:
+        log.info("JWT tv=%s stale for account %s (current %s)",
+                 token_version, account_id, account.token_version)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token has been revoked")
     return account
 
 
@@ -153,7 +173,7 @@ def register(
     )
     db.add(account)
     db.flush()
-    token = create_token(account.id, email)
+    token = create_token(account.id, email, token_version=account.token_version)
     return TokenResponse(token=token, email=email)
 
 
@@ -169,8 +189,35 @@ def login(
     if account.suspended_at is not None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Account is suspended")
     account.last_login_at = datetime.now(timezone.utc)
-    token = create_token(account.id, email)
+    token = create_token(account.id, email, token_version=account.token_version)
     return TokenResponse(token=token, email=email)
+
+
+@router.post("/auth/logout")
+def logout(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
+    db: Session = Depends(get_session),
+) -> dict:
+    """Revoke the presented token by adding its jti to the denylist."""
+    if credentials is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Authentication required")
+    try:
+        payload = decode_token(credentials.credentials)
+    except JWTError:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
+    jti = payload.get("jti")
+    if not jti:
+        return {"ok": True, "revoked": False, "note": "Token predates jti support"}
+    if db.get(RevokedToken, jti) is None:
+        account_id = int(payload.get("sub") or 0) or None
+        expires_at = None
+        if "exp" in payload:
+            expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+        db.add(RevokedToken(
+            jti=jti, account_id=account_id,
+            reason="logout", expires_at=expires_at,
+        ))
+    return {"ok": True, "revoked": True, "jti": jti}
 
 
 @router.get("/auth/me")

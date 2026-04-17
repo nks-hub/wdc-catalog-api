@@ -153,8 +153,24 @@ class Account(Base):
     password_hash: Mapped[str] = mapped_column(String(128))
     role: Mapped[str] = mapped_column(String(16), default="user", nullable=False)
     suspended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    token_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class RevokedToken(Base):
+    """Denylist of JWT jti values that must be rejected even if the
+    signature + expiry check would otherwise pass. Populated on logout,
+    password change, account suspension, and admin-initiated revocation."""
+    __tablename__ = "revoked_tokens"
+
+    jti: Mapped[str] = mapped_column(String(64), primary_key=True)
+    account_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=True, index=True,
+    )
+    reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    revoked_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class GlobalPolicy(Base):

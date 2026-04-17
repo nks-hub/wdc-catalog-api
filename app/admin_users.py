@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from . import audit
 from .auth import hash_password
-from .db import Account, DeviceConfig, get_session
+from .db import Account, DeviceConfig, RevokedToken, get_session
 from .permissions import require_role
 from .roles import Role
 
@@ -78,6 +78,21 @@ def _target_or_404(db: Session, user_id: int) -> Account:
     if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Account not found")
     return target
+
+
+def _revoke_all_for(db: Session, account_id: int, *, reason: str) -> int:
+    """Bump the account's ``token_version`` so every outstanding JWT
+    (which carries the old ``tv``) fails authentication on next use.
+
+    Returns 1 when the column was bumped, 0 when the account is gone.
+    The reason is recorded separately via ``audit.emit`` by the caller.
+    """
+    target = db.get(Account, account_id)
+    if target is None:
+        return 0
+    target.token_version += 1
+    _ = reason  # reserved for future fine-grained tracking
+    return 1
 
 
 # ── Endpoints ───────────────────────────────────────────────────────────
@@ -196,6 +211,9 @@ def suspend_user(
     if Role(target.role) == Role.owner:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot suspend an owner account")
     target.suspended_at = datetime.now(timezone.utc)
+    # Revoke every outstanding token for the suspended account so the
+    # session can't limp along until the next natural expiry.
+    _revoke_all_for(db, target.id, reason="suspend")
     db.flush()
     audit.emit(
         db, actor=caller, action="user.suspended", request=request,
@@ -245,6 +263,8 @@ def reset_password(
         )
     temp = _secrets.token_urlsafe(12)
     target.password_hash = hash_password(temp)
+    # Password reset must invalidate every JWT the old password issued.
+    _revoke_all_for(db, target.id, reason="password-reset")
     db.flush()
     audit.emit(
         db, actor=caller, action="user.password_reset", request=request,
@@ -252,6 +272,33 @@ def reset_password(
         detail={"target_email": target.email},
     )
     return ResetPasswordResponse(email=target.email, temp_password=temp)
+
+
+@router.post("/{user_id}/revoke-tokens", response_model=AdminUserRow)
+def revoke_user_tokens(
+    user_id: int,
+    request: Request,
+    caller: Account = Depends(require_role(Role.admin)),
+    db: Session = Depends(get_session),
+) -> AdminUserRow:
+    """Invalidate every JWT previously issued to this account by bumping
+    the account's ``token_version``. The user must re-login."""
+    target = _target_or_404(db, user_id)
+    if Role(target.role) == Role.owner and Role(caller.role) != Role.owner:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only owners can revoke an owner's tokens"
+        )
+    _revoke_all_for(db, target.id, reason="admin-revoke")
+    db.flush()
+    audit.emit(
+        db, actor=caller, action="user.tokens_revoked", request=request,
+        resource_type="account", resource_id=target.id,
+        detail={"target_email": target.email, "new_token_version": target.token_version},
+    )
+    device_count = db.scalar(
+        select(func.count(DeviceConfig.device_id)).where(DeviceConfig.user_id == user_id)
+    ) or 0
+    return _row(target, device_count)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
