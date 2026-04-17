@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Snapshot #{{ snapshot.id }} — {{ snapshot.device_id }}{% endblock %}
+{% block content %}
+<section class="section">
+  <p><a href="/admin/devices/{{ snapshot.device_id }}/snapshots">← back to snapshots</a></p>
+  <h1>Snapshot #{{ snapshot.id }} <span class="pill">{{ snapshot.kind }}</span></h1>
+
+  <div class="meta">
+    <div><strong>Device:</strong> <code>{{ snapshot.device_id }}</code></div>
+    <div><strong>Created:</strong> {{ snapshot.created_at }}</div>
+    <div><strong>Label:</strong> {{ snapshot.label or '—' }}</div>
+    <div><strong>Size:</strong> {{ snapshot.size_bytes }} bytes</div>
+    <div><strong>Checksum:</strong> <code class="selectable">{{ snapshot.checksum }}</code></div>
+    {% if snapshot.compression %}<div><strong>Compression:</strong> {{ snapshot.compression }}</div>{% endif %}
+    {% if snapshot.encryption_kid %}<div><strong>Encryption kid:</strong> <code>{{ snapshot.encryption_kid }}</code></div>{% endif %}
+    {% if snapshot.parent_snapshot_id %}<div><strong>Parent:</strong> <a href="/admin/devices/{{ snapshot.device_id }}/snapshots/{{ snapshot.parent_snapshot_id }}">#{{ snapshot.parent_snapshot_id }}</a></div>{% endif %}
+  </div>
+
+  <div class="action-grid">
+    <a class="btn" href="/api/v1/devices/{{ snapshot.device_id }}/backups/{{ snapshot.id }}/download" target="_blank" rel="noopener">Download JSON</a>
+    {% if not is_head %}
+    <form method="post" action="/admin/devices/{{ snapshot.device_id }}/snapshots/{{ snapshot.id }}/restore" class="inline" onsubmit="return confirm('Restore #{{ snapshot.id }} as HEAD? A pre_restore snapshot is taken first.');">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button class="btn btn-warn">Restore as HEAD</button>
+    </form>
+    {% else %}
+    <span class="pill pill-ok">This is HEAD</span>
+    {% endif %}
+  </div>
+
+  {% if payload_error %}
+    <div class="callout">
+      <strong>Payload unavailable:</strong> {{ payload_error }}
+    </div>
+  {% elif payload_json %}
+  <h2>Payload</h2>
+  <details open>
+    <summary>JSON ({{ payload_json|length }} chars)</summary>
+    <pre class="detail selectable">{{ payload_json }}</pre>
+  </details>
+  {% endif %}
+
+  {% if diff_patch is not none %}
+  <h2>Diff vs HEAD</h2>
+  {% if diff_patch %}
+  <details open>
+    <summary>{{ diff_patch|length }} operation(s)</summary>
+    <pre class="detail selectable">{{ diff_patch_text }}</pre>
+  </details>
+  {% else %}
+  <p class="muted">No differences vs HEAD.</p>
+  {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

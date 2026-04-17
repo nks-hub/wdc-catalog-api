@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}My account — NKS WDC{% endblock %}
+{% block content %}
+<section class="section">
+  <h1>My account</h1>
+
+  <div class="meta">
+    <div><strong>Signed in as:</strong> <code>{{ username }}</code></div>
+    <div><strong>Admin-UI user ID:</strong> {{ user_id }}</div>
+  </div>
+
+  <h2>Change password</h2>
+  <form method="post" action="/admin/account/password" class="form-grid">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Current password
+      <input type="password" name="current_password" required autocomplete="current-password">
+    </label>
+    <label>New password (min 12 chars)
+      <input type="password" name="new_password" minlength="12" required autocomplete="new-password">
+    </label>
+    <label>Confirm new password
+      <input type="password" name="new_password_confirm" minlength="12" required autocomplete="new-password">
+    </label>
+    <button class="btn btn-primary">Update password</button>
+  </form>
+
+  <h2>Session</h2>
+  <p class="muted">
+    Admin sessions auto-expire after 24h absolute or 2h idle. Click the button below to sign out of this browser.
+  </p>
+  <form method="post" action="/logout" class="inline">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <button class="btn btn-warn">Sign out</button>
+  </form>
+</section>
+{% endblock %}

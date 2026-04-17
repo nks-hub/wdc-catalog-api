@@ -1110,4 +1110,142 @@ def admin_restore_snapshot(
     )
 
 
+# ── Snapshot detail (payload + diff vs HEAD) ─────────────────────────
+
+
+@router.get(
+    "/admin/devices/{device_id}/snapshots/{snapshot_id}",
+    response_class=HTMLResponse,
+)
+def admin_snapshot_detail(
+    request: Request,
+    device_id: str,
+    snapshot_id: int,
+    username: Annotated[str, Depends(current_user)],
+    flash: Annotated[str | None, Cookie(alias="flash")] = None,
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    import json as _json
+
+    from . import snapshots as _snap
+    from .db import DeviceSnapshot
+    from .device_ids import normalize_device_id
+
+    acct = _admin_account(db, username)
+    dev_id = normalize_device_id(device_id)
+    snap = db.get(DeviceSnapshot, snapshot_id)
+    if snap is None or snap.device_id != dev_id or snap.account_id != acct.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot not found")
+
+    head = _snap.get_head(db, dev_id)
+    is_head = head is not None and head.id == snap.id
+
+    payload_json = None
+    payload_error = None
+    diff_patch = None
+    diff_patch_text = None
+    try:
+        payload = _snap.unpack_payload(snap, db=db)
+        payload_json = _json.dumps(
+            payload, indent=2, sort_keys=True, ensure_ascii=False
+        )
+        if head is not None and head.id != snap.id:
+            try:
+                diff_patch = _snap.diff(snap, head, db=db)
+                diff_patch_text = _json.dumps(
+                    diff_patch, indent=2, sort_keys=True, ensure_ascii=False
+                )
+            except Exception as exc:  # noqa: BLE001
+                diff_patch = []
+                diff_patch_text = f"diff failed: {exc}"
+    except PermissionError as exc:
+        payload_error = (
+            f"Passphrase-encrypted; can't show payload ({exc}). "
+            "Use the API with X-WDC-Passphrase to decrypt."
+        )
+    except Exception as exc:  # noqa: BLE001
+        payload_error = f"Failed to unpack payload: {exc}"
+
+    ctx = base_context(
+        request,
+        username,
+        snapshot={
+            "id": snap.id,
+            "device_id": snap.device_id,
+            "created_at": snap.created_at.isoformat() if snap.created_at else "",
+            "kind": snap.kind,
+            "label": snap.label,
+            "size_bytes": snap.size_bytes,
+            "checksum": snap.checksum or "",
+            "compression": snap.compression,
+            "encryption_kid": snap.encryption_kid,
+            "parent_snapshot_id": snap.parent_snapshot_id,
+        },
+        is_head=is_head,
+        payload_json=payload_json,
+        payload_error=payload_error,
+        diff_patch=diff_patch,
+        diff_patch_text=diff_patch_text,
+        flash=_pop_flash(flash),
+    )
+    response = templates.TemplateResponse(request, "snapshot_detail.html", ctx)
+    _clear_flash(response)
+    return response
+
+
+# ── Self-service account page ────────────────────────────────────────
+
+
+@router.get("/admin/account", response_class=HTMLResponse)
+def admin_account(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    flash: Annotated[str | None, Cookie(alias="flash")] = None,
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    from sqlalchemy import select as _sel
+
+    from .db import User
+
+    user = db.scalar(_sel(User).where(User.username == username))
+    ctx = base_context(
+        request,
+        username,
+        user_id=user.id if user else "—",
+        flash=_pop_flash(flash),
+    )
+    response = templates.TemplateResponse(request, "account.html", ctx)
+    _clear_flash(response)
+    return response
+
+
+@router.post("/admin/account/password", dependencies=[Depends(require_csrf)])
+def admin_change_own_password(
+    username: Annotated[str, Depends(current_user)],
+    current_password: Annotated[str, Form()],
+    new_password: Annotated[str, Form()],
+    new_password_confirm: Annotated[str, Form()],
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    from sqlalchemy import select as _sel
+
+    from .auth import hash_password as _hash
+    from .auth import verify_password as _verify
+    from .db import User
+
+    user = db.scalar(_sel(User).where(User.username == username))
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if not _verify(current_password, user.password_hash):
+        return _redirect("/admin/account", "error", "Current password is wrong")
+    if new_password != new_password_confirm:
+        return _redirect("/admin/account", "error", "New passwords don't match")
+    if len(new_password) < 12:
+        return _redirect(
+            "/admin/account", "error", "New password must be at least 12 characters"
+        )
+    user.password_hash = _hash(new_password)
+    return _redirect("/admin/account", "success", "Password updated")
+
+
 __all__ = ["router"]

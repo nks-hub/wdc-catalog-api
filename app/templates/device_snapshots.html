@@ -15,7 +15,7 @@
     <tbody>
       {% for s in snapshots %}
       <tr {% if head and s.id == head.id %}class="row-head"{% endif %}>
-        <td>#{{ s.id }}{% if head and s.id == head.id %} <span class="pill pill-ok">HEAD</span>{% endif %}</td>
+        <td><a href="/admin/devices/{{ device_id }}/snapshots/{{ s.id }}">#{{ s.id }}</a>{% if head and s.id == head.id %} <span class="pill pill-ok">HEAD</span>{% endif %}</td>
         <td class="nowrap">{{ s.created_at }}</td>
         <td><span class="pill">{{ s.kind }}</span></td>
         <td>{{ s.label or '—' }}</td>

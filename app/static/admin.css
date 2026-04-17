@@ -318,6 +318,11 @@ select, input, textarea, button {
   background: var(--surface-2);
   color: var(--text);
 }
+.nav a.active {
+  background: var(--accent-soft, color-mix(in srgb, var(--accent) 18%, transparent));
+  color: var(--accent);
+  font-weight: 600;
+}
 
 .user {
   display: flex;

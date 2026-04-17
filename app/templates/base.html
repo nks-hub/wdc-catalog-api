@@ -10,19 +10,20 @@
   <header class="topbar">
     <a href="/admin" class="brand">NKS WDC Catalog</a>
     <nav class="nav">
-      <a href="/admin">Dashboard</a>
-      <a href="/admin/catalog">Apps</a>
-      <a href="/admin/users">Users</a>
-      <a href="/admin/invites">Invites</a>
-      <a href="/admin/devices">Devices</a>
-      <a href="/admin/retention">Retention</a>
-      <a href="/admin/audit">Audit</a>
+      {% set path = request.url.path %}
+      <a href="/admin" class="{% if path == '/admin' %}active{% endif %}">Dashboard</a>
+      <a href="/admin/catalog" class="{% if path.startswith('/admin/catalog') or path.startswith('/admin/apps') or path == '/admin/new' %}active{% endif %}">Apps</a>
+      <a href="/admin/users" class="{% if path.startswith('/admin/users') %}active{% endif %}">Users</a>
+      <a href="/admin/invites" class="{% if path.startswith('/admin/invites') %}active{% endif %}">Invites</a>
+      <a href="/admin/devices" class="{% if path.startswith('/admin/devices') %}active{% endif %}">Devices</a>
+      <a href="/admin/retention" class="{% if path.startswith('/admin/retention') %}active{% endif %}">Retention</a>
+      <a href="/admin/audit" class="{% if path.startswith('/admin/audit') %}active{% endif %}">Audit</a>
       <a href="/api/v1/catalog" target="_blank" rel="noopener">JSON</a>
       <a href="/docs" target="_blank" rel="noopener">API docs</a>
     </nav>
     {% if username %}
       <div class="user">
-        <span class="user-name">{{ username }}</span>
+        <a href="/admin/account" class="user-name" title="My account">{{ username }}</a>
         <form method="post" action="/logout" class="inline">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
           <button class="btn btn-ghost" type="submit">Log out</button>
