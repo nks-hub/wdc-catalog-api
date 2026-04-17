@@ -93,8 +93,17 @@ def replay_if_present(
         return None
     if body is not None and row.body_hash is not None:
         if _canonical_body_hash(body) != row.body_hash:
+            # starlette renamed the 422 constant in 0.38. Use the new
+            # name when available; only touch the deprecated alias on
+            # older installs (evaluating the old name triggers a
+            # DeprecationWarning even just to read it).
+            code = (
+                status.HTTP_422_UNPROCESSABLE_CONTENT  # type: ignore[attr-defined]
+                if hasattr(status, "HTTP_422_UNPROCESSABLE_CONTENT")
+                else 422
+            )
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                code,
                 f"{IDEMPOTENCY_HEADER} reused with a different request body",
             )
     return Response(
