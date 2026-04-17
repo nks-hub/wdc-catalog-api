@@ -24,6 +24,83 @@
     <button class="btn btn-primary">Update password</button>
   </form>
 
+  <h2>Two-factor authentication</h2>
+  <p class="muted">
+    Time-based one-time password (TOTP, RFC 6238) — pairs with Google
+    Authenticator, 1Password, Authy, Bitwarden, and any standards-
+    compliant authenticator. Required on login in addition to the
+    password once enabled.
+  </p>
+
+  {% if new_recovery_codes %}
+  <div class="token-hero">
+    <div class="token-hero-head">
+      <div>
+        <span class="token-hero-label">Recovery codes — save now</span>
+        <b class="token-hero-name">Each code works exactly once</b>
+      </div>
+      <button type="button" class="btn btn-primary btn-copy" data-copy-target="new-recovery-codes">Copy all</button>
+    </div>
+    <pre id="new-recovery-codes" class="token-hero-value selectable">{% for c in new_recovery_codes %}{{ c }}
+{% endfor %}</pre>
+    <div class="token-hero-meta">
+      <span class="token-hero-warn">These are your fallback if you lose the authenticator — store in a password manager.</span>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if pending_totp %}
+  <div class="token-hero">
+    <div class="token-hero-head">
+      <div>
+        <span class="token-hero-label">Pair your authenticator</span>
+        <b class="token-hero-name">Paste the URI below, or type the secret manually</b>
+      </div>
+      <button type="button" class="btn btn-primary btn-copy" data-copy-target="pending-totp-uri">Copy URI</button>
+    </div>
+    <pre id="pending-totp-uri" class="token-hero-value selectable">{{ pending_totp.otpauth_uri }}</pre>
+    <div class="token-hero-meta">
+      <span class="muted">Secret: <code class="selectable">{{ pending_totp.secret }}</code></span>
+      <span class="muted">Algorithm: SHA1 · 6 digits · 30 s</span>
+    </div>
+  </div>
+  <form method="post" action="/admin/account/totp/confirm" class="form form-settings">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <fieldset class="form-fieldset">
+      <legend>Confirm pairing</legend>
+      <label>Enter the 6-digit code from your authenticator
+        <input type="text" name="code" required autocomplete="one-time-code" inputmode="numeric" pattern="[0-9 \-]{6,}" placeholder="000 000">
+        <span class="hint">Codes rotate every 30 s. If it fails, check your phone's clock.</span>
+      </label>
+    </fieldset>
+    <div class="form-actions">
+      <button class="btn btn-primary">Confirm &amp; enable 2FA</button>
+    </div>
+  </form>
+  {% elif totp_enabled %}
+  <div class="meta">
+    <div><strong>Status:</strong> <span class="pill pill-ok">enabled</span> since {{ totp_enabled_at[:19] if totp_enabled_at else '—' }}</div>
+  </div>
+  <form method="post" action="/admin/account/totp/disable" class="form form-settings">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <fieldset class="form-fieldset">
+      <legend>Disable 2FA</legend>
+      <label>Current 6-digit code (or recovery code)
+        <input type="text" name="code" required autocomplete="one-time-code" placeholder="000 000">
+        <span class="hint">Proves you still control the factor before we take it away.</span>
+      </label>
+    </fieldset>
+    <div class="form-actions">
+      <button class="btn btn-warn" onclick="return confirm('Disable 2FA? Your account will again be protected only by password.');">Disable 2FA</button>
+    </div>
+  </form>
+  {% else %}
+  <form method="post" action="/admin/account/totp/setup">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <button class="btn btn-primary">Enable 2FA</button>
+  </form>
+  {% endif %}
+
   <h2>Personal access tokens</h2>
   <p class="muted">
     Long-lived API keys for CI pipelines + scripts that can't run the

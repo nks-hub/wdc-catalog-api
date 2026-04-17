@@ -67,10 +67,14 @@ def _redirect(
         # subdomain) can't inject messages that would render into the
         # admin HTML. HttpOnly still prevents JS tampering; the
         # signature prevents everything else.
+        # Flash payloads may include UTF-8 arrows/em-dashes; base64
+        # wrap the signed bytes so the cookie value is guaranteed ASCII
+        # and no charset surprises leak into Starlette's header encoder.
+        import base64 as _b64
         signed = _flash_signer().sign(f"{flash_kind}|{flash_message}".encode("utf-8"))
         response.set_cookie(
             "flash",
-            signed.decode("ascii"),
+            _b64.urlsafe_b64encode(signed).decode("ascii"),
             max_age=15,
             httponly=True,
             samesite="strict",
@@ -82,10 +86,22 @@ def _redirect(
 def _pop_flash(cookie: str | None) -> dict | None:
     if not cookie:
         return None
+    import base64 as _b64
+
     from itsdangerous import BadSignature, SignatureExpired
 
+    # Cookie is base64(signed-bytes). Older cookies (pre-b64 wrapping)
+    # still round-trip because itsdangerous tolerates trailing = padding
+    # and urlsafe alphabet overlaps its own signature alphabet — the
+    # decode step just becomes a no-op if the value wasn't base64'd.
     try:
-        raw = _flash_signer().unsign(cookie.encode("ascii"), max_age=30).decode("utf-8")
+        padded = cookie + "=" * (-len(cookie) % 4)
+        signed_bytes = _b64.urlsafe_b64decode(padded.encode("ascii"))
+    except (ValueError, UnicodeEncodeError):
+        signed_bytes = cookie.encode("utf-8", errors="replace")
+
+    try:
+        raw = _flash_signer().unsign(signed_bytes, max_age=30).decode("utf-8")
     except (BadSignature, SignatureExpired, UnicodeDecodeError):
         # Legacy unsigned cookies written before the signing change —
         # accept once so the rollout doesn't eat flashes mid-deploy.
@@ -2103,6 +2119,10 @@ def admin_account(
         user_id=user.id if user else "—",
         tokens=_pat_view_rows(db, acct.id),
         minted_pat=None,
+        pending_totp=None,
+        new_recovery_codes=None,
+        totp_enabled=bool(acct.totp_enabled),
+        totp_enabled_at=acct.totp_enabled_at.isoformat() if acct.totp_enabled_at else None,
         flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "account.html", ctx)
@@ -2141,11 +2161,10 @@ def admin_create_account_token(
 
     # Render the account page inline so the one-time plaintext callout
     # renders with the freshly-minted row still at the top of the list.
-    ctx = base_context(
+    return _render_account(
         request,
         username,
-        user_id=user.id if user else "—",
-        tokens=_pat_view_rows(db, acct.id),
+        db,
         minted_pat={
             "name": row.name,
             "token": plaintext,
@@ -2153,7 +2172,6 @@ def admin_create_account_token(
         },
         flash={"kind": "success", "message": f"Token '{row.name}' created"},
     )
-    return templates.TemplateResponse(request, "account.html", ctx)
 
 
 @router.post(
@@ -2200,6 +2218,220 @@ def admin_change_own_password(
         )
     user.password_hash = _hash(new_password)
     return _redirect("/admin/account", "success", "Password updated")
+
+
+# ── Two-factor auth (TOTP) ──────────────────────────────────────────
+#
+# The bootstrap ``User`` (admin-UI session identity) owns the 2FA state
+# on its paired ``Account`` row — we reuse the account resolver so the
+# audit trail stays consistent with the rest of the admin surface.
+
+
+def _account_for_user(db: Session, username: str):
+    """Return the Account row that backs this admin-UI username."""
+    return _admin_account(db, username)
+
+
+def _render_account(
+    request: Request,
+    username: str,
+    db: Session,
+    *,
+    minted_pat=None,
+    pending_totp=None,
+    new_recovery_codes=None,
+    flash=None,
+) -> HTMLResponse:
+    from sqlalchemy import select as _sel
+
+    from .db import User
+
+    user = db.scalar(_sel(User).where(User.username == username))
+    acct = _admin_account(db, username)
+    ctx = base_context(
+        request,
+        username,
+        user_id=user.id if user else "—",
+        tokens=_pat_view_rows(db, acct.id),
+        minted_pat=minted_pat,
+        pending_totp=pending_totp,
+        new_recovery_codes=new_recovery_codes,
+        totp_enabled=bool(acct.totp_enabled),
+        totp_enabled_at=acct.totp_enabled_at.isoformat() if acct.totp_enabled_at else None,
+        flash=flash,
+    )
+    response = templates.TemplateResponse(request, "account.html", ctx)
+    if flash is None:
+        _clear_flash(response)
+    return response
+
+
+@router.post("/admin/account/totp/setup", dependencies=[Depends(require_csrf)])
+def admin_totp_setup(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    """Generate a fresh TOTP secret and show the pairing block.
+
+    The secret is persisted unconfirmed (``totp_enabled`` stays False)
+    so the subsequent confirm call can validate the first 6-digit code
+    against it without juggling signed cookies. If the user walks away,
+    a later setup call overwrites it — no orphaned secrets accumulate
+    because there is only ever one per account.
+    """
+    from . import audit as _audit
+    from . import totp as _totp
+
+    acct = _account_for_user(db, username)
+    if acct.totp_enabled:
+        return _redirect("/admin/account", "error", "2FA is already enabled. Disable it first to re-pair.")
+
+    secret = _totp.new_secret()
+    acct.totp_secret = secret
+    acct.totp_enabled = False
+    acct.totp_recovery_hashes = None
+    db.flush()
+
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="totp.setup_started",
+        resource_type="account",
+        resource_id=str(acct.id),
+    )
+
+    return _render_account(
+        request,
+        username,
+        db,
+        pending_totp={
+            "secret": secret,
+            "otpauth_uri": _totp.otpauth_uri(secret, account=acct.email, issuer="NKS WDC"),
+        },
+        flash={"kind": "info", "message": "Scan or paste the secret into your authenticator, then enter the code below."},
+    )
+
+
+@router.post("/admin/account/totp/confirm", dependencies=[Depends(require_csrf)])
+def admin_totp_confirm(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    code: Annotated[str, Form()],
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    """Validate the first TOTP code + flip ``totp_enabled`` on. Returns
+    the one-time recovery codes; they're never shown again afterwards."""
+    import bcrypt as _bcrypt
+    from datetime import datetime, timezone
+
+    from . import audit as _audit
+    from . import totp as _totp
+
+    acct = _account_for_user(db, username)
+    if acct.totp_enabled:
+        return _redirect("/admin/account", "error", "2FA is already enabled.")
+    if not acct.totp_secret:
+        return _redirect("/admin/account", "error", "No pending 2FA setup — start over.")
+
+    if not _totp.verify(acct.totp_secret, code):
+        return _render_account(
+            request,
+            username,
+            db,
+            pending_totp={
+                "secret": acct.totp_secret,
+                "otpauth_uri": _totp.otpauth_uri(
+                    acct.totp_secret, account=acct.email, issuer="NKS WDC"
+                ),
+            },
+            flash={"kind": "error", "message": "Code didn't match — check your clock and try again."},
+        )
+
+    # Success — bake the enablement and mint recovery codes.
+    codes = _totp.generate_recovery_codes()
+    hashes = "\n".join(
+        _bcrypt.hashpw(c.encode("utf-8"), _bcrypt.gensalt(rounds=10)).decode("ascii")
+        for c in codes
+    )
+    acct.totp_enabled = True
+    acct.totp_enabled_at = datetime.now(timezone.utc)
+    acct.totp_recovery_hashes = hashes
+
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="totp.enabled",
+        resource_type="account",
+        resource_id=str(acct.id),
+    )
+
+    return _render_account(
+        request,
+        username,
+        db,
+        new_recovery_codes=codes,
+        flash={"kind": "success", "message": "2FA enabled. Save these recovery codes now — they're shown only once."},
+    )
+
+
+@router.post("/admin/account/totp/disable", dependencies=[Depends(require_csrf)])
+def admin_totp_disable(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    code: Annotated[str, Form()],
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Turn off 2FA. Requires a current code (or recovery code) so a
+    stolen session cookie alone can't weaken the account's auth."""
+    import bcrypt as _bcrypt
+
+    from . import audit as _audit
+    from . import totp as _totp
+
+    acct = _account_for_user(db, username)
+    if not acct.totp_enabled or not acct.totp_secret:
+        return _redirect("/admin/account", "error", "2FA is not enabled.")
+
+    code_clean = code.strip()
+    ok = False
+    used_recovery = False
+    if code_clean.isdigit() and len(code_clean.replace(" ", "").replace("-", "")) == 6:
+        ok = _totp.verify(acct.totp_secret, code_clean)
+    else:
+        norm = _totp.normalize_recovery_code(code_clean)
+        for line in (acct.totp_recovery_hashes or "").splitlines():
+            if not line.strip():
+                continue
+            try:
+                if _bcrypt.checkpw(norm.encode("utf-8"), line.strip().encode("ascii")):
+                    ok = True
+                    used_recovery = True
+                    break
+            except ValueError:
+                continue
+
+    if not ok:
+        return _redirect("/admin/account", "error", "Code didn't match - 2FA stays on.")
+
+    acct.totp_enabled = False
+    acct.totp_secret = None
+    acct.totp_recovery_hashes = None
+    acct.totp_enabled_at = None
+
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="totp.disabled",
+        resource_type="account",
+        resource_id=str(acct.id),
+        detail={"used_recovery": used_recovery} if used_recovery else None,
+    )
+
+    return _redirect("/admin/account", "success", "2FA disabled.")
 
 
 __all__ = ["router"]
