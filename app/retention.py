@@ -21,9 +21,15 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from datetime import datetime, timezone
+
+from sqlalchemy import delete
+
 from .db import (
     Account,
     GlobalPolicy,
+    IdempotencyRecord,
+    RevokedToken,
     SnapshotRetentionPolicy,
     session_factory,
 )
@@ -98,7 +104,38 @@ def run_retention(db: Optional[Session] = None) -> dict:
         if close_after:
             session.close()
 
-    summary = {"accounts": len(account_ids), "deleted": deleted_total}
+    # Sweep expired idempotency records + stale revoked tokens — bounded
+    # housekeeping that keeps the DB small without needing a second cron.
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    idempotency_purged = 0
+    revoked_purged = 0
+    session_b = db or session_factory()
+    try:
+        res = session_b.execute(
+            delete(IdempotencyRecord).where(IdempotencyRecord.expires_at <= now)
+        )
+        idempotency_purged = res.rowcount or 0
+        res = session_b.execute(
+            delete(RevokedToken).where(
+                RevokedToken.expires_at.is_not(None),
+                RevokedToken.expires_at <= now,
+            )
+        )
+        revoked_purged = res.rowcount or 0
+        session_b.commit()
+    except Exception:
+        session_b.rollback()
+        raise
+    finally:
+        if close_after:
+            session_b.close()
+
+    summary = {
+        "accounts": len(account_ids),
+        "deleted": deleted_total,
+        "idempotency_purged": idempotency_purged,
+        "revoked_tokens_purged": revoked_purged,
+    }
     log.info("retention pass: %s", summary)
     try:
         from .observability import RETENTION_DELETED

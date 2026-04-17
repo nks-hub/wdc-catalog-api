@@ -17,6 +17,8 @@ router = APIRouter(prefix="/api/v1/admin/retention", tags=["admin:retention"])
 class RunNowResponse(BaseModel):
     accounts: int
     deleted: int
+    idempotency_purged: int = 0
+    revoked_tokens_purged: int = 0
 
 
 @router.post("/run-now", response_model=RunNowResponse)

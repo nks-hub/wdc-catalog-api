@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from . import audit
 from .auth import hash_password
-from .db import Account, DeviceConfig, RevokedToken, get_session
+from .db import Account, DeviceConfig, IdempotencyRecord, RevokedToken, get_session
 from .permissions import require_role
 from .roles import Role
 
@@ -52,6 +52,26 @@ class AdminUserList(BaseModel):
 
 class ChangeRoleRequest(BaseModel):
     role: Role = Field(..., description="New role. Only `owner` may assign/remove `owner`.")
+
+
+class SessionSummary(BaseModel):
+    email: str
+    token_version: int
+    revoked_tokens_active: int
+    devices_linked: int
+    last_login_at: Optional[str]
+    suspended: bool
+
+
+class RevokedTokenRow(BaseModel):
+    jti: str
+    reason: Optional[str]
+    revoked_at: Optional[str]
+    expires_at: Optional[str]
+
+
+class SessionDetail(SessionSummary):
+    revoked_tokens: list[RevokedTokenRow]
 
 
 class ResetPasswordResponse(BaseModel):
@@ -272,6 +292,47 @@ def reset_password(
         detail={"target_email": target.email},
     )
     return ResetPasswordResponse(email=target.email, temp_password=temp)
+
+
+@router.get("/{user_id}/sessions", response_model=SessionDetail)
+def list_sessions(
+    user_id: int,
+    _: Account = Depends(require_role(Role.support)),
+    db: Session = Depends(get_session),
+) -> SessionDetail:
+    """Snapshot of a user's session + token state for ops triage.
+
+    Support role or higher can read this view; it's read-only and never
+    exposes password hashes or raw tokens."""
+    target = _target_or_404(db, user_id)
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    revoked_rows = db.scalars(
+        select(RevokedToken)
+        .where(RevokedToken.account_id == user_id)
+        .order_by(RevokedToken.revoked_at.desc())
+    ).all()
+    active = [r for r in revoked_rows if r.expires_at is None or r.expires_at > now]
+    device_count = db.scalar(
+        select(func.count(DeviceConfig.device_id)).where(DeviceConfig.user_id == user_id)
+    ) or 0
+    return SessionDetail(
+        email=target.email,
+        token_version=target.token_version,
+        revoked_tokens_active=len(active),
+        devices_linked=device_count,
+        last_login_at=target.last_login_at.isoformat() if target.last_login_at else None,
+        suspended=target.suspended_at is not None,
+        revoked_tokens=[
+            RevokedTokenRow(
+                jti=r.jti,
+                reason=r.reason,
+                revoked_at=r.revoked_at.isoformat() if r.revoked_at else None,
+                expires_at=r.expires_at.isoformat() if r.expires_at else None,
+            )
+            for r in revoked_rows
+        ],
+    )
 
 
 @router.post("/{user_id}/revoke-tokens", response_model=AdminUserRow)
