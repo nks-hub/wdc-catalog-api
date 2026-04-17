@@ -157,7 +157,7 @@ def create_backup(
     db: Session = Depends(get_session),
     x_wdc_passphrase: Optional[str] = Header(default=None, alias="X-WDC-Passphrase"),
 ) -> Response:
-    cached = idempotency.replay_if_present(db, request, account)
+    cached = idempotency.replay_if_present(db, request, account, body=body)
     if cached is not None:
         return cached
 
@@ -194,6 +194,7 @@ def create_backup(
         account,
         _row(snap).model_dump(),
         status_code=status.HTTP_201_CREATED,
+        request_body=body,
     )
 
 
@@ -323,7 +324,7 @@ def import_backup(
     """Import a snapshot envelope (e.g. produced by ``/download`` on
     another instance) onto the target device. Accepts ``Idempotency-Key``
     so repeat uploads from a flaky client land on the same row."""
-    cached = idempotency.replay_if_present(db, request, account)
+    cached = idempotency.replay_if_present(db, request, account, body=body)
     if cached is not None:
         return cached
 
@@ -365,6 +366,7 @@ def import_backup(
         account,
         _row(snap).model_dump(),
         status_code=status.HTTP_201_CREATED,
+        request_body=body,
     )
 
 
@@ -380,7 +382,7 @@ def restore_backup(
     of the current HEAD first so restore is reversible. Honours
     ``Idempotency-Key`` so a retried restore doesn't double-stack
     ``pre_restore`` rows."""
-    cached = idempotency.replay_if_present(db, request, account)
+    cached = idempotency.replay_if_present(db, request, account, body=body)
     if cached is not None:
         return cached
 
@@ -418,6 +420,7 @@ def restore_backup(
         account,
         _row(target).model_dump(),
         status_code=status.HTTP_200_OK,
+        request_body=body,
     )
 
 

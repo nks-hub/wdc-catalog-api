@@ -32,7 +32,38 @@ def _setup(client: TestClient) -> tuple[str, str]:
     return token, dev
 
 
-def test_same_key_returns_first_response(client: TestClient):
+def test_same_key_same_body_returns_first_response(client: TestClient):
+    token, dev = _setup(client)
+    key = uuid.uuid4().hex
+    body = {"kind": "manual", "label": "idem-test", "payload": {"v": 1}}
+    first = client.post(
+        f"/api/v1/devices/{dev}/backups",
+        json=body,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Idempotency-Key": key,
+        },
+    )
+    assert first.status_code == 201
+    first_id = first.json()["id"]
+
+    # Retry with the *same* body → must return the original response
+    # verbatim and flag the replay.
+    second = client.post(
+        f"/api/v1/devices/{dev}/backups",
+        json=body,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Idempotency-Key": key,
+        },
+    )
+    assert second.status_code == 201
+    assert second.headers.get("idempotency-replay") == "true"
+    assert second.json()["id"] == first_id
+    assert second.json()["label"] == "idem-test"
+
+
+def test_same_key_different_body_rejected(client: TestClient):
     token, dev = _setup(client)
     key = uuid.uuid4().hex
     first = client.post(
@@ -44,10 +75,9 @@ def test_same_key_returns_first_response(client: TestClient):
         },
     )
     assert first.status_code == 201
-    first_id = first.json()["id"]
 
-    # Replay with the same key + different body → should return the
-    # original response, NOT create a second snapshot.
+    # Reusing the same Idempotency-Key with a *different* body is a
+    # client bug (stripe-style); we 422 rather than silently replay.
     second = client.post(
         f"/api/v1/devices/{dev}/backups",
         json={"kind": "manual", "label": "should-be-ignored", "payload": {"v": 2}},
@@ -56,10 +86,7 @@ def test_same_key_returns_first_response(client: TestClient):
             "Idempotency-Key": key,
         },
     )
-    assert second.status_code == 201
-    assert second.headers.get("idempotency-replay") == "true"
-    assert second.json()["id"] == first_id
-    assert second.json()["label"] == "idem-test"
+    assert second.status_code == 422
 
 
 def test_different_keys_create_distinct_snapshots(client: TestClient):

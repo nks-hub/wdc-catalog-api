@@ -42,12 +42,39 @@ def _hash_key(account_id: Optional[int], method: str, path: str, key: str) -> st
     return hashlib.sha256(seed.encode("utf-8")).hexdigest()
 
 
+def _canonical_body_hash(body: object) -> str:
+    """Hash a parsed request body in a stable way. ``None`` and empty dict
+    both hash to the empty-body sentinel so bodyless endpoints keep
+    working without special cases."""
+    import json as _json
+
+    if body is None:
+        return hashlib.sha256(b"").hexdigest()
+    if hasattr(body, "model_dump"):
+        payload = body.model_dump(mode="json")
+    elif isinstance(body, (dict, list)):
+        payload = body
+    else:
+        payload = str(body)
+    raw = _json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def replay_if_present(
     db: Session,
     request: Request,
     account: Optional[Account],
+    *,
+    body: object = None,
 ) -> Optional[Response]:
-    """Return a cached response for this request, or None on miss."""
+    """Return a cached response for this request, or None on miss.
+
+    When ``body`` is supplied the handler opts into body-tamper detection:
+    if a prior request with the same ``Idempotency-Key`` persisted a row
+    carrying a different body hash, we raise 422 instead of replaying.
+    Legacy rows without ``body_hash`` skip the check (backward-compat on
+    the transition migration).
+    """
     key = request.headers.get(IDEMPOTENCY_HEADER)
     if not key:
         return None
@@ -64,6 +91,12 @@ def replay_if_present(
     if row.expires_at <= datetime.now(timezone.utc).replace(tzinfo=None):
         db.delete(row)
         return None
+    if body is not None and row.body_hash is not None:
+        if _canonical_body_hash(body) != row.body_hash:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"{IDEMPOTENCY_HEADER} reused with a different request body",
+            )
     return Response(
         content=row.response_body,
         status_code=row.status_code,
@@ -80,6 +113,7 @@ def persist(
     status_code: int,
     body: bytes,
     content_type: str = "application/json",
+    request_body: object = None,
 ) -> None:
     """Store a response under the Idempotency-Key if the client sent one.
 
@@ -101,6 +135,7 @@ def persist(
         account_id=account_id,
         method=request.method.upper(),
         path=request.url.path,
+        body_hash=_canonical_body_hash(request_body) if request_body is not None else None,
         status_code=status_code,
         response_body=body,
         content_type=content_type,
@@ -123,6 +158,7 @@ def wrap_json(
     payload: dict,
     *,
     status_code: int = 201,
+    request_body: object = None,
 ) -> JSONResponse:
     """Convenience: serialize payload, persist it, return the JSONResponse."""
     import json as _json
@@ -135,6 +171,7 @@ def wrap_json(
         status_code=status_code,
         body=body,
         content_type="application/json",
+        request_body=request_body,
     )
     return JSONResponse(status_code=status_code, content=payload)
 

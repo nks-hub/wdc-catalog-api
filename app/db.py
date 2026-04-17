@@ -208,6 +208,12 @@ class IdempotencyRecord(Base):
     )
     method: Mapped[str] = mapped_column(String(8))
     path: Mapped[str] = mapped_column(String(256))
+    # sha256 of the raw request body. Used to detect retries that reuse
+    # the same Idempotency-Key with a *different* payload — those are
+    # programmer errors and we 422 instead of silently replaying the old
+    # response. Nullable for legacy rows written before this column
+    # existed; missing hash means skip the check (backward-compat read).
+    body_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status_code: Mapped[int] = mapped_column(Integer)
     response_body: Mapped[bytes] = mapped_column(LargeBinary)
     content_type: Mapped[str] = mapped_column(String(64), default="application/json")

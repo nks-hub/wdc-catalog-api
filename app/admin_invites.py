@@ -85,7 +85,7 @@ def create_invite(
     distinct tokens for the same email (only the first succeeds; the
     second would 409 on email-already-exists anyway, but replay is
     cleaner)."""
-    cached = idempotency.replay_if_present(db, request, caller)
+    cached = idempotency.replay_if_present(db, request, caller, body=body)
     if cached is not None:
         return cached
 
@@ -134,6 +134,7 @@ def create_invite(
             expires_at=expires.isoformat(),
         ).model_dump(),
         status_code=status.HTTP_200_OK,
+        request_body=body,
     )
 
 
