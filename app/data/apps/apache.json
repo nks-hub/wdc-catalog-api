@@ -7,6 +7,19 @@
   "license": "Apache-2.0",
   "releases": [
     {
+      "version": "2.4.66",
+      "major_minor": "2.4",
+      "channel": "stable",
+      "downloads": [
+        { "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-apache-2.4.66/httpd-2.4.66-windows-x64.zip",
+          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "nks-hub" },
+        { "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-apache-2.4.66/httpd-2.4.66-linux-x64.tar.xz",
+          "os": "linux", "arch": "x64", "archive_type": "tar.xz", "source": "nks-hub" },
+        { "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-apache-2.4.66/httpd-2.4.66-macos-arm64.tar.xz",
+          "os": "macos", "arch": "arm64", "archive_type": "tar.xz", "source": "nks-hub" }
+      ]
+    },
+    {
       "version": "2.4.65",
       "major_minor": "2.4",
       "channel": "stable",

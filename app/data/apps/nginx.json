@@ -7,6 +7,19 @@
   "license": "BSD-2-Clause",
   "releases": [
     {
+      "version": "1.27.3",
+      "major_minor": "1.27",
+      "channel": "stable",
+      "downloads": [
+        { "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-nginx-1.27.3/nginx-1.27.3-windows-x64.zip",
+          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "nks-hub" },
+        { "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-nginx-1.27.3/nginx-1.27.3-linux-x64.tar.xz",
+          "os": "linux", "arch": "x64", "archive_type": "tar.xz", "source": "nks-hub" },
+        { "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-nginx-1.27.3/nginx-1.27.3-macos-arm64.tar.xz",
+          "os": "macos", "arch": "arm64", "archive_type": "tar.xz", "source": "nks-hub" }
+      ]
+    },
+    {
       "version": "1.29.2",
       "major_minor": "1.29",
       "channel": "stable",

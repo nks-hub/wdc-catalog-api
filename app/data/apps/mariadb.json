@@ -7,6 +7,17 @@
   "license": "GPL-2.0",
   "releases": [
     {
+      "version": "11.4.4",
+      "major_minor": "11.4",
+      "channel": "lts",
+      "downloads": [
+        { "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mariadb-11.4.4/mariadb-11.4.4-windows-x64.msi",
+          "os": "windows", "arch": "x64", "archive_type": "msi", "source": "nks-hub" },
+        { "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mariadb-11.4.4/mariadb-11.4.4-linux-x64.tar.gz",
+          "os": "linux", "arch": "x64", "archive_type": "tar.gz", "source": "nks-hub" }
+      ]
+    },
+    {
       "version": "12.3.1",
       "major_minor": "12.3",
       "channel": "stable",
