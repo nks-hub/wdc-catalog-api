@@ -193,6 +193,49 @@ def test_admin_theme_toggle_cycles_cookie(admin_client: TestClient) -> None:
     ) in (None, "")
 
 
+def test_first_visit_csrf_bootstrap_lets_login_succeed() -> None:
+    """Fresh browser with no cookies must be able to complete the login
+    flow on its *first* visit. The form field + response cookie must
+    carry the SAME token so the submit passes CSRF.
+
+    Regression for a bug where the middleware wrote a newly-minted
+    random token while the template had already rendered with an empty
+    ``csrf_token`` placeholder, guaranteeing first-POST 403.
+    """
+    with TestClient(app) as c:
+        r = c.get("/login")
+        assert r.status_code == 200
+        form_csrf_match = (
+            '_csrf" value="' in r.text
+            and 'value=""' not in r.text.split("_csrf")[1][:40]
+        )
+        assert form_csrf_match, "login form rendered with empty _csrf value"
+
+        cookie_csrf = c.cookies.get("nks_wdc_csrf") or ""
+        assert len(cookie_csrf) >= 32
+        # Extract the hidden field value from the form.
+        import re as _re
+
+        match = _re.search(r'name="_csrf"\s+value="([^"]+)"', r.text)
+        assert match is not None
+        form_csrf = match.group(1)
+        assert form_csrf == cookie_csrf, (
+            f"csrf mismatch: form={form_csrf[:8]}… cookie={cookie_csrf[:8]}…"
+        )
+
+        # Submit login with the cookie+form token.
+        login = c.post(
+            "/login",
+            data={
+                "username": "admin",
+                "password": "admin",
+                "_csrf": form_csrf,
+            },
+            follow_redirects=False,
+        )
+        assert login.status_code == 303, login.text[:200]
+
+
 def test_dashboard_renders_recent_activity(admin_client: TestClient) -> None:
     """The dashboard pulls the last 10 audit rows and renders the
     "Recent activity" section if any events exist."""

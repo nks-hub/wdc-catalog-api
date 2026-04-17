@@ -189,7 +189,12 @@ async def _limit_payload_size(request: Request, call_next):
     ) and "text/html" in response.headers.get("content-type", ""):
         from .csrf import ensure_csrf_cookie
 
-        existing = request.cookies.get("nks_wdc_csrf")
+        # Prefer the token the template minted via ``base_context`` (see
+        # templating._current_banner / base_context first-visit bootstrap)
+        # so the form field and cookie always match on page one.
+        existing = request.cookies.get("nks_wdc_csrf") or getattr(
+            request.state, "csrf_token", None
+        )
         ensure_csrf_cookie(response, existing)
     # Session-refresh: when the admin user makes any authenticated hit,
     # re-issue the signed cookie so idle-timeout resets. Dormant sessions

@@ -54,7 +54,21 @@ def base_context(request: Request, username: str | None, **extra) -> dict:
     current banner message so ``base.html`` can render it above every
     admin page.
     """
+    # First-visit bootstrap: when the CSRF cookie isn't present yet,
+    # mint a token now and stash it on request.state so the middleware
+    # that sets the cookie picks the same value up. Without this, the
+    # form would render with an empty token while the middleware writes
+    # a fresh random one — every first POST would fail CSRF.
     csrf = request.cookies.get("nks_wdc_csrf") or ""
+    if not csrf or len(csrf) < 32:
+        existing_state = getattr(request.state, "csrf_token", None)
+        if existing_state:
+            csrf = existing_state
+        else:
+            import secrets as _secrets
+
+            csrf = _secrets.token_urlsafe(32)
+            request.state.csrf_token = csrf
     theme = request.cookies.get("nks_wdc_theme")
     if theme not in ("light", "dark"):
         theme = ""  # empty = fall through to prefers-color-scheme
