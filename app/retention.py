@@ -138,12 +138,40 @@ def _do_retention(session: Session) -> dict:
     }
 
 
+# Postgres advisory-lock key for the scheduled retention pass. Any
+# non-zero int64 works; pick a stable constant so two processes always
+# contend for the same slot. SQLite callers ignore this — there's no
+# multi-writer on a single file anyway.
+_RETENTION_LOCK_KEY = 42001
+
+
+def _try_acquire_leader_lock(session: Session) -> bool:
+    """``True`` when this worker got the advisory lock, ``False`` when
+    someone else already holds it. SQLite always returns ``True``.
+
+    Postgres ``pg_try_advisory_lock`` is session-scoped — unlock happens
+    automatically on ``session.close()``.
+    """
+    from sqlalchemy import text
+    dialect = session.bind.dialect.name if session.bind else ""
+    if dialect != "postgresql":
+        return True
+    result = session.execute(
+        text("SELECT pg_try_advisory_lock(:k)"), {"k": _RETENTION_LOCK_KEY}
+    ).scalar()
+    return bool(result)
+
+
 def run_retention(db: Optional[Session] = None) -> dict:
     """Iterate every account and apply their resolved retention policy.
 
     When *db* is supplied (manual admin run) the caller owns the commit
     lifecycle — we only flush. When *db* is None (scheduler) a fresh
     session is opened, committed, and closed exactly once.
+
+    On Postgres the scheduler path acquires ``pg_try_advisory_lock`` so
+    multi-worker deployments don't run retention N times in parallel.
+    Losers return early with ``{"skipped": True}`` and don't touch DB.
     """
     if db is not None:
         summary = _do_retention(db)
@@ -151,17 +179,26 @@ def run_retention(db: Optional[Session] = None) -> dict:
     else:
         session = session_factory()
         try:
+            if not _try_acquire_leader_lock(session):
+                log.info("retention skipped: advisory lock held by another worker")
+                return {
+                    "accounts": 0,
+                    "deleted": 0,
+                    "idempotency_purged": 0,
+                    "revoked_tokens_purged": 0,
+                    "skipped": True,
+                }
             summary = _do_retention(session)
             session.commit()
         except Exception:
             session.rollback()
             raise
         finally:
-            session.close()
+            session.close()  # releases advisory lock on Postgres
 
     try:
         from .observability import RETENTION_DELETED
-        RETENTION_DELETED.inc(summary["deleted"])
+        RETENTION_DELETED.inc(summary.get("deleted", 0))
     except Exception:
         pass
     return summary
@@ -190,10 +227,30 @@ def start_scheduler() -> None:
     except Exception as exc:
         log.warning("Invalid NKS_WDC_RETENTION_CRON=%s: %s — defaulting daily 03:00", cron, exc)
         trigger = CronTrigger.from_crontab("0 3 * * *", timezone="UTC")
-    sched.add_job(run_retention, trigger, id="retention-daily", replace_existing=True)
+    sched.add_job(_scheduled_retention, trigger, id="retention-daily", replace_existing=True)
     sched.start()
     _scheduler = sched
     log.info("retention scheduler started (cron=%s)", cron)
+
+
+def _scheduled_retention() -> dict:
+    """APScheduler entry-point wrapper.
+
+    Sets a ``job-<uuid>`` into the ``request_id`` ContextVar so every
+    log record emitted during the retention run carries a correlation
+    ID. Without this the scheduler thread inherits the default ``"-"``
+    and its logs can't be traced alongside request handlers.
+    """
+    import uuid
+    try:
+        from .observability import request_id_var
+    except Exception:
+        return run_retention()
+    token = request_id_var.set(f"job-{uuid.uuid4().hex[:8]}")
+    try:
+        return run_retention()
+    finally:
+        request_id_var.reset(token)
 
 
 def stop_scheduler() -> None:

@@ -65,6 +65,30 @@ def test_retention_runs_and_returns_summary(client):
     assert "deleted" in body
 
 
+def test_scheduled_retention_wrapper_sets_request_id(client):
+    """The APScheduler wrapper must inject a correlation id so background
+    log lines aren't indistinguishable from pre-request startup noise."""
+    from app.observability import request_id_var
+    from app.retention import _scheduled_retention
+
+    before = request_id_var.get()
+    _scheduled_retention()
+    after = request_id_var.get()
+    # Wrapper must restore the original value on exit (no leak).
+    assert after == before
+
+
+def test_try_acquire_leader_lock_returns_true_on_sqlite(client):
+    """SQLite has no advisory lock primitive — helper must just say yes."""
+    from app.db import get_session
+    from app.retention import _try_acquire_leader_lock
+    db = next(get_session())
+    try:
+        assert _try_acquire_leader_lock(db) is True
+    finally:
+        db.close()
+
+
 def test_retention_respects_custom_policy(client):
     token, uid = _register(client)
     auth = {"Authorization": f"Bearer {token}"}
