@@ -1212,7 +1212,7 @@ def admin_device_snapshots(
 
 
 @router.post(
-    "/admin/devices/{device_id}/snapshots/{snapshot_id}/restore",
+    "/admin/devices/{device_id}/snapshots/{snapshot_id:int}/restore",
     dependencies=[Depends(require_csrf)],
 )
 def admin_restore_snapshot(
@@ -1252,7 +1252,7 @@ def admin_restore_snapshot(
 
 
 @router.get(
-    "/admin/devices/{device_id}/snapshots/{snapshot_id}",
+    "/admin/devices/{device_id}/snapshots/{snapshot_id:int}",
     response_class=HTMLResponse,
 )
 def admin_snapshot_detail(

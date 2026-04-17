@@ -1,5 +1,50 @@
 # Changelog
 
+## v0.5.0 — 2026-04-17
+
+Admin UI polish + correctness. 14 commits on top of v0.4.0.
+
+### Bugfixes
+
+- **CSRF double-submit on first visit**: form rendered with an empty
+  token while the middleware wrote a fresh one → every first POST 403.
+  Fixed by minting the token in ``base_context`` via ``request.state``
+  so the form and cookie carry the same value.
+- **Snapshot detail route collision**: `/snapshots/compare` was matched
+  by `/snapshots/{snapshot_id}` (422 when "compare" couldn't parse as
+  int). Fixed with a `{snapshot_id:int}` path converter.
+- **Apps page missing table styling** (old `.table` class, no borders).
+- **Form-grid overflow** on Settings / Retention (4-column fixed grid
+  crammed 6+ fields). Rewritten as `repeat(auto-fit, minmax(220px, 1fr))`.
+- **Nav clipping** on the Settings tab — added wrap + `<880px` breakpoint.
+- **Error page duplicated title as detail** when identical.
+
+### Features
+
+- **Snapshot compare** (`/admin/devices/{id}/snapshots/compare`) — RFC
+  6902 diff between any two snapshots, not just vs HEAD.
+- **Per-device retention overrides** — table + add-form below the
+  account policy so specific devices can have tighter or looser rules.
+- **Dashboard recent-activity widget** — last 10 audit events under the
+  stats cards for at-a-glance operator awareness.
+- **Theme toggle** — topbar button cycles auto → light → dark → auto
+  via a `nks_wdc_theme` cookie; CSS supports both `prefers-color-scheme`
+  and explicit overrides.
+
+### Tests
+
+- 260 passing (was 251 in v0.4.0); +6 deep-route tests, +1 CSRF
+  regression, +2 theme-toggle tests.
+- Full Playwright screenshot walkthrough of every admin page captured
+  to `.playwright-mcp/`.
+
+### Cosmetics
+
+- Text contrast bumped — `--text-2/3/4` darkened to hit WCAG AA on the
+  light surface.
+- Submit buttons inside `.form-grid` span all columns with left align.
+- Checkbox labels render horizontally by default.
+
 ## v0.4.0 — 2026-04-17
 
 Full HTML admin panel — 16 working pages covering every backend feature.
