@@ -87,6 +87,29 @@ class UpdateDeviceRequest(BaseModel):
     name: str | None = Field(None, max_length=128)
 
 
+class DeviceList(BaseModel):
+    items: list[DeviceInfo]
+    total: int
+    limit: int
+    offset: int
+
+
+class AuthMe(BaseModel):
+    id: int
+    email: str
+    role: str
+    created_at: str | None = None
+    last_login_at: str | None = None
+
+
+class SimpleOk(BaseModel):
+    ok: bool
+    device_id: str | None = None
+    removed: str | None = None
+    pushed_from: str | None = None
+    pushed_to: str | None = None
+
+
 # ── JWT helpers ─────────────────────────────────────────────────────────
 
 def create_token(account_id: int, email: str, *, token_version: int = 1) -> str:
@@ -226,39 +249,46 @@ def logout(
     return {"ok": True, "revoked": True, "jti": jti}
 
 
-@router.get("/auth/me")
-def auth_me(account: Account = Depends(get_current_account)) -> dict:
-    return {
-        "id": account.id,
-        "email": account.email,
-        "created_at": account.created_at.isoformat() if account.created_at else None,
-    }
+@router.get("/auth/me", response_model=AuthMe)
+def auth_me(account: Account = Depends(get_current_account)) -> AuthMe:
+    return AuthMe(
+        id=account.id,
+        email=account.email,
+        role=account.role,
+        created_at=account.created_at.isoformat() if account.created_at else None,
+        last_login_at=account.last_login_at.isoformat()
+            if account.last_login_at else None,
+    )
 
 
 # ── Device endpoints ────────────────────────────────────────────────────
 
-@router.get("/devices", response_model=list[DeviceInfo])
+@router.get("/devices", response_model=DeviceList)
 def list_devices(
     current_device_id: str | None = None,
+    offset: int = 0,
+    limit: int = 50,
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
-) -> list[DeviceInfo]:
+) -> DeviceList:
     """List all devices registered to the authenticated account.
 
-    Optional ``current_device_id`` query param lets the caller tag which
-    row represents their own device so the UI can render a "this device"
-    badge. Without this, ``is_current`` stays False for every row (old
-    behaviour) — callers can omit the param and still get a valid list.
+    ``offset``/``limit`` apply cursor-style pagination (limit capped at
+    200). ``current_device_id`` tags the caller's own row with
+    ``is_current=true`` so the UI can highlight the local device.
     """
+    from sqlalchemy import func
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    stmt = select(DeviceConfig).where(DeviceConfig.user_id == account.id)
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     devices = db.scalars(
-        select(DeviceConfig).where(DeviceConfig.user_id == account.id)
+        stmt.order_by(DeviceConfig.last_seen_at.desc().nullslast())
+        .offset(offset).limit(limit)
     ).all()
-    # SQLite stores datetimes as naive (no tzinfo). Use naive UTC now so
-    # the subtraction doesn't throw "can't subtract offset-naive and
-    # offset-aware datetimes".
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     current = (current_device_id or "").strip().lower()
-    return [
+    items = [
         DeviceInfo(
             device_id=d.device_id,
             name=d.name,
@@ -272,15 +302,16 @@ def list_devices(
         )
         for d in devices
     ]
+    return DeviceList(items=items, total=total, limit=limit, offset=offset)
 
 
-@router.put("/devices/{device_id}")
+@router.put("/devices/{device_id}", response_model=SimpleOk)
 def update_device(
     device_id: str,
     body: UpdateDeviceRequest,
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
-) -> dict:
+) -> SimpleOk:
     """Update a device's user-visible name. Accepts a JSON body so the
     value is never logged through access logs or reverse-proxy caches
     (query parameters are indexed by most web servers)."""
@@ -289,46 +320,53 @@ def update_device(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
     if body.name is not None:
         device.name = body.name
-    return {"ok": True, "device_id": device_id}
+    return SimpleOk(ok=True, device_id=device_id)
 
 
-@router.delete("/devices/{device_id}")
+@router.delete("/devices/{device_id}", response_model=SimpleOk)
 def delete_device(
     device_id: str,
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
-) -> dict:
+) -> SimpleOk:
     device = db.get(DeviceConfig, device_id)
     if device is None or device.user_id != account.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
     db.delete(device)
-    return {"ok": True, "removed": device_id}
+    return SimpleOk(ok=True, removed=device_id)
 
 
-@router.get("/devices/{device_id}/config")
+class DeviceConfigDetail(BaseModel):
+    device_id: str
+    name: str | None = None
+    payload: dict
+    updated_at: str | None = None
+
+
+@router.get("/devices/{device_id}/config", response_model=DeviceConfigDetail)
 def get_device_config(
     device_id: str,
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
-) -> dict:
+) -> DeviceConfigDetail:
     device = db.get(DeviceConfig, device_id)
     if device is None or device.user_id != account.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
-    return {
-        "device_id": device.device_id,
-        "name": device.name,
-        "payload": device.payload,
-        "updated_at": device.updated_at.isoformat() if device.updated_at else None,
-    }
+    return DeviceConfigDetail(
+        device_id=device.device_id,
+        name=device.name,
+        payload=device.payload or {},
+        updated_at=device.updated_at.isoformat() if device.updated_at else None,
+    )
 
 
-@router.post("/devices/{device_id}/push-config")
+@router.post("/devices/{device_id}/push-config", response_model=SimpleOk)
 def push_config_to_device(
     device_id: str,
     body: PushConfigRequest,
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
-) -> dict:
+) -> SimpleOk:
     source = db.get(DeviceConfig, body.source_device_id)
     target = db.get(DeviceConfig, device_id)
     if source is None or source.user_id != account.id:
@@ -337,4 +375,6 @@ def push_config_to_device(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Target device not found")
     target.payload = source.payload
     target.updated_at = datetime.now(timezone.utc)
-    return {"ok": True, "pushed_from": body.source_device_id, "pushed_to": device_id}
+    return SimpleOk(
+        ok=True, pushed_from=body.source_device_id, pushed_to=device_id
+    )

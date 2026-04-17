@@ -78,7 +78,9 @@ def test_me_rejects_no_token(client: TestClient) -> None:
 def test_devices_empty_initially(client: TestClient, auth_token: str) -> None:
     r = client.get("/api/v1/devices", headers={"Authorization": f"Bearer {auth_token}"})
     assert r.status_code == 200
-    assert r.json() == []
+    body = r.json()
+    assert body["items"] == []
+    assert body["total"] == 0
 
 
 def test_sync_push_auto_links_device(client: TestClient, auth_token: str) -> None:
@@ -94,7 +96,7 @@ def test_sync_push_auto_links_device(client: TestClient, auth_token: str) -> Non
 
     # Device should now appear in the fleet
     r2 = client.get("/api/v1/devices", headers={"Authorization": f"Bearer {auth_token}"})
-    devices = r2.json()
+    devices = r2.json()["items"]
     assert len(devices) == 1
     d = devices[0]
     assert d["device_id"] == "test-device-001"
@@ -120,7 +122,7 @@ def test_list_devices_is_current_flag(client: TestClient, auth_token: str) -> No
     # No param → all False
     r = client.get("/api/v1/devices", headers={"Authorization": f"Bearer {auth_token}"})
     assert r.status_code == 200
-    assert all(d["is_current"] is False for d in r.json())
+    assert all(d["is_current"] is False for d in r.json()["items"])
 
     # With matching param → exactly one True
     r = client.get(
@@ -128,7 +130,7 @@ def test_list_devices_is_current_flag(client: TestClient, auth_token: str) -> No
         headers={"Authorization": f"Bearer {auth_token}"},
     )
     assert r.status_code == 200
-    flagged = [d for d in r.json() if d["is_current"]]
+    flagged = [d for d in r.json()["items"] if d["is_current"]]
     assert len(flagged) == 1
     assert flagged[0]["device_id"] == "test-device-001"
 
@@ -138,7 +140,7 @@ def test_list_devices_is_current_flag(client: TestClient, auth_token: str) -> No
         headers={"Authorization": f"Bearer {auth_token}"},
     )
     assert r.status_code == 200
-    assert all(d["is_current"] is False for d in r.json())
+    assert all(d["is_current"] is False for d in r.json()["items"])
 
 
 def test_push_config_between_devices(client: TestClient, auth_token: str) -> None:
@@ -284,5 +286,5 @@ def test_delete_device(client: TestClient, auth_token: str) -> None:
 
     # Should be gone from fleet
     r2 = client.get("/api/v1/devices", headers={"Authorization": f"Bearer {auth_token}"})
-    device_ids = {d["device_id"] for d in r2.json()}
+    device_ids = {d["device_id"] for d in r2.json()["items"]}
     assert "test-device-002" not in device_ids
