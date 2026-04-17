@@ -17,7 +17,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from .auth import hash_password, verify_password
 from .db import Account, DeviceConfig, get_session
+from .ratelimit import limiter
 
 log = logging.getLogger(__name__)
 
@@ -133,7 +134,10 @@ def optional_account(
 # ── Auth endpoints ──────────────────────────────────────────────────────
 
 @router.post("/auth/register", response_model=TokenResponse)
-def register(body: RegisterRequest, db: Session = Depends(get_session)) -> TokenResponse:
+@limiter.limit("3/hour")
+def register(
+    request: Request, body: RegisterRequest, db: Session = Depends(get_session)
+) -> TokenResponse:
     email = body.email.strip().lower()
     if not email or len(email) < 5:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid email")
@@ -153,7 +157,10 @@ def register(body: RegisterRequest, db: Session = Depends(get_session)) -> Token
 
 
 @router.post("/auth/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: Session = Depends(get_session)) -> TokenResponse:
+@limiter.limit("5/minute")
+def login(
+    request: Request, body: LoginRequest, db: Session = Depends(get_session)
+) -> TokenResponse:
     email = body.email.strip().lower()
     account = db.scalar(select(Account).where(Account.email == email))
     if account is None or not verify_password(body.password, account.password_hash):

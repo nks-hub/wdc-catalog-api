@@ -118,6 +118,23 @@ if os.environ.get("NKS_WDC_CATALOG_ALLOW_CORS") == "1":
     )
 
 
+# Rate limiting — protects auth + sync endpoints from brute force + DoS.
+# Tests opt out with NKS_WDC_DISABLE_RATE_LIMITS=1.
+from slowapi.errors import RateLimitExceeded
+
+from .ratelimit import limiter
+
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    return JSONResponse(
+        {"detail": f"Rate limit exceeded: {exc.detail}"},
+        status_code=429,
+    )
+
+
 # Payload size ceiling — the config-sync endpoint accepts free-form JSON
 # so an unbounded request body is a cheap DoS + storage-exhaust vector.
 # 1 MiB covers legitimate WDC snapshots (seen in the wild: 50–300 KB).
