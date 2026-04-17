@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from . import pats
+from . import audit, pats
 from .db import Account, get_session
 from .devices import get_current_account
 
@@ -52,6 +52,7 @@ class TokenList(BaseModel):
 @router.post("", response_model=TokenCreateResponse, status_code=201)
 def create_token(
     body: TokenCreateRequest,
+    request: Request,
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
 ) -> TokenCreateResponse:
@@ -63,6 +64,19 @@ def create_token(
         account_id=account.id,
         name=body.name,
         expires_at=expires_at,
+    )
+    audit.emit(
+        db,
+        request=request,
+        actor=account,
+        action="pat.created",
+        resource_type="pat",
+        resource_id=str(row.id),
+        detail={
+            "name": row.name,
+            "prefix": row.token_prefix,
+            "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+        },
     )
     return TokenCreateResponse(
         id=row.id,
@@ -98,12 +112,21 @@ def list_tokens(
 @router.delete("/{token_id}", status_code=204)
 def revoke_token(
     token_id: int,
+    request: Request,
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
 ):
     ok = pats.revoke(db, account_id=account.id, token_id=token_id)
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Token not found")
+    audit.emit(
+        db,
+        request=request,
+        actor=account,
+        action="pat.revoked",
+        resource_type="pat",
+        resource_id=str(token_id),
+    )
 
 
 __all__ = ["router"]

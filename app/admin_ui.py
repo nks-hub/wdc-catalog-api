@@ -2296,6 +2296,21 @@ def admin_create_account_token(
         db, account_id=acct.id, name=name, expires_at=expires_at
     )
 
+    from . import audit as _audit
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="pat.created",
+        resource_type="pat",
+        resource_id=str(row.id),
+        detail={
+            "name": row.name,
+            "prefix": row.token_prefix,
+            "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+        },
+    )
+
     # Render the account page inline so the one-time plaintext callout
     # renders with the freshly-minted row still at the top of the list.
     return _render_account(
@@ -2315,16 +2330,26 @@ def admin_create_account_token(
     "/admin/account/tokens/{token_id}/revoke", dependencies=[Depends(require_csrf)]
 )
 def admin_revoke_account_token(
+    request: Request,
     token_id: int,
     username: Annotated[str, Depends(current_user)],
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
+    from . import audit as _audit
     from . import pats as _pats
 
     acct = _admin_account(db, username)
     ok = _pats.revoke(db, account_id=acct.id, token_id=token_id)
     if not ok:
         return _redirect("/admin/account", "error", "Token not found")
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="pat.revoked",
+        resource_type="pat",
+        resource_id=str(token_id),
+    )
     return _redirect("/admin/account", "success", "Token revoked")
 
 
