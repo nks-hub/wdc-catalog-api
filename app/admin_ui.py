@@ -484,11 +484,14 @@ def admin_delete_download(
 
 @router.post("/admin/apps/{app_id}/auto-generate", dependencies=[Depends(require_csrf)])
 def admin_auto_generate(
+    request: Request,
     app_id: str,
     username: Annotated[str, Depends(current_user)],
     limit: Annotated[int, Form()] = 5,
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
+    from . import audit as _audit
+
     app_row = get_app(db, app_id)
     if not app_row:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Unknown app '{app_id}'")
@@ -498,6 +501,21 @@ def admin_auto_generate(
         )
     releases = run_generator(app_id, limit=limit)
     inserted = apply_generated_releases(db, app_id, releases)
+
+    acct = _admin_account(db, username)
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="app.auto_generated",
+        resource_type="app",
+        resource_id=app_id,
+        detail={
+            "limit": limit,
+            "scraped": len(releases),
+            "inserted": inserted,
+        },
+    )
     return _redirect(
         f"/admin/apps/{app_id}",
         "success" if inserted else "info",
@@ -1641,11 +1659,13 @@ def admin_device_snapshots(
     dependencies=[Depends(require_csrf)],
 )
 def admin_restore_snapshot(
+    request: Request,
     device_id: str,
     snapshot_id: int,
     username: Annotated[str, Depends(current_user)],
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
+    from . import audit as _audit
     from . import snapshots as _snap
     from .db import DeviceSnapshot
     from .device_ids import normalize_device_id
@@ -1656,6 +1676,7 @@ def admin_restore_snapshot(
     if target is None or target.device_id != dev_id or target.account_id != acct.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot not found")
     current = _snap.get_head(db, dev_id)
+    previous_head_id = current.id if current is not None else None
     if current is not None and current.id != target.id:
         _snap.create_snapshot(
             db,
@@ -1666,6 +1687,19 @@ def admin_restore_snapshot(
             label=f"pre-restore-to-#{target.id}",
         )
     _snap.set_head(db, dev_id, target.id, updated_by="admin-ui")
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="snapshot.restored",
+        resource_type="snapshot",
+        resource_id=str(target.id),
+        detail={
+            "device_id": dev_id,
+            "previous_head_id": previous_head_id,
+            "target_label": target.label,
+        },
+    )
     return _redirect(
         f"/admin/devices/{dev_id}/snapshots",
         "success",
@@ -1935,6 +1969,7 @@ def admin_device_import_form(
 
 @router.post("/admin/devices/{device_id}/import", dependencies=[Depends(require_csrf)])
 def admin_device_import(
+    request: Request,
     device_id: str,
     username: Annotated[str, Depends(current_user)],
     payload: Annotated[str, Form()],
@@ -1995,6 +2030,21 @@ def admin_device_import(
     if set_head:
         _snap.set_head(db, dev_id, snap.id, updated_by="admin-ui-import")
 
+    from . import audit as _audit
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="snapshot.imported",
+        resource_type="snapshot",
+        resource_id=str(snap.id),
+        detail={
+            "device_id": dev_id,
+            "label": default_label,
+            "set_head": bool(set_head),
+            "payload_bytes": len(payload or ""),
+        },
+    )
     return _redirect(
         f"/admin/devices/{dev_id}/snapshots",
         "success",
