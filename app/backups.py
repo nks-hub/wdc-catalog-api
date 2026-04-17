@@ -254,6 +254,7 @@ def download_backup(
     snapshot_id: int,
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
+    x_wdc_passphrase: Optional[str] = Header(default=None, alias="X-WDC-Passphrase"),
 ) -> Response:
     _owned_device(device_id, account, db)
     snap = db.get(DeviceSnapshot, snapshot_id)
@@ -263,6 +264,13 @@ def download_backup(
         or snap.account_id != account.id
     ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot not found")
+    try:
+        payload = snapshots.unpack_payload(snap, db=db, passphrase=x_wdc_passphrase)
+    except PermissionError as exc:
+        # Passphrase-encrypted snapshots without a valid header must
+        # surface as 401, not 500 — the caller needs to know they must
+        # re-issue with the header set.
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc))
     envelope = {
         "schema": "nks-wdc-snapshot-v1",
         "id": snap.id,
@@ -271,7 +279,7 @@ def download_backup(
         "label": snap.label,
         "kind": snap.kind,
         "checksum": snap.checksum,
-        "payload": snapshots.unpack_payload(snap, db=db),
+        "payload": payload,
     }
     body = json.dumps(envelope, indent=2).encode("utf-8")
     return Response(

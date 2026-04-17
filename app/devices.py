@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -395,8 +395,21 @@ def list_devices(
         .offset(offset)
         .limit(limit)
     ).all()
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now_utc = datetime.now(timezone.utc)
     current = (current_device_id or "").strip().lower()
+
+    def _online(last_seen: Optional[datetime]) -> bool:
+        if last_seen is None:
+            return False
+        # SQLite stores naive, Postgres TIMESTAMPTZ returns aware.
+        # Normalize to UTC-aware so the subtraction can't raise
+        # ``can't subtract offset-naive and offset-aware`` depending on
+        # backend. This was a latent bug — every deployment on
+        # TIMESTAMPTZ columns would 500 on the device list page.
+        if last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=timezone.utc)
+        return (now_utc - last_seen).total_seconds() < 300
+
     items = [
         DeviceInfo(
             device_id=d.device_id,
@@ -406,8 +419,7 @@ def list_devices(
             site_count=d.site_count,
             last_seen_at=d.last_seen_at.isoformat() if d.last_seen_at else None,
             updated_at=d.updated_at.isoformat() if d.updated_at else None,
-            online=d.last_seen_at is not None
-            and (now - d.last_seen_at).total_seconds() < 300,
+            online=_online(d.last_seen_at),
             is_current=bool(current) and d.device_id == current,
         )
         for d in devices
