@@ -33,7 +33,7 @@ def ensure_csrf_cookie(response: Response, existing: Optional[str]) -> str:
     unguessable random string whose security comes from the same-origin
     cookie policy (browser won't send cross-site), not cryptography.
     """
-    from .main import _cookie_secure  # late import avoids circular dep
+    from .cookies import cookie_secure
     token = existing if existing and len(existing) >= 32 else secrets.token_urlsafe(32)
     response.set_cookie(
         key=CSRF_COOKIE,
@@ -41,7 +41,7 @@ def ensure_csrf_cookie(response: Response, existing: Optional[str]) -> str:
         max_age=CSRF_MAX_AGE,
         httponly=False,  # templates read the cookie to populate form fields
         samesite="strict",
-        secure=_cookie_secure(),
+        secure=cookie_secure(),
     )
     return token
 

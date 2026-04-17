@@ -137,9 +137,15 @@ app.state.limiter = limiter
 
 @app.exception_handler(RateLimitExceeded)
 async def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
-    return JSONResponse(
-        {"detail": f"Rate limit exceeded: {exc.detail}"},
-        status_code=429,
+    # Surface through the RFC 7807 handler so clients see a consistent
+    # ``application/problem+json`` shape — the raw 429 used to leak a
+    # plain ``{"detail": ...}`` body outside the problem contract.
+    from .problems import problem_response
+    return problem_response(
+        request,
+        429,
+        f"Rate limit exceeded: {exc.detail}",
+        title="Too Many Requests",
     )
 
 
@@ -155,9 +161,12 @@ async def _limit_payload_size(request: Request, call_next):
     if cl is not None:
         try:
             if int(cl) > MAX_REQUEST_BYTES:
-                return JSONResponse(
-                    {"detail": f"Request body exceeds {MAX_REQUEST_BYTES} bytes"},
-                    status_code=413,
+                from .problems import problem_response
+                return problem_response(
+                    request,
+                    413,
+                    f"Request body exceeds {MAX_REQUEST_BYTES} bytes",
+                    title="Content Too Large",
                 )
         except ValueError:
             pass
@@ -575,14 +584,7 @@ def logout() -> RedirectResponse:
 # Admin UI (authenticated HTML)
 # ─────────────────────────────────────────────────────────────────────────
 
-def _cookie_secure() -> bool:
-    """Session cookies must carry the Secure flag in production.
-
-    TestClient uses http:// so we cannot unconditionally set Secure. Respect
-    an explicit opt-out for dev, default to Secure whenever we're not in
-    DEV mode (production deployments run behind HTTPS reverse proxies).
-    """
-    return os.environ.get("NKS_WDC_CATALOG_DEV") != "1"
+from .cookies import cookie_secure as _cookie_secure  # noqa: E402  — re-export for legacy callsites
 
 
 def _redirect(url: str, flash_kind: str | None = None, flash_message: str | None = None) -> RedirectResponse:
