@@ -59,6 +59,7 @@ from .auth import (
     ensure_admin_user,
     issue_session,
     optional_user,
+    verify_dummy_password,
     verify_password,
 )
 from .db import Account, DeviceConfig, User, create_all, get_session, session_factory
@@ -589,6 +590,7 @@ def login_form(request: Request) -> HTMLResponse:
 
 
 @app.post("/login", include_in_schema=False, dependencies=[Depends(require_csrf)])
+@limiter.limit("5/minute")
 def login_submit(
     request: Request,
     username: Annotated[str, Form()],
@@ -596,7 +598,15 @@ def login_submit(
     db: Session = Depends(get_session),
 ):
     user = db.scalar(select(User).where(User.username == username.strip()))
-    if user is None or not verify_password(password, user.password_hash):
+    if user is None:
+        verify_dummy_password(password)
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            _base_context(request, None, error="Invalid username or password"),
+            status_code=401,
+        )
+    if not verify_password(password, user.password_hash):
         return templates.TemplateResponse(
             request,
             "login.html",

@@ -87,6 +87,26 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
+# Pre-computed dummy hash used by ``verify_dummy_password`` so bcrypt work
+# runs even when the account doesn't exist — eliminates the timing side
+# channel that would otherwise let an attacker enumerate valid usernames
+# by measuring response latency.
+_DUMMY_HASH = bcrypt.hashpw(b"nks-wdc-dummy-value-00", bcrypt.gensalt(rounds=12)).decode(
+    "ascii"
+)
+
+
+def verify_dummy_password(plain: str) -> bool:
+    """Burn ~one bcrypt round so the unknown-user branch matches the
+    timing of the real ``verify_password`` call. Always returns ``False``.
+    """
+    try:
+        bcrypt.checkpw(plain.encode("utf-8"), _DUMMY_HASH.encode("ascii"))
+    except Exception:  # noqa: BLE001
+        pass
+    return False
+
+
 def issue_session(username: str) -> str:
     return _signer.sign(username.encode("utf-8")).decode("ascii")
 

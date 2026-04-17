@@ -25,7 +25,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .auth import hash_password, verify_password
+from .auth import hash_password, verify_dummy_password, verify_password
 from .db import Account, DeviceConfig, RevokedToken, get_session
 from .ratelimit import limiter
 
@@ -233,7 +233,12 @@ def login(
 ) -> TokenResponse:
     email = body.email.strip().lower()
     account = db.scalar(select(Account).where(Account.email == email))
-    if account is None or not verify_password(body.password, account.password_hash):
+    if account is None:
+        # Spend the same CPU as the real path so response latency can't
+        # be used to enumerate registered emails.
+        verify_dummy_password(body.password)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
+    if not verify_password(body.password, account.password_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
     if account.suspended_at is not None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Account is suspended")
