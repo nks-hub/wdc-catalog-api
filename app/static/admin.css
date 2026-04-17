@@ -1271,7 +1271,8 @@ details > summary:hover { color: var(--accent-hover); }
    -------------------------------------------------------------------------- */
 .login-card {
   max-width: 390px;
-  margin: var(--space-10) auto 0;
+  width: 100%;
+  margin: 0 auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -1308,20 +1309,69 @@ details > summary:hover { color: var(--accent-hover); }
   border-radius: var(--radius-md);
 }
 
-.login-card::before {
-  content: 'NKS WebDev Console';
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: var(--space-6);
-  padding-bottom: var(--space-4);
-  border-bottom: 2px solid var(--accent-subtle);
+/* Login page brand moment — first impression is a 50ms credibility
+   judgement (Lindgaard et al., 2006), so the login surface gets its own
+   composition: warm gradient field, real logomark, tagline, then card. */
+body:has(.login-wrap) {
+  background:
+    radial-gradient(ellipse at top left,
+      color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
+    radial-gradient(ellipse at bottom right,
+      color-mix(in srgb, var(--action) 9%, transparent), transparent 55%),
+    var(--bg);
 }
+body:has(.login-wrap) .topbar,
+body:has(.login-wrap) .footer { display: none; }
+body:has(.login-wrap) main.container { padding-top: 0; }
+
+.login-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - var(--space-10));
+  gap: var(--space-6);
+  padding: var(--space-8) var(--space-4);
+  width: 100%;
+}
+
+.login-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--accent);
+  text-decoration: none;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: background var(--t-fast);
+}
+.login-brand:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.login-logomark { width: 48px; height: 48px; flex: none; }
+.login-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  line-height: 1.15;
+}
+.login-brand-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.login-brand-tag {
+  font-size: 0.786rem;
+  color: var(--text-3);
+  letter-spacing: 0.02em;
+}
+
+.login-foot {
+  font-size: 0.786rem;
+  margin: 0;
+}
+.login-foot a { color: var(--text-3); }
+.login-foot a:hover { color: var(--accent); }
 
 /* --------------------------------------------------------------------------
    Page-head

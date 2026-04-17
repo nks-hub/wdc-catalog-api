@@ -1,23 +1,43 @@
 {% extends "base.html" %}
 {% block title %}Log in — NKS WDC Catalog{% endblock %}
 {% block content %}
-  <section class="login-card">
-    <h1>Sign in</h1>
-    <p class="muted">Admin access to the NKS WDC catalog.</p>
-    {% if error %}
-      <div class="flash flash-error">{{ error }}</div>
-    {% endif %}
-    <form method="post" action="/login" class="form">
+  <div class="login-wrap">
+    <a href="/" class="login-brand" aria-label="NKS WebDev Console">
+      <svg class="login-logomark" viewBox="0 0 48 48" aria-hidden="true" focusable="false"
+           xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="2" width="44" height="44" rx="11"
+              fill="currentColor" opacity="0.08"/>
+        <path d="M14 34 V14 L24 28 V14 L34 28 V34"
+              fill="none" stroke="currentColor" stroke-width="3"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="34" cy="14" r="2.25" fill="currentColor"/>
+      </svg>
+      <span class="login-brand-text">
+        <span class="login-brand-name">NKS WebDev Console</span>
+        <span class="login-brand-tag">Catalog &amp; config sync</span>
+      </span>
+    </a>
+
+    <section class="login-card">
+      <h1>Welcome back</h1>
+      <p class="muted">Sign in to manage the catalog.</p>
+      {% if error %}
+        <div class="flash flash-error">{{ error }}</div>
+      {% endif %}
+      <form method="post" action="/login" class="form">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-      <label>
-        <span>Username</span>
-        <input type="text" name="username" autocomplete="username" required autofocus>
-      </label>
-      <label>
-        <span>Password</span>
-        <input type="password" name="password" autocomplete="current-password" required>
-      </label>
-      <button class="btn btn-primary" type="submit">Sign in</button>
-    </form>
-  </section>
+        <label>
+          <span>Username</span>
+          <input type="text" name="username" autocomplete="username" required autofocus>
+        </label>
+        <label>
+          <span>Password</span>
+          <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <button class="btn btn-primary" type="submit">Sign in</button>
+      </form>
+    </section>
+
+    <p class="login-foot muted">v{{ version }} · <a href="/docs" target="_blank" rel="noopener">API docs</a></p>
+  </div>
 {% endblock %}
