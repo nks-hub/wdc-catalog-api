@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.8.2 — 2026-04-18
+
+Audit-log coverage sweep — every mutation path emits a named event.
+
+Previously, an admin could:
+- Rewrite instance-wide policy via `/admin/settings`
+- Toggle the snapshot retention policy or add device overrides
+- Create / edit / delete apps, releases, downloads
+- Change their own password
+- Delete a device
+
+…with **zero audit trail**. Each of those paths now emits an audit
+event with before/after detail where relevant.
+
+### New audit events
+- `settings.updated` (detail: `changed` diff per field)
+- `retention.policy_saved` (before/after)
+- `retention.manual_run` (summary counts)
+- `retention.device_override_added`, `retention.device_override_removed`
+- `password.changed`, `password.change_failed`
+- `device.deleted`
+- `app.created`, `app.updated` (field diff), `app.deleted`
+- `release.created`, `release.deleted`
+- `download.added`, `download.deleted`
+
+### Tests
+`test_settings_retention_audit.py` (5 cases) +
+`test_catalog_audit_events.py` (4 cases) — total 317 tests passing.
+
 ## v0.8.1 — 2026-04-18
 
 Observability + audit coverage follow-up to v0.8.0.
