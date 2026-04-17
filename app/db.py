@@ -543,11 +543,24 @@ def create_all() -> None:
 
 
 def get_session() -> Iterator[Session]:
-    """FastAPI dependency that yields a scoped session per request."""
+    """FastAPI dependency that yields a scoped session per request.
+
+    Semantics:
+    - Handler raises (HTTPException or otherwise) → generator ``.throw()``
+      reraises into the try, we rollback, propagate.
+    - Handler returns normally → commit. If the commit itself errors
+      (e.g., Postgres pool lost, unique-violation from a pending row)
+      rollback and propagate so FastAPI's error handler sees it rather
+      than an orphaned half-committed state.
+    """
     session: Session = _SessionLocal()
     try:
         yield session
-        session.commit()
+        try:
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
     except Exception:
         session.rollback()
         raise
