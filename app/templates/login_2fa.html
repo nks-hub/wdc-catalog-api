@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Two-factor code — NKS WDC{% endblock %}
+{% block content %}
+  <div class="login-wrap">
+    <a href="/" class="login-brand" aria-label="NKS WebDev Console">
+      <svg class="login-logomark" viewBox="0 0 48 48" aria-hidden="true" focusable="false"
+           xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="2" width="44" height="44" rx="11"
+              fill="currentColor" opacity="0.08"/>
+        <path d="M14 34 V14 L24 28 V14 L34 28 V34"
+              fill="none" stroke="currentColor" stroke-width="3"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="34" cy="14" r="2.25" fill="currentColor"/>
+      </svg>
+      <span class="login-brand-text">
+        <span class="login-brand-name">NKS WebDev Console</span>
+        <span class="login-brand-tag">Two-factor authentication</span>
+      </span>
+    </a>
+
+    <section class="login-card">
+      <h1>Enter your code</h1>
+      <p class="muted">Signing in as <code>{{ pending_user }}</code>. Open your authenticator and enter the 6-digit code (or a recovery code).</p>
+      {% if error %}
+        <div class="flash flash-error">{{ error }}</div>
+      {% endif %}
+      <form method="post" action="/login/2fa" class="form">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <label>
+          <span>Code</span>
+          <input type="text" name="code" autocomplete="one-time-code"
+                 inputmode="numeric" autofocus required
+                 placeholder="000 000">
+        </label>
+        <button class="btn btn-primary" type="submit">Verify</button>
+      </form>
+      <p class="muted" style="margin-top: var(--space-4); font-size: 0.821rem;">
+        Lost your authenticator?
+        Enter one of the recovery codes you saved when you enabled 2FA.
+        Each code works once.
+      </p>
+    </section>
+
+    <p class="login-foot muted">
+      <a href="/login">← Back to password</a>
+    </p>
+  </div>
+{% endblock %}

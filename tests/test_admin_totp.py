@@ -14,7 +14,23 @@ from app.main import app
 def admin_client() -> TestClient:
     """Fresh-session admin client per test — TOTP state lives on the
     admin account row and each test either enables or leaves it
-    disabled, so isolation matters."""
+    disabled, so isolation matters.
+
+    Resets the admin account's 2FA state BEFORE logging in so the login
+    flow never lands on /login/2fa while the test is still setting up.
+    """
+    from app.db import Account, session_factory
+    from sqlalchemy import select as _sel
+
+    with session_factory() as db:
+        acct = db.scalar(_sel(Account).where(Account.email == "admin@admin.local"))
+        if acct is not None:
+            acct.totp_enabled = False
+            acct.totp_secret = None
+            acct.totp_recovery_hashes = None
+            acct.totp_enabled_at = None
+            db.commit()
+
     with TestClient(app) as c:
         c.get("/login")
         csrf = c.cookies.get("nks_wdc_csrf") or ""
