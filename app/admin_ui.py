@@ -1186,6 +1186,7 @@ def admin_retention_page(
 
 @router.post("/admin/retention/device", dependencies=[Depends(require_csrf)])
 def admin_add_device_retention(
+    request: Request,
     username: Annotated[str, Depends(current_user)],
     device_id: Annotated[str, Form()],
     keep_last_n_auto: Annotated[int, Form()] = 30,
@@ -1195,6 +1196,7 @@ def admin_add_device_retention(
 ) -> RedirectResponse:
     from sqlalchemy import select as _sel
 
+    from . import audit as _audit
     from .db import DeviceConfig, SnapshotRetentionPolicy
     from .device_ids import normalize_device_id
 
@@ -1217,16 +1219,28 @@ def admin_add_device_retention(
             "/admin/retention", "error", f"Override for {dev_id} already exists"
         )
 
+    policy_detail = {
+        "keep_last_n_auto": max(1, min(keep_last_n_auto, 500)),
+        "auto_expire_days": int(auto_expire_days) if auto_expire_days.strip() else None,
+        "keep_labeled_forever": bool(keep_labeled_forever),
+    }
     db.add(
         SnapshotRetentionPolicy(
             account_id=acct.id,
             device_id=dev_id,
-            keep_last_n_auto=max(1, min(keep_last_n_auto, 500)),
-            auto_expire_days=int(auto_expire_days)
-            if auto_expire_days.strip()
-            else None,
-            keep_labeled_forever=bool(keep_labeled_forever),
+            keep_last_n_auto=policy_detail["keep_last_n_auto"],
+            auto_expire_days=policy_detail["auto_expire_days"],
+            keep_labeled_forever=policy_detail["keep_labeled_forever"],
         )
+    )
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="retention.device_override_added",
+        resource_type="retention_policy",
+        resource_id=dev_id,
+        detail=policy_detail,
     )
     return _redirect("/admin/retention", "success", f"Added override for {dev_id}")
 
@@ -1235,12 +1249,14 @@ def admin_add_device_retention(
     "/admin/retention/device/{device_id}/delete", dependencies=[Depends(require_csrf)]
 )
 def admin_delete_device_retention(
+    request: Request,
     device_id: str,
     username: Annotated[str, Depends(current_user)],
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
     from sqlalchemy import select as _sel
 
+    from . import audit as _audit
     from .db import SnapshotRetentionPolicy
     from .device_ids import normalize_device_id
 
@@ -1254,12 +1270,27 @@ def admin_delete_device_retention(
     )
     if row is None:
         return _redirect("/admin/retention", "error", "Override not found")
+    removed = {
+        "keep_last_n_auto": row.keep_last_n_auto,
+        "auto_expire_days": row.auto_expire_days,
+        "keep_labeled_forever": row.keep_labeled_forever,
+    }
     db.delete(row)
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="retention.device_override_removed",
+        resource_type="retention_policy",
+        resource_id=dev_id,
+        detail=removed,
+    )
     return _redirect("/admin/retention", "success", f"Override for {dev_id} removed")
 
 
 @router.post("/admin/retention/policy", dependencies=[Depends(require_csrf)])
 def admin_set_retention_policy(
+    request: Request,
     username: Annotated[str, Depends(current_user)],
     keep_last_n_auto: Annotated[int, Form()] = 30,
     auto_expire_days: Annotated[str, Form()] = "",
@@ -1268,6 +1299,7 @@ def admin_set_retention_policy(
 ) -> RedirectResponse:
     from sqlalchemy import select as _sel
 
+    from . import audit as _audit
     from .db import SnapshotRetentionPolicy
 
     acct = _admin_account(db, username)
@@ -1279,6 +1311,15 @@ def admin_set_retention_policy(
     )
     expire_days = int(auto_expire_days) if auto_expire_days.strip() else None
     keep_labeled = bool(keep_labeled_forever)
+    before = (
+        {
+            "keep_last_n_auto": row.keep_last_n_auto,
+            "auto_expire_days": row.auto_expire_days,
+            "keep_labeled_forever": row.keep_labeled_forever,
+        }
+        if row is not None
+        else None
+    )
     if row is None:
         row = SnapshotRetentionPolicy(
             account_id=acct.id,
@@ -1292,14 +1333,33 @@ def admin_set_retention_policy(
         row.keep_last_n_auto = max(1, min(keep_last_n_auto, 500))
         row.auto_expire_days = expire_days
         row.keep_labeled_forever = keep_labeled
+
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="retention.policy_saved",
+        resource_type="retention_policy",
+        resource_id=str(acct.id),
+        detail={
+            "before": before,
+            "after": {
+                "keep_last_n_auto": row.keep_last_n_auto,
+                "auto_expire_days": row.auto_expire_days,
+                "keep_labeled_forever": row.keep_labeled_forever,
+            },
+        },
+    )
     return _redirect("/admin/retention", "success", "Policy saved")
 
 
 @router.post("/admin/retention/run-now", dependencies=[Depends(require_csrf)])
 def admin_retention_run_now(
+    request: Request,
     username: Annotated[str, Depends(current_user)],
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
+    from . import audit as _audit
     from . import retention as _ret
 
     summary = _ret.run_retention(db)
@@ -1308,6 +1368,16 @@ def admin_retention_run_now(
         f"deleted={summary.get('deleted', 0)}, "
         f"idempotency_purged={summary.get('idempotency_purged', 0)}, "
         f"revoked_tokens_purged={summary.get('revoked_tokens_purged', 0)}"
+    )
+    acct = _admin_account(db, username)
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="retention.manual_run",
+        resource_type="retention_policy",
+        resource_id=None,
+        detail={"summary": summary},
     )
     return _redirect("/admin/retention", "success", msg)
 
@@ -1591,6 +1661,7 @@ def admin_settings(
 
 @router.post("/admin/settings", dependencies=[Depends(require_csrf)])
 def admin_save_settings(
+    request: Request,
     username: Annotated[str, Depends(current_user)],
     snapshot_keep_last_n: Annotated[int, Form()] = 30,
     snapshot_retain_days: Annotated[int, Form()] = 90,
@@ -1600,6 +1671,7 @@ def admin_save_settings(
     banner_message: Annotated[str, Form()] = "",
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
+    from . import audit as _audit
     from .db import GlobalPolicy
     from .roles import Role
 
@@ -1613,6 +1685,18 @@ def admin_save_settings(
         row = GlobalPolicy(id=1)
         db.add(row)
 
+    # Snapshot the before-state so the audit entry carries a diff of
+    # exactly what the admin just changed. Missing row = defaults, so
+    # an upsert reads as "created from defaults".
+    before = {
+        "snapshot_keep_last_n": row.snapshot_keep_last_n,
+        "snapshot_retain_days": row.snapshot_retain_days,
+        "max_bytes_per_user": row.max_bytes_per_user,
+        "registration_enabled": row.registration_enabled,
+        "default_role": row.default_role,
+        "banner_message": row.banner_message,
+    }
+
     row.snapshot_keep_last_n = max(1, min(int(snapshot_keep_last_n), 500))
     row.snapshot_retain_days = max(1, min(int(snapshot_retain_days), 3650))
     row.max_bytes_per_user = (
@@ -1622,6 +1706,27 @@ def admin_save_settings(
     row.default_role = default_role
     row.banner_message = banner_message.strip() or None
     row.updated_by_email = f"{username}@admin.local"
+
+    after = {
+        "snapshot_keep_last_n": row.snapshot_keep_last_n,
+        "snapshot_retain_days": row.snapshot_retain_days,
+        "max_bytes_per_user": row.max_bytes_per_user,
+        "registration_enabled": row.registration_enabled,
+        "default_role": row.default_role,
+        "banner_message": row.banner_message,
+    }
+    changed = {k: {"from": before[k], "to": after[k]} for k in after if before[k] != after[k]}
+    if changed:
+        acct = _admin_account(db, username)
+        _audit.emit(
+            db,
+            request=request,
+            actor=acct,
+            action="settings.updated",
+            resource_type="global_policy",
+            resource_id="1",
+            detail={"changed": changed},
+        )
 
     return _redirect("/admin/settings", "success", "Settings saved")
 
