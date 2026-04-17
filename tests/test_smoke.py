@@ -102,6 +102,11 @@ def test_login_accepts_dev_admin(client: TestClient) -> None:
     )
     assert r.status_code == 303
     assert "nks_wdc_catalog_session" in r.cookies
+    # Cookie must be HttpOnly + SameSite=Strict so the admin panel survives
+    # CSRF + XSS token-exfiltration attempts (F-03, F-04 hardening).
+    set_cookie = r.headers.get("set-cookie", "").lower()
+    assert "httponly" in set_cookie
+    assert "samesite=strict" in set_cookie
 
 
 @pytest.fixture

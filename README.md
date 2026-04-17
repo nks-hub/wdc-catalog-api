@@ -81,8 +81,15 @@ version without restarting the daemon.
 | `NKS_WDC_CATALOG_ADMIN_USER` | `admin` | Bootstrap admin username |
 | `NKS_WDC_CATALOG_ADMIN_PASS` | — (dev: `admin`) | Bootstrap admin password |
 | `NKS_WDC_CATALOG_DEV` | — | `1` enables `admin`/`admin` fallback + verbose logs |
-| `NKS_WDC_CATALOG_SECRET` | dev fallback | `itsdangerous` signer key for session cookies |
+| `NKS_WDC_JWT_SECRET` | _required in prod_ | HS256 signing key for desktop-client JWTs |
+| `NKS_WDC_SESSION_SECRET` | _required in prod_ | `itsdangerous` signer key for admin UI session cookies |
+| `NKS_WDC_CATALOG_SECRET` | — | Legacy combined secret, used as fallback for both dedicated vars (deprecated) |
 | `NKS_WDC_CATALOG_ALLOW_CORS` | — | `1` emits permissive CORS headers |
+
+In production **the secret env vars must be set** to independent random 32+ byte values
+(`openssl rand -base64 48`). The service refuses to start otherwise. Setting
+`NKS_WDC_CATALOG_DEV=1` overrides the check and generates ephemeral random keys —
+local development only.
 
 ## API
 

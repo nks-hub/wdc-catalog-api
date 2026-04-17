@@ -357,7 +357,8 @@ def login_submit(
         value=token,
         max_age=SESSION_MAX_AGE,
         httponly=True,
-        samesite="lax",
+        samesite="strict",
+        secure=_cookie_secure(),
     )
     return response
 
@@ -373,11 +374,28 @@ def logout() -> RedirectResponse:
 # Admin UI (authenticated HTML)
 # ─────────────────────────────────────────────────────────────────────────
 
+def _cookie_secure() -> bool:
+    """Session cookies must carry the Secure flag in production.
+
+    TestClient uses http:// so we cannot unconditionally set Secure. Respect
+    an explicit opt-out for dev, default to Secure whenever we're not in
+    DEV mode (production deployments run behind HTTPS reverse proxies).
+    """
+    return os.environ.get("NKS_WDC_CATALOG_DEV") != "1"
+
+
 def _redirect(url: str, flash_kind: str | None = None, flash_message: str | None = None) -> RedirectResponse:
     response = RedirectResponse(url, status_code=status.HTTP_303_SEE_OTHER)
     if flash_kind and flash_message:
         # Flash via short-lived cookie so the next GET picks it up.
-        response.set_cookie("flash", f"{flash_kind}|{flash_message}", max_age=15, samesite="lax")
+        response.set_cookie(
+            "flash",
+            f"{flash_kind}|{flash_message}",
+            max_age=15,
+            httponly=True,
+            samesite="strict",
+            secure=_cookie_secure(),
+        )
     return response
 
 
