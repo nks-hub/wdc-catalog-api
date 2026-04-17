@@ -24,10 +24,41 @@
     <input type="text" name="resource_id" placeholder="resource id" value="{{ resource_id or '' }}">
     <input type="number" name="actor_id" placeholder="actor id" value="{{ actor_id or '' }}">
     <button class="btn">Filter</button>
-    {% if action or resource_type or resource_id or actor_id %}
+    {% if any_filter_active %}
       <a class="btn btn-ghost" href="/admin/audit">clear</a>
     {% endif %}
   </form>
+
+  {% if saved_queries or any_filter_active %}
+  <section class="saved-queries">
+    {% if saved_queries %}
+    <div class="saved-queries-list">
+      <span class="muted">Saved filters:</span>
+      {% for q in saved_queries %}
+        <span class="saved-query{% if q.active %} saved-query-active{% endif %}">
+          <a href="/admin/audit{{ q.qs }}">{{ q.name }}</a>
+          <form method="post" action="/admin/audit/saved/{{ q.id }}/delete" class="inline" onsubmit="return confirm('Delete saved filter {{ q.name }}?');">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="saved-query-x" type="submit" aria-label="Delete">×</button>
+          </form>
+        </span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if any_filter_active %}
+    <form method="post" action="/admin/audit/save" class="saved-query-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="action" value="{{ action or '' }}">
+      <input type="hidden" name="resource_type" value="{{ resource_type or '' }}">
+      <input type="hidden" name="resource_id" value="{{ resource_id or '' }}">
+      <input type="hidden" name="actor_id" value="{{ actor_id or '' }}">
+      <input type="text" name="name" placeholder="Name this filter" maxlength="64" required>
+      <button class="btn btn-sm" type="submit">Save filter</button>
+    </form>
+    {% endif %}
+  </section>
+  {% endif %}
 
   <table class="data compact">
     <thead>

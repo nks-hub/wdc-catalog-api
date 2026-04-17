@@ -1799,6 +1799,89 @@ body:has(.login-wrap) main.container { padding-top: 0; }
   color: #fff;
 }
 
+/* Saved audit-query row — hybrid chip (clickable) + inline delete. */
+.saved-queries {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  margin-bottom: var(--space-3);
+  border-bottom: 1px dashed var(--border);
+}
+.saved-queries-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.821rem;
+}
+.saved-query {
+  display: inline-flex;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  font-size: 0.786rem;
+  font-weight: 500;
+}
+.saved-query > a {
+  padding: 3px var(--space-2) 3px var(--space-3);
+  color: var(--text-2);
+  text-decoration: none;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.saved-query:hover { border-color: var(--accent); }
+.saved-query:hover > a { color: var(--accent); }
+.saved-query-active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.saved-query-active > a,
+.saved-query-active:hover > a { color: #fff; }
+.saved-query-x {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 2px 8px 4px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity var(--t-fast), background var(--t-fast);
+}
+.saved-query-x:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  color: var(--danger);
+}
+.saved-query-active .saved-query-x:hover {
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+}
+
+.saved-query-form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  font-size: 0.821rem;
+}
+.saved-query-form input[type="text"] {
+  padding: 5px var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.821rem;
+  min-width: 180px;
+}
+.saved-query-form input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 /* --------------------------------------------------------------------------
    Motion — respect users who requested reduced motion at the OS level.
    -------------------------------------------------------------------------- */

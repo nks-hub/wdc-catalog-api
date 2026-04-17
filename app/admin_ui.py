@@ -872,6 +872,51 @@ def admin_audit(
         qs_parts.append(f"actor_id={actor_id}")
     qs = ("&".join(qs_parts) + "&") if qs_parts else ""
 
+    # Per-account saved-filter sidebar. Each row renders as a link that
+    # reapplies the named filter in a single click.
+    from .db import SavedAuditQuery as _SavedQ
+
+    acct = _admin_account(db, username)
+    saved_rows = db.scalars(
+        _sel(_SavedQ)
+        .where(_SavedQ.account_id == acct.id)
+        .order_by(_SavedQ.name.asc())
+    ).all()
+
+    def _saved_qs(row: _SavedQ) -> str:
+        parts: list[str] = []
+        if row.action:
+            parts.append(f"action={row.action}")
+        if row.resource_type:
+            parts.append(f"resource_type={row.resource_type}")
+        if row.resource_id:
+            parts.append(f"resource_id={row.resource_id}")
+        if row.actor_id:
+            parts.append(f"actor_id={row.actor_id}")
+        return "?" + "&".join(parts) if parts else ""
+
+    # Flag the saved row whose params match the current request so the
+    # sidebar highlights "you are on this filter right now".
+    def _matches(row: _SavedQ) -> bool:
+        return (
+            (row.action or "") == (action or "")
+            and (row.resource_type or "") == (resource_type or "")
+            and (row.resource_id or "") == (resource_id or "")
+            and (row.actor_id or None) == (actor_id or None)
+        )
+
+    saved_queries = [
+        {
+            "id": r.id,
+            "name": r.name,
+            "qs": _saved_qs(r),
+            "active": _matches(r),
+        }
+        for r in saved_rows
+    ]
+
+    any_filter_active = bool(action or resource_type or resource_id or actor_id)
+
     ctx = base_context(
         request,
         username,
@@ -884,11 +929,103 @@ def admin_audit(
         resource_id=resource_id,
         actor_id=actor_id,
         qs=qs,
+        saved_queries=saved_queries,
+        any_filter_active=any_filter_active,
         flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "audit.html", ctx)
     _clear_flash(response)
     return response
+
+
+@router.post("/admin/audit/save", dependencies=[Depends(require_csrf)])
+def admin_audit_save(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    name: Annotated[str, Form()],
+    action: Annotated[str, Form()] = "",
+    resource_type: Annotated[str, Form()] = "",
+    resource_id: Annotated[str, Form()] = "",
+    actor_id: Annotated[str, Form()] = "",
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Persist the current query params as a named preset."""
+    from sqlalchemy import select as _sel
+
+    from .db import SavedAuditQuery
+
+    clean_name = (name or "").strip()[:64]
+    if not clean_name:
+        return _redirect("/admin/audit", "error", "Name is required")
+
+    acct = _admin_account(db, username)
+    try:
+        actor_id_int: int | None = int(actor_id) if (actor_id or "").strip() else None
+    except ValueError:
+        return _redirect("/admin/audit", "error", "Actor ID must be a number")
+
+    # Upsert on (account_id, name) so the user can tweak + re-save with
+    # the same label without bumping into the unique-key constraint.
+    existing = db.scalar(
+        _sel(SavedAuditQuery).where(
+            SavedAuditQuery.account_id == acct.id,
+            SavedAuditQuery.name == clean_name,
+        )
+    )
+    if existing is None:
+        row = SavedAuditQuery(
+            account_id=acct.id,
+            name=clean_name,
+            action=(action or "").strip() or None,
+            resource_type=(resource_type or "").strip() or None,
+            resource_id=(resource_id or "").strip() or None,
+            actor_id=actor_id_int,
+        )
+        db.add(row)
+    else:
+        existing.action = (action or "").strip() or None
+        existing.resource_type = (resource_type or "").strip() or None
+        existing.resource_id = (resource_id or "").strip() or None
+        existing.actor_id = actor_id_int
+
+    # Preserve the filter params on the redirect so the user lands back
+    # on the same view they just saved.
+    qs_parts: list[str] = []
+    if action:
+        qs_parts.append(f"action={action}")
+    if resource_type:
+        qs_parts.append(f"resource_type={resource_type}")
+    if resource_id:
+        qs_parts.append(f"resource_id={resource_id}")
+    if actor_id_int:
+        qs_parts.append(f"actor_id={actor_id_int}")
+    url = "/admin/audit" + ("?" + "&".join(qs_parts) if qs_parts else "")
+    return _redirect(url, "success", f"Saved as '{clean_name}'")
+
+
+@router.post(
+    "/admin/audit/saved/{saved_id}/delete", dependencies=[Depends(require_csrf)]
+)
+def admin_audit_saved_delete(
+    saved_id: int,
+    username: Annotated[str, Depends(current_user)],
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    from sqlalchemy import select as _sel
+
+    from .db import SavedAuditQuery
+
+    acct = _admin_account(db, username)
+    row = db.scalar(
+        _sel(SavedAuditQuery).where(
+            SavedAuditQuery.id == saved_id,
+            SavedAuditQuery.account_id == acct.id,
+        )
+    )
+    if row is None:
+        return _redirect("/admin/audit", "error", "Saved filter not found")
+    db.delete(row)
+    return _redirect("/admin/audit", "success", "Saved filter removed")
 
 
 @router.get("/admin/invites", response_class=HTMLResponse)
