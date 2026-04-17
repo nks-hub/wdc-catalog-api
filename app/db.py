@@ -32,6 +32,7 @@ from sqlalchemy import (
     LargeBinary,
     SmallInteger,
     String,
+    Text,
     UniqueConstraint,
     create_engine,
 )
@@ -210,6 +211,17 @@ class Account(Base):
     # noisy proxy can't force every user out.
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # TOTP two-factor authentication — opt-in per account. The login flow
+    # treats ``totp_enabled`` as the gate; ``totp_secret`` is only
+    # populated once the user confirms a first code (a secret sitting in
+    # the row without the flag means setup was started but never
+    # finished — a later "disable & retry" clears both). Recovery codes
+    # are stored as a newline-joined list of bcrypt hashes so a DB leak
+    # never surfaces the plaintext fallback codes.
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    totp_recovery_hashes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    totp_enabled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class IdempotencyRecord(Base):
