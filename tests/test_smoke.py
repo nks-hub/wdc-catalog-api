@@ -80,10 +80,21 @@ def test_unknown_app_returns_404(client: TestClient) -> None:
     assert r.status_code == 404
 
 
+def _csrf_pair(client: TestClient) -> tuple[str, str]:
+    """GET /login so the middleware drops a CSRF cookie, then hand it
+    back together with the form-field spelling the tests need."""
+    r = client.get("/login")
+    assert r.status_code == 200
+    token = r.cookies.get("nks_wdc_csrf")
+    assert token
+    return token, "_csrf"
+
+
 def test_login_rejects_bad_credentials(client: TestClient) -> None:
+    token, field = _csrf_pair(client)
     r = client.post(
         "/login",
-        data={"username": "admin", "password": "wrong"},
+        data={"username": "admin", "password": "wrong", field: token},
         follow_redirects=False,
     )
     assert r.status_code == 401
@@ -95,9 +106,10 @@ def test_admin_requires_auth(client: TestClient) -> None:
 
 
 def test_login_accepts_dev_admin(client: TestClient) -> None:
+    token, field = _csrf_pair(client)
     r = client.post(
         "/login",
-        data={"username": "admin", "password": "admin"},
+        data={"username": "admin", "password": "admin", field: token},
         follow_redirects=False,
     )
     assert r.status_code == 303
