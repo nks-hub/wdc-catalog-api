@@ -28,6 +28,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
@@ -128,7 +129,36 @@ def _html_error_response(
 
 
 def install_problem_handlers(app: FastAPI) -> None:
-    """Register global exception handlers on the FastAPI instance."""
+    """Register global exception handlers on the FastAPI instance.
+
+    We register against both ``fastapi.HTTPException`` *and* the raw
+    ``starlette.exceptions.HTTPException`` so that 404s raised by the
+    router itself (for paths that never matched any route) still flow
+    through our HTML/JSON content negotiator instead of Starlette's
+    default JSON 404.
+    """
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _starlette_http_exc(
+        request: Request, exc: StarletteHTTPException
+    ) -> Response:
+        if (
+            _prefers_html(request)
+            and 400 <= exc.status_code < 600
+            and exc.status_code != 401
+        ):
+            return _html_error_response(
+                request,
+                exc.status_code,
+                str(exc.detail) if exc.detail else _phrase(exc.status_code),
+                title=_phrase(exc.status_code),
+            )
+        return problem_response(
+            request,
+            exc.status_code,
+            exc.detail or _phrase(exc.status_code),
+            headers=getattr(exc, "headers", None),
+        )
 
     @app.exception_handler(HTTPException)
     async def _http_exc(request: Request, exc: HTTPException) -> Response:

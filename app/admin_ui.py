@@ -1020,6 +1020,8 @@ def admin_device_snapshots(
     request: Request,
     device_id: str,
     username: Annotated[str, Depends(current_user)],
+    kind: str = "",
+    label_like: str = "",
     offset: int = 0,
     limit: int = 50,
     flash: Annotated[str | None, Cookie(alias="flash")] = None,
@@ -1034,6 +1036,8 @@ def admin_device_snapshots(
         db,
         device_id=dev_id,
         account_id=acct.id,
+        kind=kind or None,
+        label_like=label_like or None,
         offset=offset,
         limit=limit,
     )
@@ -1066,6 +1070,8 @@ def admin_device_snapshots(
         total=total,
         offset=offset,
         limit=limit,
+        kind=kind,
+        label_like=label_like,
         flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "device_snapshots.html", ctx)
@@ -1401,6 +1407,77 @@ def admin_device_import(
         f"/admin/devices/{dev_id}/snapshots",
         "success",
         f"Imported #{snap.id} ({default_label})",
+    )
+
+
+# ── Device snapshot ZIP export ──────────────────────────────────────
+
+
+@router.get("/admin/devices/{device_id}/snapshots/export.zip")
+def admin_device_snapshots_export(
+    device_id: str,
+    username: Annotated[str, Depends(current_user)],
+    db: Session = Depends(get_session),
+):
+    """Bundle every snapshot for a device into a single ZIP download.
+
+    Each snapshot lands as ``<id>-<kind>-<label>.json`` inside the archive
+    with the same envelope shape used by ``GET /backups/{id}/download``
+    so a re-import flows through ``/admin/devices/{id}/import`` cleanly.
+    """
+    import io
+    import json as _json
+    import zipfile
+
+    from fastapi.responses import StreamingResponse
+
+    from . import snapshots as _snap
+    from .db import DeviceConfig
+    from .device_ids import normalize_device_id
+
+    acct = _admin_account(db, username)
+    dev_id = normalize_device_id(device_id)
+    dev = db.get(DeviceConfig, dev_id)
+    if dev is None or dev.user_id != acct.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
+
+    # Stream everything into an in-memory buffer. Per-device snapshot
+    # counts are bounded by the retention policy so this is cheaper than
+    # wiring a streaming ZIP generator for zero operator benefit.
+    rows, _ = _snap.list_snapshots(
+        db, device_id=dev_id, account_id=acct.id, offset=0, limit=10_000
+    )
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for s in rows:
+            try:
+                payload = _snap.unpack_payload(s, db=db)
+            except PermissionError:
+                # Variant-B encrypted without passphrase — skip rather
+                # than failing the whole export.
+                continue
+            envelope = {
+                "schema": "nks-wdc-snapshot-v1",
+                "id": s.id,
+                "device_id": s.device_id,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "label": s.label,
+                "kind": s.kind,
+                "checksum": s.checksum,
+                "payload": payload,
+            }
+            safe_label = (s.label or "unlabeled").replace("/", "_")[:40]
+            name = f"{s.id:06d}-{s.kind}-{safe_label}.json"
+            zf.writestr(name, _json.dumps(envelope, indent=2, ensure_ascii=False))
+
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{dev_id}-snapshots.zip"'
+        },
     )
 
 

@@ -129,6 +129,20 @@ def test_admin_error_page_renders_html_not_problem_json(
     assert "Not Found".lower() in r.text.lower()
 
 
+def test_admin_unregistered_path_also_renders_html(
+    admin_client: TestClient,
+) -> None:
+    """404s from unregistered routes (router-level miss) must also flow
+    through the HTML content-negotiation path. Previously Starlette's
+    default JSON handler was leaking through here."""
+    r = admin_client.get(
+        "/admin/nonexistent-page-xyz",
+        headers={"Accept": "text/html"},
+    )
+    assert r.status_code == 404
+    assert "text/html" in r.headers["content-type"].lower()
+
+
 def test_api_404_stays_problem_json(admin_client: TestClient) -> None:
     """The /api/v1/* namespace must always return Problem+JSON on 404,
     even when Accept mentions HTML — machine clients depend on it."""

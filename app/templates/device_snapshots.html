@@ -5,8 +5,25 @@
   <p><a href="/admin/devices">← back to devices</a></p>
   <header class="section-head">
     <h1>Snapshots for <code>{{ device_id }}</code></h1>
-    <a class="btn" href="/admin/devices/{{ device_id }}/import">+ Import backup</a>
+    <div class="pill-row">
+      <a class="btn" href="/admin/devices/{{ device_id }}/snapshots/export.zip" download>Download ZIP</a>
+      <a class="btn" href="/admin/devices/{{ device_id }}/import">+ Import backup</a>
+    </div>
   </header>
+
+  <form method="get" class="inline-form">
+    <select name="kind">
+      <option value="">any kind</option>
+      {% for k in ["auto", "manual", "pre_restore", "import"] %}
+        <option value="{{ k }}" {% if kind == k %}selected{% endif %}>{{ k }}</option>
+      {% endfor %}
+    </select>
+    <input type="text" name="label_like" placeholder="label contains…" value="{{ label_like or '' }}">
+    <button class="btn">Filter</button>
+    {% if kind or label_like %}
+      <a class="btn btn-ghost" href="/admin/devices/{{ device_id }}/snapshots">clear</a>
+    {% endif %}
+  </form>
   {% if head %}
   <p>Current HEAD: <code>#{{ head.id }}</code> ({{ head.created_at }})</p>
   {% endif %}
