@@ -160,6 +160,16 @@ def decode_token(token: str) -> dict:
     )
 
 
+def _inc_auth_failure(reason: str) -> None:
+    """Best-effort metric increment — shouldn't break auth on import glitch."""
+    try:
+        from .observability import AUTH_FAILURES
+
+        AUTH_FAILURES.labels(reason=reason).inc()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _record_failed_login(account: "Account") -> None:
     """Increment the per-account failure counter + lock on threshold hit.
 
@@ -215,6 +225,7 @@ def get_current_account(
         jti = payload.get("jti")
     except (JWTError, KeyError, ValueError) as exc:
         log.info("JWT decode failed: %s", exc)
+        _inc_auth_failure("invalid_token")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
     if jti and _is_revoked(db, jti):
         log.info("JWT %s is revoked — rejecting", jti)
@@ -289,6 +300,7 @@ def login(
         # Spend the same CPU as the real path so response latency can't
         # be used to enumerate registered emails.
         verify_dummy_password(body.password)
+        _inc_auth_failure("unknown_email")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
     now = datetime.now(timezone.utc)
     if account.locked_until is not None:
@@ -306,6 +318,7 @@ def login(
         # to trigger ``get_session`` rollback. Otherwise lockout never
         # arms because each failure looks like a fresh first attempt.
         db.commit()
+        _inc_auth_failure("bad_password")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
     if account.suspended_at is not None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Account is suspended")

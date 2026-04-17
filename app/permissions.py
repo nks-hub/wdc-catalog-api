@@ -66,8 +66,9 @@ def _emit_deny(
     actual: str,
     required: Role,
 ) -> None:
-    """Best-effort audit log on RBAC denial. Failures don't block the
-    403 — better to miss a row than to 500 on legitimate access checks."""
+    """Best-effort audit log + metric on RBAC denial. Failures don't
+    block the 403 — better to miss a row than to 500 on legitimate
+    access checks."""
     try:
         from . import audit
 
@@ -80,6 +81,12 @@ def _emit_deny(
             resource_id=request.url.path,
             detail={"required": required.value, "actual": actual},
         )
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from .observability import AUTH_FAILURES
+
+        AUTH_FAILURES.labels(reason="permission_denied").inc()
     except Exception:  # noqa: BLE001
         pass
 

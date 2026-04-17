@@ -92,6 +92,14 @@ BLOB_ORPHAN_TOTAL = Counter(
     "storage cost.",
 )
 
+AUTH_FAILURES = Counter(
+    "nks_wdc_auth_failures_total",
+    "Authentication / authorization failures bucketed by cause. "
+    "Spikes in ``invalid_token`` or ``permission_denied`` are strong "
+    "signals of credential-stuffing or lateral-movement attempts.",
+    ["reason"],
+)
+
 
 # ── Logging config ─────────────────────────────────────────────────────
 
@@ -206,4 +214,5 @@ __all__ = [
     "SNAPSHOTS_CREATED",
     "RETENTION_DELETED",
     "BLOB_ORPHAN_TOTAL",
+    "AUTH_FAILURES",
 ]
