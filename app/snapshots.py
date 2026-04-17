@@ -220,6 +220,11 @@ def create_snapshot(
     db.add(snap)
     db.flush()
     set_head(db, device_id, snap.id, updated_by=kind)
+    try:
+        from .observability import SNAPSHOTS_CREATED
+        SNAPSHOTS_CREATED.labels(kind=kind).inc()
+    except Exception:
+        pass  # metrics are optional — never fail a write because of them
     return snap
 
 

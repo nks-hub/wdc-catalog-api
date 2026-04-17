@@ -1,0 +1,162 @@
+"""Structured logging + Prometheus metrics + request-id middleware.
+
+Call ``configure_logging()`` at module import time and
+``install(app)`` from ``main.py`` to wire middleware + /metrics.
+
+Logs land on stdout as JSON (``python-json-logger``) so container log
+aggregators (Loki, CloudWatch, Datadog) can index fields directly. Each
+line carries a ``request_id`` context var so every log produced during
+one request can be correlated.
+
+Metrics exposed at ``/metrics`` (Prometheus text format):
+
+- ``http_requests_total{method,status,route}``
+- ``http_request_duration_seconds`` histogram
+- ``snapshot_created_total{kind}``
+- ``retention_deleted_total``
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import time
+import uuid
+from contextvars import ContextVar
+from typing import Any
+
+from fastapi import FastAPI, Request
+from fastapi.responses import Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from pythonjsonlogger import jsonlogger
+
+
+REQUEST_ID_HEADER = "x-request-id"
+request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
+
+
+# ── Metrics ────────────────────────────────────────────────────────────
+
+HTTP_REQUESTS = Counter(
+    "nks_wdc_http_requests_total",
+    "Total HTTP requests",
+    ["method", "status", "route"],
+)
+
+HTTP_DURATION = Histogram(
+    "nks_wdc_http_request_duration_seconds",
+    "HTTP request duration in seconds",
+    ["method", "route"],
+)
+
+SNAPSHOTS_CREATED = Counter(
+    "nks_wdc_snapshot_created_total",
+    "Snapshots committed via the backup / sync endpoints",
+    ["kind"],
+)
+
+RETENTION_DELETED = Counter(
+    "nks_wdc_retention_deleted_total",
+    "Snapshots removed by the retention runner",
+)
+
+
+# ── Logging config ─────────────────────────────────────────────────────
+
+class _RequestIdInjector(logging.Filter):
+    """Attach the current request_id context var to every log record."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.request_id = request_id_var.get()
+        return True
+
+
+def configure_logging() -> None:
+    """Root logger → JSON formatter on stdout. Idempotent."""
+    root = logging.getLogger()
+    if getattr(root, "_nks_configured", False):
+        return
+    handler = logging.StreamHandler()
+    fmt = jsonlogger.JsonFormatter(
+        "%(asctime)s %(name)s %(levelname)s %(message)s %(request_id)s",
+        rename_fields={"asctime": "ts", "levelname": "level"},
+    )
+    handler.setFormatter(fmt)
+    handler.addFilter(_RequestIdInjector())
+    root.handlers = [handler]
+    root.setLevel(os.environ.get("NKS_WDC_LOG_LEVEL", "INFO").upper())
+    root._nks_configured = True  # type: ignore[attr-defined]
+
+
+# ── Middleware ─────────────────────────────────────────────────────────
+
+async def request_context_middleware(request: Request, call_next) -> Response:
+    """Set request_id + collect metrics for every request."""
+    req_id = request.headers.get(REQUEST_ID_HEADER) or uuid.uuid4().hex[:16]
+    token = request_id_var.set(req_id)
+    route = _route_template(request)
+    start = time.monotonic()
+    try:
+        response: Response = await call_next(request)
+    except Exception:
+        HTTP_REQUESTS.labels(
+            method=request.method, status="500", route=route
+        ).inc()
+        raise
+    finally:
+        HTTP_DURATION.labels(method=request.method, route=route).observe(
+            time.monotonic() - start
+        )
+        request_id_var.reset(token)
+    HTTP_REQUESTS.labels(
+        method=request.method,
+        status=str(response.status_code),
+        route=route,
+    ).inc()
+    response.headers[REQUEST_ID_HEADER] = req_id
+    return response
+
+
+def _route_template(request: Request) -> str:
+    """Return the matched route template (``/api/v1/devices/{id}``) so
+    metric cardinality stays bounded. Falls back to the raw path if no
+    route matched (404 cases)."""
+    route = request.scope.get("route")
+    if route is not None and hasattr(route, "path"):
+        return route.path
+    return request.url.path
+
+
+# ── /metrics endpoint ──────────────────────────────────────────────────
+
+def metrics_endpoint() -> Response:
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
+
+
+# ── Installer ──────────────────────────────────────────────────────────
+
+def install(app: FastAPI) -> None:
+    configure_logging()
+    app.middleware("http")(request_context_middleware)
+    app.add_api_route(
+        "/metrics",
+        metrics_endpoint,
+        methods=["GET"],
+        include_in_schema=False,
+        tags=["observability"],
+    )
+
+
+__all__ = [
+    "configure_logging",
+    "install",
+    "request_id_var",
+    "REQUEST_ID_HEADER",
+    "HTTP_REQUESTS",
+    "HTTP_DURATION",
+    "SNAPSHOTS_CREATED",
+    "RETENTION_DELETED",
+]

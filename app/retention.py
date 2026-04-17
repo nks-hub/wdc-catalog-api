@@ -100,6 +100,11 @@ def run_retention(db: Optional[Session] = None) -> dict:
 
     summary = {"accounts": len(account_ids), "deleted": deleted_total}
     log.info("retention pass: %s", summary)
+    try:
+        from .observability import RETENTION_DELETED
+        RETENTION_DELETED.inc(deleted_total)
+    except Exception:
+        pass
     return summary
 
 

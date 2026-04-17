@@ -184,6 +184,11 @@ app.include_router(public_invites_router)
 app.include_router(backups_router)
 app.include_router(admin_retention_router)
 
+# Wire structured logging + Prometheus metrics + request-id middleware.
+from . import observability  # noqa: E402
+
+observability.install(app)
+
 app.mount("/static", StaticFiles(directory=_APP_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=_APP_DIR / "templates")
 
