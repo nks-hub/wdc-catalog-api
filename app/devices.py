@@ -118,6 +118,13 @@ class SimpleOk(BaseModel):
 
 # ── JWT helpers ─────────────────────────────────────────────────────────
 
+# Iss claim pins tokens to this deployment so a leaked secret from an
+# older or forked service on the same master key cannot cross-sign. A
+# deploy bumping this constant implicitly invalidates every outstanding
+# token — acceptable because ``Account.token_version`` already acts as a
+# per-account bulk-revocation handle if operators want finer control.
+JWT_ISSUER = "nks-wdc-catalog"
+
 
 def create_token(account_id: int, email: str, *, token_version: int = 1) -> str:
     """Mint a JWT with ``jti`` + account ``tv`` (token version).
@@ -131,6 +138,7 @@ def create_token(account_id: int, email: str, *, token_version: int = 1) -> str:
     jti = __import__("uuid").uuid4().hex
     return jwt.encode(
         {
+            "iss": JWT_ISSUER,
             "sub": str(account_id),
             "email": email,
             "exp": expire,
@@ -143,7 +151,13 @@ def create_token(account_id: int, email: str, *, token_version: int = 1) -> str:
 
 
 def decode_token(token: str) -> dict:
-    return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    return jwt.decode(
+        token,
+        JWT_SECRET,
+        algorithms=[JWT_ALGORITHM],
+        issuer=JWT_ISSUER,
+        options={"require": ["exp", "sub", "jti"]},
+    )
 
 
 def _is_revoked(db: Session, jti: str) -> bool:

@@ -53,15 +53,31 @@ class MasterKeyMissing(RuntimeError):
 
 
 def master_key() -> bytes:
-    """Return the master key (bytes). Honours env + DEV ephemeral fallback."""
+    """Return the master key (bytes). Honours env + DEV ephemeral fallback.
+
+    Raises when the env var is present but shorter than 32 bytes — silent
+    sha256-padding of ``"password"`` into 32 bytes creates a false sense
+    of security. Operators who want a short passphrase should derive the
+    key out-of-band (scrypt/argon2) and pass the full 32 bytes, or opt in
+    to the explicit weak-key override via ``NKS_WDC_MASTER_KEY_ALLOW_WEAK=1``.
+    """
     global _EPHEMERAL_MASTER_KEY
     env = os.environ.get("NKS_WDC_MASTER_KEY")
     if env:
         key = env.encode("utf-8") if isinstance(env, str) else env
         if len(key) < _AES_KEY_BYTES:
-            import hashlib
+            if os.environ.get("NKS_WDC_MASTER_KEY_ALLOW_WEAK") == "1":
+                import hashlib
 
-            key = hashlib.sha256(key).digest()
+                key = hashlib.sha256(key).digest()
+            else:
+                raise MasterKeyMissing(
+                    f"NKS_WDC_MASTER_KEY must be at least {_AES_KEY_BYTES} bytes "
+                    "(got %d). Generate one with: "
+                    "python -c 'import secrets; print(secrets.token_urlsafe(32))'. "
+                    "Set NKS_WDC_MASTER_KEY_ALLOW_WEAK=1 to opt in to sha256 padding."
+                    % len(key)
+                )
         return key[:_AES_KEY_BYTES]
     if os.environ.get("NKS_WDC_CATALOG_DEV") == "1":
         if _EPHEMERAL_MASTER_KEY is None:
