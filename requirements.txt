@@ -19,3 +19,4 @@ python-json-logger>=2.0
 prometheus-client>=0.20
 email-validator>=2.2
 boto3>=1.35
+argon2-cffi>=23.1

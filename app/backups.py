@@ -11,7 +11,7 @@ import json
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -58,6 +58,12 @@ class CreateSnapshotRequest(BaseModel):
         None,
         description="Payload to snapshot. When omitted, the current device "
                     "config (as reported by the last sync) is re-snapshotted.",
+    )
+    encrypt: bool = Field(
+        False,
+        description="When true, encrypt payload at rest with the account's "
+                    "active KEK (Variant A) or with the header-supplied "
+                    "passphrase (Variant B).",
     )
 
 
@@ -142,6 +148,7 @@ def create_backup(
     request: Request,
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
+    x_wdc_passphrase: Optional[str] = Header(default=None, alias="X-WDC-Passphrase"),
 ) -> SnapshotMeta:
     dev = _owned_device(device_id, account, db)
     # Payload fallback: snapshot the existing DeviceConfig.payload so
@@ -156,9 +163,14 @@ def create_backup(
             kind=body.kind,
             label=body.label,
             created_by_ip=request.client.host if request.client else None,
+            encrypt=body.encrypt,
+            passphrase=x_wdc_passphrase,
         )
     except snapshots.PayloadTooLarge as exc:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, str(exc))
+    except ValueError as exc:
+        # passphrase validation failures (too short, etc.)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     audit.emit(
         db, actor=account, action="backup.created", request=request,
         resource_type="snapshot", resource_id=snap.id,
@@ -192,15 +204,17 @@ def get_backup(
     snapshot_id: int,
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
+    x_wdc_passphrase: Optional[str] = Header(default=None, alias="X-WDC-Passphrase"),
 ) -> SnapshotDetail:
     _owned_device(device_id, account, db)
     snap = db.get(DeviceSnapshot, snapshot_id)
     if snap is None or snap.device_id != device_id.lower() or snap.account_id != account.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot not found")
-    return SnapshotDetail(
-        **_row(snap).model_dump(),
-        payload=snapshots.unpack_payload(snap, db=db),
-    )
+    try:
+        payload = snapshots.unpack_payload(snap, db=db, passphrase=x_wdc_passphrase)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc))
+    return SnapshotDetail(**_row(snap).model_dump(), payload=payload)
 
 
 @router.get("/{snapshot_id}/download")

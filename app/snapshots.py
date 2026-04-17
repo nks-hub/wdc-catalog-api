@@ -99,79 +99,108 @@ def pack_payload(payload: dict, *, account_id: Optional[int] = None) -> PackedPa
     )
 
 
-def unpack_payload(snap: DeviceSnapshot, *, db: Optional[Session] = None) -> dict:
+def unpack_payload(
+    snap: DeviceSnapshot,
+    *,
+    db: Optional[Session] = None,
+    passphrase: Optional[str] = None,
+) -> dict:
     if snap.payload_json is not None:
         return snap.payload_json
     if snap.payload_blob is not None:
         raw = snap.payload_blob
-        if snap.encryption_kid:
-            if db is None:
-                raise RuntimeError(
-                    "Cannot unpack encrypted snapshot without a DB session"
-                )
-            raw = _decrypt_with_kid(db, snap.encryption_kid, snap.account_id, raw)
-        if snap.compression == "zstd":
-            raw = zstd.ZstdDecompressor().decompress(raw)
-        return json.loads(raw)
-    if snap.blob_uri is not None:
+    elif snap.blob_uri is not None:
         from . import blob_store
         raw = blob_store.download(snap.blob_uri)
-        if snap.encryption_kid:
-            if db is None:
-                raise RuntimeError(
-                    "Cannot unpack encrypted snapshot without a DB session"
-                )
-            raw = _decrypt_with_kid(db, snap.encryption_kid, snap.account_id, raw)
-        if snap.compression == "zstd":
-            raw = zstd.ZstdDecompressor().decompress(raw)
-        return json.loads(raw)
-    raise RuntimeError(f"Snapshot {snap.id} has no payload lane populated")
+    else:
+        raise RuntimeError(f"Snapshot {snap.id} has no payload lane populated")
+    if snap.encryption_kid:
+        if db is None:
+            raise RuntimeError("Cannot unpack encrypted snapshot without a DB session")
+        raw = _decrypt_with_kid(
+            db, snap.encryption_kid, snap.account_id, raw,
+            passphrase=passphrase,
+        )
+    if snap.compression == "zstd":
+        raw = zstd.ZstdDecompressor().decompress(raw)
+    return json.loads(raw)
 
 
 # ── Encryption helpers ─────────────────────────────────────────────────
 
-def _active_key(db: Session, account_id: int) -> AccountEncryptionKey:
-    """Return (or create) the currently-active encryption key for the account."""
+def _active_key(
+    db: Session, account_id: int, *, passphrase: Optional[str] = None
+) -> AccountEncryptionKey:
+    """Return (or lazily create) the active encryption key for the account.
+
+    When ``passphrase`` is provided the key is stored as Variant B
+    (``kek_source='password-derived'``) and every subsequent use MUST
+    supply the same passphrase — the server cannot unwrap it otherwise.
+    When absent, fallback to the master-key (KMS/env) Variant A.
+    """
+    filters = [AccountEncryptionKey.account_id == account_id,
+               AccountEncryptionKey.retired_at.is_(None)]
+    if passphrase is not None:
+        filters.append(AccountEncryptionKey.kek_source == "password-derived")
+    else:
+        filters.append(AccountEncryptionKey.kek_source != "password-derived")
     row = db.scalar(
-        select(AccountEncryptionKey)
-        .where(
-            AccountEncryptionKey.account_id == account_id,
-            AccountEncryptionKey.retired_at.is_(None),
-        )
-        .order_by(AccountEncryptionKey.created_at.desc())
-        .limit(1)
+        select(AccountEncryptionKey).where(*filters)
+        .order_by(AccountEncryptionKey.created_at.desc()).limit(1)
     )
     if row is not None:
         return row
+
     dek = _crypto.generate_dek()
     salt = os.urandom(16)
-    wrapped = _crypto.wrap_dek(dek, account_id, salt) + b"||SALT||" + salt
+    if passphrase is not None:
+        kek = _crypto.derive_key_from_passphrase(passphrase, salt)
+        wrapped_core = _crypto.wrap_dek_with_kek(dek, kek, account_id)
+        kek_source = "password-derived"
+    else:
+        wrapped_core = _crypto.wrap_dek(dek, account_id, salt)
+        kek_source = (
+            "dev-ephemeral"
+            if os.environ.get("NKS_WDC_CATALOG_DEV") == "1"
+            else "master"
+        )
     kid = uuid.uuid4().hex
     row = AccountEncryptionKey(
         kid=kid,
         account_id=account_id,
-        wrapped_dek=wrapped,
+        wrapped_dek=wrapped_core + b"||SALT||" + salt,
         wrap_algo="aes-256-gcm",
-        kek_source=("dev-ephemeral" if os.environ.get("NKS_WDC_CATALOG_DEV") == "1"
-                     else "master"),
+        kek_source=kek_source,
     )
     db.add(row)
     db.flush()
     return row
 
 
-def _unwrap(row: AccountEncryptionKey) -> bytes:
+def _unwrap(row: AccountEncryptionKey, *, passphrase: Optional[str] = None) -> bytes:
     wrapped, _, salt = row.wrapped_dek.partition(b"||SALT||")
+    if row.kek_source == "password-derived":
+        if not passphrase:
+            raise PermissionError(
+                "Snapshot was encrypted with a passphrase; supply X-WDC-Passphrase"
+            )
+        kek = _crypto.derive_key_from_passphrase(passphrase, salt)
+        return _crypto.unwrap_dek_with_kek(wrapped, kek, row.account_id)
     return _crypto.unwrap_dek(wrapped, row.account_id, salt)
 
 
 def _decrypt_with_kid(
-    db: Session, kid: str, account_id: Optional[int], ciphertext: bytes
+    db: Session,
+    kid: str,
+    account_id: Optional[int],
+    ciphertext: bytes,
+    *,
+    passphrase: Optional[str] = None,
 ) -> bytes:
     row = db.get(AccountEncryptionKey, kid)
     if row is None:
         raise RuntimeError(f"Encryption key {kid} no longer exists")
-    dek = _unwrap(row)
+    dek = _unwrap(row, passphrase=passphrase)
     aad = f"nks-wdc-snapshot-{account_id or 0}".encode("ascii")
     return _crypto.decrypt_payload(ciphertext, dek, aad=aad)
 
@@ -186,6 +215,7 @@ def create_snapshot(
     label: Optional[str] = None,
     created_by_ip: Optional[str] = None,
     encrypt: bool = False,
+    passphrase: Optional[str] = None,
 ) -> DeviceSnapshot:
     """Append a snapshot + advance HEAD.
 
@@ -205,14 +235,12 @@ def create_snapshot(
         return head
 
     encryption_kid: Optional[str] = None
-    if encrypt and account_id is not None:
-        key_row = _active_key(db, account_id)
+    if (encrypt or passphrase) and account_id is not None:
+        key_row = _active_key(db, account_id, passphrase=passphrase)
         encryption_kid = key_row.kid
-        # Serialize to bytes (compressed if the inline lane was chosen),
-        # then AES-GCM encrypt.
         raw = _canonical_bytes(payload)
         compressed = zstd.ZstdCompressor(level=10).compress(raw)
-        dek = _unwrap(key_row)
+        dek = _unwrap(key_row, passphrase=passphrase)
         aad = f"nks-wdc-snapshot-{account_id}".encode("ascii")
         envelope = _crypto.encrypt_payload(compressed, dek, aad=aad)
         packed = PackedPayload(

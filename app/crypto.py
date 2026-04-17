@@ -123,6 +123,54 @@ def decrypt_payload(
     return AESGCM(dek).decrypt(nonce, ct, aad)
 
 
+# ── Password-derived KEK (Variant B — zero-knowledge) ──────────────────
+#
+# When an account opts in to passphrase-protected snapshots, the server
+# never sees the master key. Each create/restore request must carry the
+# passphrase, which is expanded via Argon2id into a 32-byte KEK. The
+# server derives once, wraps the DEK, and zeroes the KEK from memory as
+# soon as the response is returned.
+
+ARGON2_TIME_COST = 3
+ARGON2_MEMORY_KB = 64 * 1024  # 64 MiB
+ARGON2_PARALLELISM = 4
+
+
+def derive_key_from_passphrase(passphrase: str, salt: bytes) -> bytes:
+    """Argon2id-derive a 32-byte KEK from ``passphrase`` + per-account ``salt``.
+
+    Raises ``ValueError`` when the passphrase is trivially short; callers
+    should also enforce a UX-level minimum before reaching this layer.
+    """
+    if not passphrase or len(passphrase) < 8:
+        raise ValueError("Passphrase must be at least 8 characters")
+    if len(salt) < 16:
+        raise ValueError("Salt must be at least 16 bytes")
+    from argon2.low_level import Type, hash_secret_raw
+    return hash_secret_raw(
+        secret=passphrase.encode("utf-8"),
+        salt=salt,
+        time_cost=ARGON2_TIME_COST,
+        memory_cost=ARGON2_MEMORY_KB,
+        parallelism=ARGON2_PARALLELISM,
+        hash_len=_AES_KEY_BYTES,
+        type=Type.ID,
+    )
+
+
+def wrap_dek_with_kek(dek: bytes, kek: bytes, account_id: int) -> bytes:
+    """Wrap a DEK under a caller-supplied KEK (Variant B). Returns
+    ``nonce || ciphertext`` bytes suitable for the ``wrapped_dek`` column."""
+    nonce = os.urandom(_NONCE_BYTES)
+    ct = AESGCM(kek).encrypt(nonce, dek, _aad(account_id))
+    return nonce + ct
+
+
+def unwrap_dek_with_kek(wrapped: bytes, kek: bytes, account_id: int) -> bytes:
+    nonce, ct = wrapped[:_NONCE_BYTES], wrapped[_NONCE_BYTES:]
+    return AESGCM(kek).decrypt(nonce, ct, _aad(account_id))
+
+
 __all__ = [
     "MasterKeyMissing",
     "master_key",
@@ -131,4 +179,10 @@ __all__ = [
     "unwrap_dek",
     "encrypt_payload",
     "decrypt_payload",
+    "derive_key_from_passphrase",
+    "wrap_dek_with_kek",
+    "unwrap_dek_with_kek",
+    "ARGON2_TIME_COST",
+    "ARGON2_MEMORY_KB",
+    "ARGON2_PARALLELISM",
 ]
