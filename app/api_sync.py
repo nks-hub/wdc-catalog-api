@@ -183,10 +183,13 @@ def api_exists_config(
     response.headers["Link"] = (
         f'</api/v1/sync/config/{device_id}>; rel="successor-version"'
     )
-    normalized = normalize_device_id(device_id)
+    # ``_require_owned_row`` will normalize + validate; reuse its result
+    # rather than calling ``normalize_device_id`` twice.
     row = _require_owned_row(device_id, account, db, not_found_ok=True)
     if row is None:
-        return ConfigSyncListResponse(device_id=normalized, has_config=False)
+        return ConfigSyncListResponse(
+            device_id=normalize_device_id(device_id), has_config=False
+        )
     return ConfigSyncListResponse(
         device_id=row.device_id,
         updated_at=row.updated_at.isoformat() if row.updated_at else None,

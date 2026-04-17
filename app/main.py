@@ -29,7 +29,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Iterator
+from typing import AsyncIterator
 
 from fastapi import (
     FastAPI,
@@ -65,7 +65,7 @@ _SEED_DIR = _APP_DIR / "data" / "apps"
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI) -> Iterator[None]:
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     create_all()
     ensure_admin_user()
     _warn_if_dev_in_prod()
@@ -273,16 +273,9 @@ app.mount("/static", StaticFiles(directory=_APP_DIR / "static"), name="static")
 # Health probes extracted to ``app.api_health`` — mounted below.
 
 
-# ─────────────────────────────────────────────────────────────────────────
-# Public JSON API (consumed by C# CatalogClient)
-# ─────────────────────────────────────────────────────────────────────────
-
-_CATALOG_CACHE_SECONDS = int(os.environ.get("NKS_WDC_CATALOG_CACHE_SECONDS", "60"))
-
-
-# Public catalog read endpoints live in ``app.api_catalog`` — mounted
-# above via ``app.include_router``. Keeping them out of this module
-# makes it easier to eventually front them with a dedicated CDN worker.
+# Public catalog / sync / health routers are mounted above via the
+# ``app.include_router`` calls — the JSON API endpoints live in their
+# own focused modules (api_catalog, api_sync, api_health).
 
 
 # ─────────────────────────────────────────────────────────────────────────
