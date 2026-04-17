@@ -22,10 +22,16 @@ from typing import Iterator
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
+    LargeBinary,
+    SmallInteger,
     String,
     UniqueConstraint,
     create_engine,
@@ -225,6 +231,142 @@ class DeviceConfig(Base):
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, onupdate=_utc_now)
     payload: Mapped[dict] = mapped_column(JSON)
+
+
+class DeviceSnapshot(Base):
+    """Immutable per-sync snapshot of a device's configuration payload.
+
+    Rows never UPDATE (barring the retention runner's DELETE). HEAD lives
+    separately in ``device_heads`` so restore is a pointer move, not a copy.
+    Exactly one of ``payload_json`` / ``payload_blob`` / ``blob_uri`` is
+    populated — the first lane wins for small configs (< 64 KB), the
+    middle for compressed/encrypted medium payloads, the third reserves
+    future external object-storage backends.
+    """
+    __tablename__ = "device_snapshots"
+    __table_args__ = (
+        CheckConstraint(
+            "(CASE WHEN payload_json IS NOT NULL THEN 1 ELSE 0 END) + "
+            "(CASE WHEN payload_blob IS NOT NULL THEN 1 ELSE 0 END) + "
+            "(CASE WHEN blob_uri IS NOT NULL THEN 1 ELSE 0 END) = 1",
+            name="ck_snapshot_exactly_one_storage",
+        ),
+        CheckConstraint(
+            "kind IN ('auto','manual','pre_restore','import')",
+            name="ck_snapshot_kind",
+        ),
+        Index("ix_snap_device_created", "device_id", "created_at"),
+        Index("ix_snap_account_kind_created", "account_id", "kind", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    device_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("device_configs.device_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    account_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, nullable=False)
+    label: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    kind: Mapped[str] = mapped_column(String(16), default="auto", nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    payload_blob: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    blob_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    parent_snapshot_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("device_snapshots.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
+    compression: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    encryption_kid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_by_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+
+
+class DeviceHead(Base):
+    """HEAD pointer per device — which snapshot is currently authoritative.
+
+    Keeping this in a dedicated table (rather than a column on
+    ``device_configs``) lets us swap HEAD atomically and audit each move
+    without touching the larger row.
+    """
+    __tablename__ = "device_heads"
+
+    device_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("device_configs.device_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    current_snapshot_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("device_snapshots.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utc_now, onupdate=_utc_now, nullable=False,
+    )
+    updated_by: Mapped[str] = mapped_column(String(32), default="sync", nullable=False)
+
+
+class SnapshotRetentionPolicy(Base):
+    """Per-account + optional per-device retention settings.
+
+    ``device_id=None`` → account-wide default. Resolution priority:
+    device-specific > account-wide > global policy > hardcoded fallback.
+    """
+    __tablename__ = "snapshot_retention_policies"
+    __table_args__ = (
+        UniqueConstraint("account_id", "device_id", name="uq_retention_scope"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("accounts.id", ondelete="CASCADE"), index=True,
+    )
+    device_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("device_configs.device_id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    keep_last_n_auto: Mapped[int] = mapped_column(SmallInteger, default=30)
+    auto_expire_days: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    keep_labeled_forever: Mapped[bool] = mapped_column(Boolean, default=True)
+    max_total_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, onupdate=_utc_now)
+
+
+class SnapshotExport(Base):
+    """Audit trail for snapshot exports + restores + imports."""
+    __tablename__ = "snapshot_exports"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("accounts.id", ondelete="CASCADE"), index=True,
+    )
+    snapshot_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("device_snapshots.id", ondelete="SET NULL"), nullable=True,
+    )
+    action: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, index=True)
+    ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+
+class AccountEncryptionKey(Base):
+    """Envelope-encryption metadata — DEK wrapped by account KEK."""
+    __tablename__ = "account_encryption_keys"
+
+    kid: Mapped[str] = mapped_column(String(64), primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("accounts.id", ondelete="CASCADE"), index=True,
+    )
+    wrapped_dek: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    wrap_algo: Mapped[str] = mapped_column(String(32), default="aes-256-gcm")
+    kek_source: Mapped[str] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 # ── Session helper ──────────────────────────────────────────────────────
