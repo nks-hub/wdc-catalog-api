@@ -1,0 +1,109 @@
+name: Postgres compatibility
+
+# Prove the Alembic migration chain + runtime paths still work when
+# the catalog-api is pointed at Postgres (the scale-out target) rather
+# than the default SQLite bundle. Runs on every push touching schema
+# or migration files so regressions show up before they hit ops.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/db.py"
+      - "alembic/**"
+      - "requirements.txt"
+      - ".github/workflows/postgres-compat.yml"
+  pull_request:
+    paths:
+      - "app/db.py"
+      - "alembic/**"
+      - "requirements.txt"
+      - ".github/workflows/postgres-compat.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: postgres-compat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migrate-and-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: catalog
+          POSTGRES_PASSWORD: catalog-test-pw
+          POSTGRES_DB: catalog
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U catalog"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql+psycopg://catalog:catalog-test-pw@127.0.0.1:5432/catalog"
+      NKS_WDC_CATALOG_DEV: "1"
+      NKS_WDC_DISABLE_SCHEDULER: "1"
+      NKS_WDC_DISABLE_RATE_LIMITS: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies + psycopg
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install "psycopg[binary]>=3.2"
+
+      - name: Run Alembic migrations
+        run: alembic upgrade head
+
+      - name: Verify current revision is head
+        run: |
+          OUT=$(alembic current 2>&1 | tail -5)
+          echo "$OUT"
+          echo "$OUT" | grep -q "(head)"
+
+      - name: Spin up app against Postgres + smoke
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8765 &
+          APP_PID=$!
+          # Wait for healthz to report DB up
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8765/healthz >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          set -e
+          curl -fsS http://127.0.0.1:8765/healthz | tee /tmp/health.json
+          jq -e '.ok == true and .db == "up"' /tmp/health.json
+          curl -fsS http://127.0.0.1:8765/api/v1/catalog | jq -e '.apps | type == "object"'
+          # Register + push a config-sync so the snapshot bridge exercises
+          # the encrypted-JSON + zstd-blob paths on Postgres JSONB / BYTEA.
+          TOKEN=$(curl -fsS -X POST http://127.0.0.1:8765/api/v1/auth/register \
+            -H 'content-type: application/json' \
+            -d '{"email":"pg-compat@nks-wdc.dev","password":"pass12345678"}' | jq -r .token)
+          curl -fsS -X POST http://127.0.0.1:8765/api/v1/sync/config \
+            -H "authorization: Bearer $TOKEN" \
+            -H 'content-type: application/json' \
+            -d '{"device_id":"pg-compat-dev-1","payload":{"sites":["a.loc"]}}' \
+            | jq -e '.device_id == "pg-compat-dev-1"'
+          curl -fsS http://127.0.0.1:8765/api/v1/devices/pg-compat-dev-1/backups \
+            -H "authorization: Bearer $TOKEN" \
+            | jq -e '.total >= 1 and .head_id != null'
+          kill $APP_PID || true
+
+      - name: Alembic downgrade round-trip
+        run: |
+          # Undo all migrations then re-apply so ``downgrade()`` paths
+          # are exercised — SQLite batch_alter_table rewrites behave
+          # differently on Postgres, this is our regression fence.
+          alembic downgrade base
+          alembic upgrade head
