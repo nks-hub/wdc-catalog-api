@@ -382,6 +382,35 @@ class AuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, index=True)
 
 
+class SavedAuditQuery(Base):
+    """Named filter preset on the admin audit log.
+
+    Each admin keeps a short list of go-to searches (e.g. "RBAC denials",
+    "failed logins for alice", "snapshot ops today") so they don't have
+    to re-type the four-field filter form every time. Scoped per
+    ``Account`` so one admin's presets don't clutter another's sidebar.
+    """
+
+    __tablename__ = "saved_audit_queries"
+    __table_args__ = (
+        UniqueConstraint("account_id", "name", name="uq_saved_audit_q_account_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("accounts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    action: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    resource_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    resource_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    actor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
+
+
 class DeviceConfig(Base):
     __tablename__ = "device_configs"
 
