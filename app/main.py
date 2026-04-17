@@ -167,6 +167,7 @@ from .admin_invites import (  # noqa: E402
     admin_router as admin_invites_router,
     public_router as public_invites_router,
 )
+from .backups import router as backups_router  # noqa: E402
 
 app.include_router(admin_users_router)
 app.include_router(admin_audit_router)
@@ -174,6 +175,7 @@ app.include_router(admin_stats_router)
 app.include_router(admin_policies_router)
 app.include_router(admin_invites_router)
 app.include_router(public_invites_router)
+app.include_router(backups_router)
 
 app.mount("/static", StaticFiles(directory=_APP_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=_APP_DIR / "templates")
@@ -336,6 +338,25 @@ def api_upsert_config(
             row.arch = sys_info["os"].get("arch")
 
     db.flush()
+
+    # Bridge legacy sync into the versioned snapshot store (Task 4.4).
+    # Every authenticated push becomes an auto snapshot + HEAD move;
+    # anonymous pushes skip snapshotting since we have no owner to
+    # attribute storage against.
+    if account is not None:
+        from . import snapshots as _snap
+        try:
+            _snap.create_snapshot(
+                db,
+                device_id=device_id,
+                account_id=account.id,
+                payload=body.payload or {},
+                kind="auto",
+                created_by_ip=None,
+            )
+        except _snap.PayloadTooLarge:
+            pass  # legacy clients pre-date payload ceiling; skip history.
+
     return ConfigSyncEntry(
         device_id=row.device_id,
         updated_at=row.updated_at.isoformat() if row.updated_at else "",
