@@ -108,7 +108,8 @@ def get_current_account(
         payload = decode_token(credentials.credentials)
         account_id = int(payload["sub"])
     except (JWTError, KeyError, ValueError) as exc:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"Invalid token: {exc}")
+        log.info("JWT decode failed: %s", exc)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
     account = db.get(Account, account_id)
     if account is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Account not found")
