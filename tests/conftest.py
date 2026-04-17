@@ -12,3 +12,6 @@ if "NKS_WDC_CATALOG_STATE_DIR" not in os.environ:
     # Rate limits make per-IP tests flaky; opt out by default and re-enable
     # selectively via monkeypatch in dedicated rate-limit regression tests.
     os.environ.setdefault("NKS_WDC_DISABLE_RATE_LIMITS", "1")
+    # Don't spin up the APScheduler during tests — it logs noise and
+    # keeps a background thread alive past the TestClient lifespan.
+    os.environ.setdefault("NKS_WDC_DISABLE_SCHEDULER", "1")

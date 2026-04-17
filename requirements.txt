@@ -13,3 +13,4 @@ slowapi>=0.1.9
 pydantic-settings>=2.5
 zstandard>=0.22
 jsonpatch>=1.33
+APScheduler>=3.10

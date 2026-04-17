@@ -94,7 +94,12 @@ async def lifespan(_app: FastAPI) -> Iterator[None]:
         count = seed_from_json(db, _SEED_DIR)
         if count:
             log.info("Seeded %d apps from %s", count, _SEED_DIR)
-    yield
+    from . import retention as _retention
+    _retention.start_scheduler()
+    try:
+        yield
+    finally:
+        _retention.stop_scheduler()
 
 
 app = FastAPI(
@@ -168,6 +173,7 @@ from .admin_invites import (  # noqa: E402
     public_router as public_invites_router,
 )
 from .backups import router as backups_router  # noqa: E402
+from .admin_retention import router as admin_retention_router  # noqa: E402
 
 app.include_router(admin_users_router)
 app.include_router(admin_audit_router)
@@ -176,6 +182,7 @@ app.include_router(admin_policies_router)
 app.include_router(admin_invites_router)
 app.include_router(public_invites_router)
 app.include_router(backups_router)
+app.include_router(admin_retention_router)
 
 app.mount("/static", StaticFiles(directory=_APP_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=_APP_DIR / "templates")
