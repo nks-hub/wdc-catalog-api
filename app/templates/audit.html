@@ -17,6 +17,10 @@
     <a class="chip {% if action == 'backup.restored' %}chip-active{% endif %}" href="/admin/audit?action=backup.restored">Restores</a>
     <a class="chip {% if action == 'user.deleted' %}chip-active{% endif %}" href="/admin/audit?action=user.deleted">Deletions</a>
     <a class="chip {% if resource_type == 'pat' and not action %}chip-active{% endif %}" href="/admin/audit?resource_type=pat">PATs</a>
+    <a class="chip {% if action == 'login.ok' %}chip-active{% endif %}" href="/admin/audit?action=login.ok">Logins</a>
+    <a class="chip {% if action == 'account.registered' %}chip-active{% endif %}" href="/admin/audit?action=account.registered">Registrations</a>
+    <a class="chip {% if action == 'settings.updated' %}chip-active{% endif %}" href="/admin/audit?action=settings.updated">Settings</a>
+    <a class="chip {% if action == 'app.deleted' %}chip-active{% endif %}" href="/admin/audit?action=app.deleted">App deletions</a>
   </div>
 
   <form method="get" class="inline-form">
