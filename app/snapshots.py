@@ -56,7 +56,7 @@ def _canonical_bytes(payload: dict) -> bytes:
     return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-def pack_payload(payload: dict) -> PackedPayload:
+def pack_payload(payload: dict, *, account_id: Optional[int] = None) -> PackedPayload:
     raw = _canonical_bytes(payload)
     checksum = hashlib.sha256(raw).hexdigest()
     if len(raw) <= INLINE_THRESHOLD:
@@ -80,9 +80,22 @@ def pack_payload(payload: dict) -> PackedPayload:
             size_bytes=len(compressed),
             checksum=checksum,
         )
+    # Overflow — upload to S3/MinIO if operator opted in.
+    from . import blob_store
+    if blob_store.is_configured():
+        uri = blob_store.upload(compressed, account_id=account_id)
+        return PackedPayload(
+            column="blob_uri",
+            json_value=None,
+            blob_value=None,
+            uri_value=uri,
+            compression="zstd",
+            size_bytes=len(compressed),
+            checksum=checksum,
+        )
     raise PayloadTooLarge(
         f"Snapshot {len(compressed)} bytes exceeds BLOB_THRESHOLD "
-        f"{BLOB_THRESHOLD}; external object store not yet implemented."
+        f"{BLOB_THRESHOLD}; configure NKS_WDC_BLOB_S3_* to enable external storage."
     )
 
 
@@ -101,7 +114,17 @@ def unpack_payload(snap: DeviceSnapshot, *, db: Optional[Session] = None) -> dic
             raw = zstd.ZstdDecompressor().decompress(raw)
         return json.loads(raw)
     if snap.blob_uri is not None:
-        raise NotImplementedError("External blob storage not yet implemented")
+        from . import blob_store
+        raw = blob_store.download(snap.blob_uri)
+        if snap.encryption_kid:
+            if db is None:
+                raise RuntimeError(
+                    "Cannot unpack encrypted snapshot without a DB session"
+                )
+            raw = _decrypt_with_kid(db, snap.encryption_kid, snap.account_id, raw)
+        if snap.compression == "zstd":
+            raw = zstd.ZstdDecompressor().decompress(raw)
+        return json.loads(raw)
     raise RuntimeError(f"Snapshot {snap.id} has no payload lane populated")
 
 
@@ -175,7 +198,7 @@ def create_snapshot(
     The envelope ``(nonce || ciphertext)`` lives in ``payload_blob`` and
     ``encryption_kid`` pins which DEK unwraps it.
     """
-    packed = pack_payload(payload)
+    packed = pack_payload(payload, account_id=account_id)
 
     head = get_head(db, device_id)
     if head is not None and head.checksum == packed.checksum and label is None:
@@ -332,6 +355,18 @@ def purge_auto_older_than(
                 continue
             if cutoff is not None and snap.created_at > cutoff.replace(tzinfo=None):
                 continue
+            # External blobs are orphaned if we only DELETE the row — free
+            # them first. Failures are swallowed so a transient S3 hiccup
+            # doesn't block local cleanup.
+            if snap.blob_uri:
+                try:
+                    from . import blob_store
+                    blob_store.delete(snap.blob_uri)
+                except Exception as exc:  # noqa: BLE001
+                    import logging as _log
+                    _log.getLogger(__name__).warning(
+                        "failed to delete blob %s: %s", snap.blob_uri, exc,
+                    )
             db.delete(snap)
             deleted += 1
     db.flush()
