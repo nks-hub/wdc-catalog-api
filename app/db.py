@@ -157,6 +157,22 @@ class Account(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class GlobalPolicy(Base):
+    """Singleton settings row (``id=1``) holding instance-wide policy
+    defaults. Seeded with a conservative baseline on first startup."""
+    __tablename__ = "global_policies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    snapshot_keep_last_n: Mapped[int] = mapped_column(Integer, default=30)
+    snapshot_retain_days: Mapped[int] = mapped_column(Integer, default=90)
+    max_bytes_per_user: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    registration_enabled: Mapped[bool] = mapped_column(default=True)
+    default_role: Mapped[str] = mapped_column(String(16), default="user")
+    banner_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, onupdate=_utc_now)
+    updated_by_email: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+
 class AuditEvent(Base):
     """Append-only audit trail for admin + security actions.
 
