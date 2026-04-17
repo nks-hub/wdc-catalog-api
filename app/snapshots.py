@@ -487,62 +487,110 @@ def purge_auto_older_than(
     auto_expire_days: Optional[int] = None,
     keep_labeled: bool = True,
 ) -> int:
-    head_ids = set(
-        db.scalars(
-            select(DeviceHead.current_snapshot_id)
-            .join(DeviceSnapshot, DeviceSnapshot.device_id == DeviceHead.device_id)
-            .where(DeviceSnapshot.account_id == account_id)
-        ).all()
-    )
+    """Purge quota-exceeded or TTL-expired auto snapshots.
 
-    by_device: dict[str, list[DeviceSnapshot]] = {}
-    stmt = select(DeviceSnapshot).where(
+    Implementation uses a window-function CTE so the "which rows rank past
+    ``keep_last_n`` within their device partition" decision happens
+    entirely in SQL. Previous implementation materialized every matching
+    snapshot into a Python dict keyed by device_id and iterated — fine
+    for a tenant with 50 devices × 30 rows; OOM on 1k devices × 30+ rows.
+
+    The CTE approach loads only the candidate ids + blob URIs (small
+    projection), so even a 500k-row account stays well under memory
+    budget. Postgres + SQLite 3.25+ both honour ROW_NUMBER() in CTEs.
+    """
+    from sqlalchemy import and_, delete as sql_delete, func, or_
+
+    cutoff_naive: Optional[datetime] = None
+    if auto_expire_days is not None:
+        cutoff_naive = (
+            datetime.now(timezone.utc) - timedelta(days=auto_expire_days)
+        ).replace(tzinfo=None)
+
+    # Build the ranked subquery once, then filter by (rn > keep_last_n
+    # OR created_at <= cutoff).
+    base_filters = [
         DeviceSnapshot.account_id == account_id,
         DeviceSnapshot.kind == "auto",
-    )
+    ]
     if keep_labeled:
-        stmt = stmt.where(DeviceSnapshot.label.is_(None))
-    for row in db.scalars(stmt.order_by(DeviceSnapshot.created_at.desc())).all():
-        by_device.setdefault(row.device_id, []).append(row)
+        base_filters.append(DeviceSnapshot.label.is_(None))
 
-    cutoff = None
-    if auto_expire_days is not None:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=auto_expire_days)
+    rn = (
+        func.row_number()
+        .over(
+            partition_by=DeviceSnapshot.device_id,
+            order_by=DeviceSnapshot.created_at.desc(),
+        )
+        .label("rn")
+    )
+    ranked = (
+        select(
+            DeviceSnapshot.id.label("id"),
+            DeviceSnapshot.blob_uri.label("blob_uri"),
+            DeviceSnapshot.created_at.label("created_at"),
+            rn,
+        )
+        .where(*base_filters)
+        .subquery("ranked")
+    )
 
-    # Delete when EITHER quota exceeded OR past the TTL — classic OR
-    # semantics. Previously used AND, which silently kept rows that
-    # matched only one axis.
-    cutoff_naive = cutoff.replace(tzinfo=None) if cutoff is not None else None
-    deleted = 0
-    for _device_id, rows in by_device.items():
-        for idx, snap in enumerate(rows):
-            if snap.id in head_ids:
-                continue
-            too_many = idx >= keep_last_n
-            too_old = cutoff_naive is not None and snap.created_at <= cutoff_naive
-            if not (too_many or too_old):
-                continue
-            if snap.blob_uri:
+    head_subq = (
+        select(DeviceHead.current_snapshot_id)
+        .join(DeviceSnapshot, DeviceSnapshot.device_id == DeviceHead.device_id)
+        .where(DeviceSnapshot.account_id == account_id)
+    ).subquery("heads")
+
+    reasons = [ranked.c.rn > keep_last_n]
+    if cutoff_naive is not None:
+        reasons.append(ranked.c.created_at <= cutoff_naive)
+
+    to_delete_stmt = select(ranked.c.id, ranked.c.blob_uri).where(
+        and_(
+            or_(*reasons),
+            ~ranked.c.id.in_(select(head_subq.c.current_snapshot_id)),
+        )
+    )
+    candidates = db.execute(to_delete_stmt).all()
+    if not candidates:
+        return 0
+
+    doomed_ids: list[int] = []
+    blob_uris: list[str] = []
+    for row in candidates:
+        doomed_ids.append(row.id)
+        if row.blob_uri:
+            blob_uris.append(row.blob_uri)
+
+    if blob_uris:
+        from . import blob_store
+
+        for uri in blob_uris:
+            try:
+                blob_store.delete(uri)
+            except Exception as exc:  # noqa: BLE001
+                import logging as _log
+
+                _log.getLogger(__name__).warning(
+                    "failed to delete blob %s: %s", uri, exc
+                )
                 try:
-                    from . import blob_store
+                    from .observability import BLOB_ORPHAN_TOTAL
 
-                    blob_store.delete(snap.blob_uri)
-                except Exception as exc:  # noqa: BLE001
-                    import logging as _log
+                    BLOB_ORPHAN_TOTAL.inc()
+                except Exception:
+                    pass
 
-                    _log.getLogger(__name__).warning(
-                        "failed to delete blob %s: %s",
-                        snap.blob_uri,
-                        exc,
-                    )
-                    try:
-                        from .observability import BLOB_ORPHAN_TOTAL
-
-                        BLOB_ORPHAN_TOTAL.inc()
-                    except Exception:
-                        pass
-            db.delete(snap)
-            deleted += 1
+    # Chunk the DELETE to keep the IN(...) list bounded under SQLite's
+    # default 999-parameter ceiling.
+    deleted = 0
+    CHUNK = 500
+    for i in range(0, len(doomed_ids), CHUNK):
+        batch = doomed_ids[i : i + CHUNK]
+        res = db.execute(
+            sql_delete(DeviceSnapshot).where(DeviceSnapshot.id.in_(batch))
+        )
+        deleted += res.rowcount or 0
     db.flush()
     return deleted
 
