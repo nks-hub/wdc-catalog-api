@@ -38,7 +38,6 @@ from fastapi import (
     Form,
     HTTPException,
     Request,
-    Response,
     status,
 )
 
@@ -61,14 +60,9 @@ from .auth import (
     verify_dummy_password,
     verify_password,
 )
-from .db import Account, DeviceConfig, User, create_all, get_session, session_factory
-from .devices import router as devices_router, optional_account, get_current_account
+from .db import User, create_all, get_session, session_factory
+from .devices import router as devices_router
 from .generators import GENERATORS, run_generator
-from .schemas import (
-    ConfigSyncEntry,
-    ConfigSyncListResponse,
-    ConfigSyncUploadRequest,
-)
 from .service import (
     add_download,
     add_release,
@@ -242,13 +236,15 @@ async def _limit_payload_size(request: Request, call_next):
     return response
 
 
-# Health + catalog read endpoints — extracted to keep this module
-# focused on wiring, middleware, and the HTML admin UI.
+# Public JSON API routers — extracted so this module focuses on
+# wiring, middleware, and the HTML admin UI.
 from .api_catalog import router as catalog_router  # noqa: E402
 from .api_health import router as health_router  # noqa: E402
+from .api_sync import router as sync_router  # noqa: E402
 
 app.include_router(health_router)
 app.include_router(catalog_router)
+app.include_router(sync_router)
 
 # Mount the accounts + devices router (JWT-authenticated endpoints)
 app.include_router(devices_router)
@@ -339,227 +335,9 @@ _CATALOG_CACHE_SECONDS = int(os.environ.get("NKS_WDC_CATALOG_CACHE_SECONDS", "60
 # device_configs table. This is defence-in-depth — SQLAlchemy already
 # parameterizes the SQL, so the risk is cosmetic storage pollution, not
 # injection.
-import re as _re  # noqa: E402
-
-_DEVICE_ID_RE = _re.compile(r"^[a-z0-9][a-z0-9-]{2,63}$")
 
 
-def _normalize_device_id(raw: str) -> str:
-    """Lowercase + strip + validate a client-supplied device id.
-
-    Raises HTTP 400 on any format violation so clients see a clear
-    error instead of the request silently succeeding with a mangled id.
-    """
-    normalized = raw.strip().lower()
-    if not normalized:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "device_id is required")
-    if not _DEVICE_ID_RE.match(normalized):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "device_id must be 3–64 chars, lowercase alphanumeric + dashes",
-        )
-    return normalized
-
-
-@app.post("/api/v1/sync/config", response_model=ConfigSyncEntry, tags=["sync"])
-def api_upsert_config(
-    body: ConfigSyncUploadRequest,
-    account: Account | None = Depends(optional_account),
-    db: Session = Depends(get_session),
-) -> ConfigSyncEntry:
-    from datetime import datetime, timezone
-
-    device_id = _normalize_device_id(body.device_id)
-
-    # Writes require authentication. Anonymous upsert let an attacker
-    # squat any device_id (pre-register a row with ``user_id IS NULL``)
-    # so a later legitimate push from that device would be treated as a
-    # "first auth push" and auto-linked to whoever's token happened to
-    # hit the endpoint. Requiring auth for every write closes the vector
-    # and matches the pattern every other mutation on this service uses.
-    if account is None:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            "Authentication required to push device config",
-        )
-
-    row = db.get(DeviceConfig, device_id)
-    # Cross-account overwrite of a linked device remains a separate 403
-    # (owned by another user) rather than 401 — the caller IS
-    # authenticated, just not as the owner.
-    if row is not None and row.user_id is not None and row.user_id != account.id:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            "Device is linked to another account",
-        )
-    if row is None:
-        row = DeviceConfig(device_id=device_id, payload=body.payload)
-        db.add(row)
-    else:
-        row.payload = body.payload
-        row.updated_at = datetime.now(timezone.utc)
-
-    # Auto-link device to account on first authenticated push — no
-    # explicit "register device" step needed. Also extract metadata
-    # from the payload so the device list can show name/OS/arch/sites
-    # without opening the full JSON blob.
-    if account is not None and row.user_id is None:
-        row.user_id = account.id
-    elif account is not None and row.user_id == account.id:
-        pass  # already linked
-    row.last_seen_at = datetime.now(timezone.utc)
-
-    # Extract device metadata from payload if present
-    p = body.payload or {}
-    if isinstance(p.get("settings"), dict):
-        settings = p["settings"]
-        if "sync.deviceName" in settings:
-            row.name = settings["sync.deviceName"]
-    if isinstance(p.get("sites"), list):
-        row.site_count = len(p["sites"])
-    if "deviceId" in p:
-        pass  # already have device_id from URL
-
-    # Extract OS info from system snapshot if pushed
-    if isinstance(p.get("system"), dict):
-        sys_info = p["system"]
-        if isinstance(sys_info.get("os"), dict):
-            row.os = sys_info["os"].get("tag")
-            row.arch = sys_info["os"].get("arch")
-
-    db.flush()
-
-    # Bridge legacy sync into the versioned snapshot store (Task 4.4).
-    # Every authenticated push becomes an auto snapshot + HEAD move;
-    # anonymous pushes skip snapshotting since we have no owner to
-    # attribute storage against.
-    if account is not None:
-        from . import snapshots as _snap
-
-        try:
-            _snap.create_snapshot(
-                db,
-                device_id=device_id,
-                account_id=account.id,
-                payload=body.payload or {},
-                kind="auto",
-                created_by_ip=None,
-            )
-        except _snap.PayloadTooLarge as exc:
-            # Legacy clients pre-date the snapshot size ceiling. Skip the
-            # versioned write but leave a footprint so operators can
-            # detect a growing cohort of oversized syncs.
-            log.warning(
-                "sync bridge skipped snapshot for device=%s: %s",
-                device_id,
-                exc,
-            )
-
-    return ConfigSyncEntry(
-        device_id=row.device_id,
-        updated_at=row.updated_at.isoformat() if row.updated_at else "",
-        payload=row.payload,
-    )
-
-
-def _require_owned_row(
-    device_id: str,
-    account: Account,
-    db: Session,
-    *,
-    not_found_ok: bool = False,
-) -> DeviceConfig | None:
-    """Load a DeviceConfig, enforcing ownership (F-12 guard).
-
-    Raises 404 when the row does not exist (unless ``not_found_ok``),
-    raises 403 when the row belongs to a different account, and raises
-    404 for unowned rows so we don't leak their existence.
-    """
-    normalized = _normalize_device_id(device_id)
-    row = db.get(DeviceConfig, normalized)
-    if row is None:
-        if not_found_ok:
-            return None
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No snapshot for {normalized}")
-    if row.user_id is None or row.user_id != account.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No snapshot for {normalized}")
-    return row
-
-
-@app.get(
-    "/api/v1/sync/config/{device_id}", response_model=ConfigSyncEntry, tags=["sync"]
-)
-def api_get_config(
-    device_id: str,
-    account: Account = Depends(get_current_account),
-    db: Session = Depends(get_session),
-) -> ConfigSyncEntry:
-    row = _require_owned_row(device_id, account, db)
-    return ConfigSyncEntry(
-        device_id=row.device_id,
-        updated_at=row.updated_at.isoformat() if row.updated_at else "",
-        payload=row.payload,
-    )
-
-
-@app.head("/api/v1/sync/config/{device_id}", tags=["sync"])
-def api_head_config(
-    device_id: str,
-    account: Account = Depends(get_current_account),
-    db: Session = Depends(get_session),
-) -> Response:
-    """Resource-oriented existence probe — 200 if a snapshot exists for
-    the caller's device, 404 otherwise. Preferred over the legacy
-    ``/exists`` sub-resource endpoint."""
-    row = _require_owned_row(device_id, account, db, not_found_ok=True)
-    if row is None:
-        return Response(status_code=status.HTTP_404_NOT_FOUND)
-    headers = {}
-    if row.updated_at is not None:
-        headers["Last-Modified"] = row.updated_at.strftime("%a, %d %b %Y %H:%M:%S GMT")
-    return Response(status_code=status.HTTP_200_OK, headers=headers)
-
-
-@app.get(
-    "/api/v1/sync/config/{device_id}/exists",
-    response_model=ConfigSyncListResponse,
-    tags=["sync"],
-    deprecated=True,
-    description="Deprecated — use HEAD /api/v1/sync/config/{device_id} instead.",
-)
-def api_exists_config(
-    device_id: str,
-    response: Response,
-    account: Account = Depends(get_current_account),
-    db: Session = Depends(get_session),
-) -> ConfigSyncListResponse:
-    # RFC 8594 sunset + deprecation signal — clients should migrate to HEAD.
-    response.headers["Deprecation"] = "true"
-    response.headers["Link"] = (
-        f'</api/v1/sync/config/{device_id}>; rel="successor-version"'
-    )
-    normalized = _normalize_device_id(device_id)
-    row = _require_owned_row(device_id, account, db, not_found_ok=True)
-    if row is None:
-        return ConfigSyncListResponse(device_id=normalized, has_config=False)
-    return ConfigSyncListResponse(
-        device_id=row.device_id,
-        updated_at=row.updated_at.isoformat() if row.updated_at else None,
-        has_config=True,
-    )
-
-
-@app.delete("/api/v1/sync/config/{device_id}", tags=["sync"])
-def api_delete_config(
-    device_id: str,
-    account: Account = Depends(get_current_account),
-    db: Session = Depends(get_session),
-) -> JSONResponse:
-    row = _require_owned_row(device_id, account, db, not_found_ok=True)
-    if row is None:
-        return JSONResponse({"ok": True, "removed": False})
-    db.delete(row)
-    return JSONResponse({"ok": True, "removed": True})
+# sync/config endpoints live in ``app.api_sync`` � mounted below.
 
 
 # ─────────────────────────────────────────────────────────────────────────
