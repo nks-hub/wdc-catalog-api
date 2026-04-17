@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Global settings — NKS WDC{% endblock %}
+{% block content %}
+<section class="section">
+  <h1>Global settings</h1>
+  <p class="muted">Instance-wide defaults. Changes apply immediately and propagate to the catalog + sync behavior within the next cache window.</p>
+
+  <form method="post" action="/admin/settings" class="form-grid">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+
+    <label class="checkbox">
+      <input type="checkbox" name="registration_enabled" value="1" {% if policy.registration_enabled %}checked{% endif %}>
+      Self-registration enabled
+      <span class="muted">— when off, <code>POST /api/v1/auth/register</code> returns 403.</span>
+    </label>
+
+    <label>Default role for new accounts
+      <select name="default_role">
+        {% for r in roles %}<option value="{{ r }}" {% if r == policy.default_role %}selected{% endif %}>{{ r }}</option>{% endfor %}
+      </select>
+    </label>
+
+    <label>Snapshot keep last N (global default)
+      <input type="number" name="snapshot_keep_last_n" value="{{ policy.snapshot_keep_last_n }}" min="1" max="500">
+    </label>
+
+    <label>Snapshot retain days (global default)
+      <input type="number" name="snapshot_retain_days" value="{{ policy.snapshot_retain_days }}" min="1" max="3650">
+    </label>
+
+    <label>Max bytes per user (blank = no limit)
+      <input type="number" name="max_bytes_per_user" value="{{ policy.max_bytes_per_user or '' }}" min="0" step="1048576">
+    </label>
+
+    <label class="span-all">Banner message (shown in admin UI; blank = none)
+      <textarea name="banner_message" rows="3" maxlength="512">{{ policy.banner_message or '' }}</textarea>
+    </label>
+
+    <button class="btn btn-primary">Save settings</button>
+  </form>
+
+  <div class="meta">
+    <div><strong>Last updated:</strong> {{ policy.updated_at or '—' }} {% if policy.updated_by_email %}by <code>{{ policy.updated_by_email }}</code>{% endif %}</div>
+  </div>
+</section>
+{% endblock %}

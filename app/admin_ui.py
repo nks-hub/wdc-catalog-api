@@ -1193,6 +1193,217 @@ def admin_snapshot_detail(
     return response
 
 
+# ── Global settings (GlobalPolicy singleton) ────────────────────────
+
+
+@router.get("/admin/settings", response_class=HTMLResponse)
+def admin_settings(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    flash: Annotated[str | None, Cookie(alias="flash")] = None,
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    from .db import GlobalPolicy
+    from .roles import Role
+
+    row = db.get(GlobalPolicy, 1)
+    if row is None:
+        # Seed the singleton so the form has something to render against.
+        row = GlobalPolicy(id=1)
+        db.add(row)
+        db.flush()
+    ctx = base_context(
+        request,
+        username,
+        policy={
+            "snapshot_keep_last_n": row.snapshot_keep_last_n,
+            "snapshot_retain_days": row.snapshot_retain_days,
+            "max_bytes_per_user": row.max_bytes_per_user,
+            "registration_enabled": row.registration_enabled,
+            "default_role": row.default_role,
+            "banner_message": row.banner_message,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            "updated_by_email": row.updated_by_email,
+        },
+        roles=[r.value for r in Role],
+        flash=_pop_flash(flash),
+    )
+    response = templates.TemplateResponse(request, "settings.html", ctx)
+    _clear_flash(response)
+    return response
+
+
+@router.post("/admin/settings", dependencies=[Depends(require_csrf)])
+def admin_save_settings(
+    username: Annotated[str, Depends(current_user)],
+    snapshot_keep_last_n: Annotated[int, Form()] = 30,
+    snapshot_retain_days: Annotated[int, Form()] = 90,
+    max_bytes_per_user: Annotated[str, Form()] = "",
+    registration_enabled: Annotated[str, Form()] = "",
+    default_role: Annotated[str, Form()] = "user",
+    banner_message: Annotated[str, Form()] = "",
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    from .db import GlobalPolicy
+    from .roles import Role
+
+    try:
+        Role(default_role)
+    except ValueError:
+        return _redirect("/admin/settings", "error", f"Unknown role: {default_role}")
+
+    row = db.get(GlobalPolicy, 1)
+    if row is None:
+        row = GlobalPolicy(id=1)
+        db.add(row)
+
+    row.snapshot_keep_last_n = max(1, min(int(snapshot_keep_last_n), 500))
+    row.snapshot_retain_days = max(1, min(int(snapshot_retain_days), 3650))
+    row.max_bytes_per_user = (
+        int(max_bytes_per_user) if max_bytes_per_user.strip() else None
+    )
+    row.registration_enabled = bool(registration_enabled)
+    row.default_role = default_role
+    row.banner_message = banner_message.strip() or None
+    row.updated_by_email = f"{username}@admin.local"
+
+    return _redirect("/admin/settings", "success", "Settings saved")
+
+
+# ── Invite history (consumed) ────────────────────────────────────────
+
+
+@router.get("/admin/invites/history", response_class=HTMLResponse)
+def admin_invites_history(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    flash: Annotated[str | None, Cookie(alias="flash")] = None,
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    from sqlalchemy import select as _sel
+
+    from .db import ConsumedInvite, count_query
+
+    stmt = _sel(ConsumedInvite)
+    total = count_query(db, stmt)
+    rows = db.scalars(stmt.order_by(ConsumedInvite.consumed_at.desc()).limit(200)).all()
+    consumed = [
+        {
+            "nonce": r.nonce,
+            "email": r.email,
+            "consumed_at": r.consumed_at.isoformat() if r.consumed_at else "",
+            "account_id": r.account_id,
+        }
+        for r in rows
+    ]
+    ctx = base_context(
+        request,
+        username,
+        consumed=consumed,
+        total=total,
+        flash=_pop_flash(flash),
+    )
+    response = templates.TemplateResponse(request, "invites_history.html", ctx)
+    _clear_flash(response)
+    return response
+
+
+# ── Backup import (paste-JSON → create snapshot) ─────────────────────
+
+
+@router.get("/admin/devices/{device_id}/import", response_class=HTMLResponse)
+def admin_device_import_form(
+    request: Request,
+    device_id: str,
+    username: Annotated[str, Depends(current_user)],
+    flash: Annotated[str | None, Cookie(alias="flash")] = None,
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    from .device_ids import normalize_device_id
+
+    acct = _admin_account(db, username)
+    dev_id = normalize_device_id(device_id)
+    # Ensure the device belongs to the admin's account — otherwise 404.
+    from .db import DeviceConfig
+
+    dev = db.get(DeviceConfig, dev_id)
+    if dev is None or dev.user_id != acct.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
+    ctx = base_context(request, username, device_id=dev_id, flash=_pop_flash(flash))
+    response = templates.TemplateResponse(request, "device_import.html", ctx)
+    _clear_flash(response)
+    return response
+
+
+@router.post("/admin/devices/{device_id}/import", dependencies=[Depends(require_csrf)])
+def admin_device_import(
+    device_id: str,
+    username: Annotated[str, Depends(current_user)],
+    payload: Annotated[str, Form()],
+    label: Annotated[str, Form()] = "",
+    set_head: Annotated[str, Form()] = "",
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    import json as _json
+
+    from . import snapshots as _snap
+    from .db import DeviceConfig
+    from .device_ids import normalize_device_id
+
+    acct = _admin_account(db, username)
+    dev_id = normalize_device_id(device_id)
+    dev = db.get(DeviceConfig, dev_id)
+    if dev is None or dev.user_id != acct.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
+
+    try:
+        raw = _json.loads(payload)
+    except _json.JSONDecodeError as exc:
+        return _redirect(
+            f"/admin/devices/{dev_id}/import", "error", f"Invalid JSON: {exc}"
+        )
+
+    # Accept either a bare config dict or the wrapped envelope shape
+    # produced by the download endpoint.
+    if isinstance(raw, dict) and raw.get("schema") == "nks-wdc-snapshot-v1":
+        config = raw.get("payload", {})
+        default_label = (
+            label.strip()
+            or f"imported-from-{raw.get('device_id', 'unknown')}-#{raw.get('id', '?')}"
+        )
+    else:
+        config = raw
+        default_label = label.strip() or "imported-snapshot"
+
+    if not isinstance(config, dict):
+        return _redirect(
+            f"/admin/devices/{dev_id}/import",
+            "error",
+            "Payload must be a JSON object.",
+        )
+
+    try:
+        snap = _snap.create_snapshot(
+            db,
+            device_id=dev_id,
+            account_id=acct.id,
+            payload=config,
+            kind="import",
+            label=default_label,
+        )
+    except _snap.PayloadTooLarge as exc:
+        return _redirect(f"/admin/devices/{dev_id}/import", "error", str(exc))
+
+    if set_head:
+        _snap.set_head(db, dev_id, snap.id, updated_by="admin-ui-import")
+
+    return _redirect(
+        f"/admin/devices/{dev_id}/snapshots",
+        "success",
+        f"Imported #{snap.id} ({default_label})",
+    )
+
+
 # ── Self-service account page ────────────────────────────────────────
 
 

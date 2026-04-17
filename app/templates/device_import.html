@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Import backup — {{ device_id }}{% endblock %}
+{% block content %}
+<section class="section">
+  <p><a href="/admin/devices/{{ device_id }}/snapshots">← back to snapshots</a></p>
+  <h1>Import backup onto <code>{{ device_id }}</code></h1>
+  <p class="muted">Paste the full JSON envelope produced by <code>GET /api/v1/devices/&lt;id&gt;/backups/&lt;snap&gt;/download</code> on another instance, or the raw config JSON.</p>
+
+  <form method="post" action="/admin/devices/{{ device_id }}/import" class="form-grid">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label class="span-all">JSON payload
+      <textarea name="payload" rows="16" required placeholder='{"schema": "nks-wdc-snapshot-v1", ...}'></textarea>
+    </label>
+    <label>Label (optional)
+      <input type="text" name="label" placeholder="imported-from-backup">
+    </label>
+    <label class="checkbox">
+      <input type="checkbox" name="set_head" value="1">
+      Also move HEAD to the imported snapshot
+    </label>
+    <button class="btn btn-primary">Import</button>
+  </form>
+</section>
+{% endblock %}

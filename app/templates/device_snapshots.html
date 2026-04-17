@@ -3,7 +3,10 @@
 {% block content %}
 <section class="section">
   <p><a href="/admin/devices">← back to devices</a></p>
-  <h1>Snapshots for <code>{{ device_id }}</code></h1>
+  <header class="section-head">
+    <h1>Snapshots for <code>{{ device_id }}</code></h1>
+    <a class="btn" href="/admin/devices/{{ device_id }}/import">+ Import backup</a>
+  </header>
   {% if head %}
   <p>Current HEAD: <code>#{{ head.id }}</code> ({{ head.created_at }})</p>
   {% endif %}

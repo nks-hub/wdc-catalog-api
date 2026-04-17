@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Invite history — NKS WDC{% endblock %}
+{% block content %}
+<section class="section">
+  <header class="section-head">
+    <h1>Invite history ({{ total }})</h1>
+    <a class="btn btn-primary" href="/admin/invites">+ Mint new invite</a>
+  </header>
+
+  <p class="muted">Redeemed invites are tracked via their signed nonce so the same token can't be replayed. Unredeemed invites don't appear here (they're stateless until used).</p>
+
+  <table class="data">
+    <thead>
+      <tr><th>Email</th><th>Consumed at</th><th>Account</th><th>Nonce</th></tr>
+    </thead>
+    <tbody>
+      {% for row in consumed %}
+      <tr>
+        <td>{{ row.email }}</td>
+        <td class="nowrap">{{ row.consumed_at }}</td>
+        <td>
+          {% if row.account_id %}<a href="/admin/users/{{ row.account_id }}">#{{ row.account_id }}</a>
+          {% else %}<span class="muted">— (deleted)</span>{% endif %}
+        </td>
+        <td><code title="{{ row.nonce }}">{{ row.nonce[:16] }}…</code></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="muted">No invites have been redeemed yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

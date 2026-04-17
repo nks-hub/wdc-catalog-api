@@ -2,7 +2,10 @@
 {% block title %}Invites — NKS WDC{% endblock %}
 {% block content %}
 <section class="section">
-  <h1>Invites</h1>
+  <header class="section-head">
+    <h1>Invites</h1>
+    <a class="btn" href="/admin/invites/history">View redemption history</a>
+  </header>
   <p class="muted">Mint a signed invite token. Hand it to the invitee; they redeem at <code>POST /api/v1/auth/accept-invite</code>.</p>
 
   <form method="post" action="/admin/invites" class="form-grid">
