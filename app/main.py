@@ -184,6 +184,7 @@ from .admin_invites import (  # noqa: E402
 )
 from .backups import router as backups_router  # noqa: E402
 from .admin_retention import router as admin_retention_router  # noqa: E402
+from .retention_policies import router as retention_policies_router  # noqa: E402
 
 app.include_router(admin_users_router)
 app.include_router(admin_audit_router)
@@ -193,6 +194,7 @@ app.include_router(admin_invites_router)
 app.include_router(public_invites_router)
 app.include_router(backups_router)
 app.include_router(admin_retention_router)
+app.include_router(retention_policies_router)
 
 # Wire structured logging + Prometheus metrics + request-id middleware.
 from . import observability  # noqa: E402
