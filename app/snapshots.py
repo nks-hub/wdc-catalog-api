@@ -261,9 +261,7 @@ def _active_key(
             db.add(row)
             db.flush()
     except IntegrityError:
-        existing = db.scalar(
-            select(AccountEncryptionKey).where(*filters).limit(1)
-        )
+        existing = db.scalar(select(AccountEncryptionKey).where(*filters).limit(1))
         if existing is None:
             raise
         return existing
@@ -363,13 +361,28 @@ def create_snapshot(
     ):
         return head
 
-    packed = _pack_from_raw(raw, checksum, payload, account_id=account_id)
-
+    # Skip the non-encrypted pack on the encrypted path — its output is
+    # overwritten below anyway, and for > INLINE_THRESHOLD payloads the
+    # discarded compression + S3 upload are expensive.
     encryption_kid: Optional[str] = None
-    if (encrypt or passphrase) and account_id is not None:
+    will_encrypt = bool((encrypt or passphrase) and account_id is not None)
+    if will_encrypt:
+        packed = PackedPayload(
+            column="payload_blob",
+            json_value=None,
+            blob_value=b"",
+            uri_value=None,
+            compression=None,
+            size_bytes=0,
+            checksum=checksum,
+        )
+    else:
+        packed = _pack_from_raw(raw, checksum, payload, account_id=account_id)
+
+    if will_encrypt:
         key_row = _active_key(db, account_id, passphrase=passphrase)
         encryption_kid = key_row.kid
-        raw = _canonical_bytes(payload)
+        # ``raw`` and ``checksum`` were computed above; reuse both.
         compressed = _ZSTD_CMP_HIGH.compress(raw)
         dek = _unwrap(key_row, passphrase=passphrase)
         aad = f"nks-wdc-snapshot-{account_id}".encode("ascii")
@@ -381,7 +394,7 @@ def create_snapshot(
             uri_value=None,
             compression="zstd",
             size_bytes=len(envelope),
-            checksum=packed.checksum,
+            checksum=checksum,
         )
 
     snap = DeviceSnapshot(
@@ -587,9 +600,7 @@ def purge_auto_older_than(
     CHUNK = 500
     for i in range(0, len(doomed_ids), CHUNK):
         batch = doomed_ids[i : i + CHUNK]
-        res = db.execute(
-            sql_delete(DeviceSnapshot).where(DeviceSnapshot.id.in_(batch))
-        )
+        res = db.execute(sql_delete(DeviceSnapshot).where(DeviceSnapshot.id.in_(batch)))
         deleted += res.rowcount or 0
     db.flush()
     return deleted
