@@ -118,24 +118,40 @@ def upload(body: bytes, *, account_id: Optional[int] = None) -> str:
     return f"s3://{cfg.bucket}/{key}"
 
 
-def download(uri: str) -> bytes:
-    """Fetch bytes for a previously uploaded ``s3://`` URI."""
+def _parse_uri(uri: str) -> tuple[str, str]:
+    """Split ``s3://bucket/key`` into parts and enforce the configured
+    bucket. A corrupted ``blob_uri`` column pointing at a different
+    bucket could otherwise dispatch operations to unintended storage —
+    the allowlist keeps blob ops pinned to the exact bucket we
+    configured at startup.
+    """
     if not uri.startswith("s3://"):
         raise ValueError(f"Unsupported blob URI scheme: {uri!r}")
-    client, _ = _client()
     _, _, rest = uri.partition("s3://")
     bucket, _, key = rest.partition("/")
+    if not bucket or not key:
+        raise ValueError(f"Malformed blob URI: {uri!r}")
+    _, cfg = _client()
+    if bucket != cfg.bucket:
+        raise ValueError(
+            f"Refusing to operate on bucket {bucket!r} — configured bucket is "
+            f"{cfg.bucket!r}. A mismatch indicates a corrupted blob_uri row."
+        )
+    return bucket, key
+
+
+def download(uri: str) -> bytes:
+    """Fetch bytes for a previously uploaded ``s3://`` URI."""
+    client, _ = _client()
+    bucket, key = _parse_uri(uri)
     resp = client.get_object(Bucket=bucket, Key=key)
     return resp["Body"].read()
 
 
 def delete(uri: str) -> None:
     """Remove a blob when its snapshot row is deleted by retention."""
-    if not uri.startswith("s3://"):
-        raise ValueError(f"Unsupported blob URI scheme: {uri!r}")
     client, _ = _client()
-    _, _, rest = uri.partition("s3://")
-    bucket, _, key = rest.partition("/")
+    bucket, key = _parse_uri(uri)
     client.delete_object(Bucket=bucket, Key=key)
     log.info("deleted blob %s/%s", bucket, key)
 

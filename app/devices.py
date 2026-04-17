@@ -309,6 +309,14 @@ def login(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
     if account.suspended_at is not None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Account is suspended")
+    # ``readonly`` is documented in roles.py as "account disabled — data
+    # preserved for audit". Reject the login so the audit row stays
+    # honest and nobody accidentally grants a ``readonly`` account API
+    # access that the rest of the RBAC layer assumed was impossible.
+    if account.role == "readonly":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Account is disabled (read-only)"
+        )
     # Successful auth clears the backoff state so a user who mistyped
     # their password a couple of times isn't punished forever.
     account.failed_login_count = 0
