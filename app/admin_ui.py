@@ -2260,10 +2260,12 @@ def admin_device_detail(
 
 @router.post("/admin/devices/{device_id}/delete", dependencies=[Depends(require_csrf)])
 def admin_device_delete(
+    request: Request,
     device_id: str,
     username: Annotated[str, Depends(current_user)],
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
+    from . import audit as _audit
     from .db import DeviceConfig
     from .device_ids import normalize_device_id
 
@@ -2272,7 +2274,17 @@ def admin_device_delete(
     dev = db.get(DeviceConfig, dev_id)
     if dev is None or dev.user_id != acct.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
+    dev_name = dev.name
     db.delete(dev)
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="device.deleted",
+        resource_type="device",
+        resource_id=dev_id,
+        detail={"name": dev_name} if dev_name else None,
+    )
     return _redirect("/admin/devices", "success", f"Device {dev_id} deleted")
 
 
@@ -2460,6 +2472,7 @@ def admin_revoke_account_token(
 
 @router.post("/admin/account/password", dependencies=[Depends(require_csrf)])
 def admin_change_own_password(
+    request: Request,
     username: Annotated[str, Depends(current_user)],
     current_password: Annotated[str, Form()],
     new_password: Annotated[str, Form()],
@@ -2468,6 +2481,7 @@ def admin_change_own_password(
 ) -> RedirectResponse:
     from sqlalchemy import select as _sel
 
+    from . import audit as _audit
     from .auth import hash_password as _hash
     from .auth import verify_password as _verify
     from .db import User
@@ -2476,6 +2490,18 @@ def admin_change_own_password(
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
     if not _verify(current_password, user.password_hash):
+        # Audit the failed attempt too — repeated failures from the same
+        # account surface a compromised session cookie.
+        acct_fail = _admin_account(db, username)
+        _audit.emit(
+            db,
+            request=request,
+            actor=acct_fail,
+            action="password.change_failed",
+            resource_type="account",
+            resource_id=str(acct_fail.id),
+            detail={"reason": "current_password_wrong"},
+        )
         return _redirect("/admin/account", "error", "Current password is wrong")
     if new_password != new_password_confirm:
         return _redirect("/admin/account", "error", "New passwords don't match")
@@ -2484,6 +2510,15 @@ def admin_change_own_password(
             "/admin/account", "error", "New password must be at least 12 characters"
         )
     user.password_hash = _hash(new_password)
+    acct = _admin_account(db, username)
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="password.changed",
+        resource_type="account",
+        resource_id=str(acct.id),
+    )
     return _redirect("/admin/account", "success", "Password updated")
 
 
