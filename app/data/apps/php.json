@@ -11,12 +11,27 @@
       "major_minor": "8.5",
       "channel": "stable",
       "downloads": [
-        { "url": "https://windows.php.net/downloads/releases/php-8.5.5-nts-Win32-vs17-x64.zip",
-          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "php.net" },
-        { "url": "https://github.com/nks-hub/webdev-console/releases/download/binaries-php-8.5.5/php-8.5.5-linux-x64.tar.xz",
-          "os": "linux", "arch": "x64", "archive_type": "tar.xz", "source": "nks-hub" },
-        { "url": "https://github.com/nks-hub/webdev-console/releases/download/binaries-php-8.5.5/php-8.5.5-macos-arm64.tar.xz",
-          "os": "macos", "arch": "arm64", "archive_type": "tar.xz", "source": "nks-hub" }
+        {
+          "url": "https://windows.php.net/downloads/releases/php-8.5.5-nts-Win32-vs17-x64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "php.net"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.5.5/php-8.5.5-linux-x64.tar.xz",
+          "os": "linux",
+          "arch": "x64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.5.5/php-8.5.5-macos-arm64.tar.xz",
+          "os": "macos",
+          "arch": "arm64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
+        }
       ]
     },
     {
@@ -24,12 +39,27 @@
       "major_minor": "8.4",
       "channel": "stable",
       "downloads": [
-        { "url": "https://windows.php.net/downloads/releases/php-8.4.20-nts-Win32-vs17-x64.zip",
-          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "php.net" },
-        { "url": "https://github.com/nks-hub/webdev-console/releases/download/binaries-php-8.4.20/php-8.4.20-linux-x64.tar.xz",
-          "os": "linux", "arch": "x64", "archive_type": "tar.xz", "source": "nks-hub" },
-        { "url": "https://github.com/nks-hub/webdev-console/releases/download/binaries-php-8.4.20/php-8.4.20-macos-arm64.tar.xz",
-          "os": "macos", "arch": "arm64", "archive_type": "tar.xz", "source": "nks-hub" }
+        {
+          "url": "https://windows.php.net/downloads/releases/php-8.4.20-nts-Win32-vs17-x64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "php.net"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.4.20/php-8.4.20-linux-x64.tar.xz",
+          "os": "linux",
+          "arch": "x64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.4.20/php-8.4.20-macos-arm64.tar.xz",
+          "os": "macos",
+          "arch": "arm64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
+        }
       ]
     },
     {
@@ -37,12 +67,27 @@
       "major_minor": "8.3",
       "channel": "stable",
       "downloads": [
-        { "url": "https://windows.php.net/downloads/releases/php-8.3.25-nts-Win32-vs16-x64.zip",
-          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "php.net" },
-        { "url": "https://github.com/nks-hub/webdev-console/releases/download/binaries-php-8.3.25/php-8.3.25-linux-x64.tar.xz",
-          "os": "linux", "arch": "x64", "archive_type": "tar.xz", "source": "nks-hub" },
-        { "url": "https://github.com/nks-hub/webdev-console/releases/download/binaries-php-8.3.25/php-8.3.25-macos-arm64.tar.xz",
-          "os": "macos", "arch": "arm64", "archive_type": "tar.xz", "source": "nks-hub" }
+        {
+          "url": "https://windows.php.net/downloads/releases/php-8.3.25-nts-Win32-vs16-x64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "php.net"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.3.25/php-8.3.25-linux-x64.tar.xz",
+          "os": "linux",
+          "arch": "x64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.3.25/php-8.3.25-macos-arm64.tar.xz",
+          "os": "macos",
+          "arch": "arm64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
+        }
       ]
     },
     {
@@ -50,12 +95,27 @@
       "major_minor": "8.2",
       "channel": "stable",
       "downloads": [
-        { "url": "https://windows.php.net/downloads/releases/php-8.2.30-nts-Win32-vs16-x64.zip",
-          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "php.net" },
-        { "url": "https://github.com/nks-hub/webdev-console/releases/download/binaries-php-8.2.30/php-8.2.30-linux-x64.tar.xz",
-          "os": "linux", "arch": "x64", "archive_type": "tar.xz", "source": "nks-hub" },
-        { "url": "https://github.com/nks-hub/webdev-console/releases/download/binaries-php-8.2.30/php-8.2.30-macos-arm64.tar.xz",
-          "os": "macos", "arch": "arm64", "archive_type": "tar.xz", "source": "nks-hub" }
+        {
+          "url": "https://windows.php.net/downloads/releases/php-8.2.30-nts-Win32-vs16-x64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "php.net"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.2.30/php-8.2.30-linux-x64.tar.xz",
+          "os": "linux",
+          "arch": "x64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.2.30/php-8.2.30-macos-arm64.tar.xz",
+          "os": "macos",
+          "arch": "arm64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
+        }
       ]
     },
     {
@@ -63,12 +123,27 @@
       "major_minor": "8.1",
       "channel": "stable",
       "downloads": [
-        { "url": "https://windows.php.net/downloads/releases/archives/php-8.1.33-nts-Win32-vs16-x64.zip",
-          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "php.net" },
-        { "url": "https://github.com/nks-hub/webdev-console/releases/download/binaries-php-8.1.33/php-8.1.33-linux-x64.tar.xz",
-          "os": "linux", "arch": "x64", "archive_type": "tar.xz", "source": "nks-hub" },
-        { "url": "https://github.com/nks-hub/webdev-console/releases/download/binaries-php-8.1.33/php-8.1.33-macos-arm64.tar.xz",
-          "os": "macos", "arch": "arm64", "archive_type": "tar.xz", "source": "nks-hub" }
+        {
+          "url": "https://windows.php.net/downloads/releases/archives/php-8.1.33-nts-Win32-vs16-x64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "php.net"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.1.33/php-8.1.33-linux-x64.tar.xz",
+          "os": "linux",
+          "arch": "x64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.1.33/php-8.1.33-macos-arm64.tar.xz",
+          "os": "macos",
+          "arch": "arm64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
+        }
       ]
     },
     {
@@ -76,12 +151,27 @@
       "major_minor": "8.0",
       "channel": "stable",
       "downloads": [
-        { "url": "https://windows.php.net/downloads/releases/archives/php-8.0.30-nts-Win32-vs16-x64.zip",
-          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "php.net" },
-        { "url": "https://github.com/nks-hub/webdev-console/releases/download/binaries-php-8.0.30/php-8.0.30-linux-x64.tar.xz",
-          "os": "linux", "arch": "x64", "archive_type": "tar.xz", "source": "nks-hub" },
-        { "url": "https://github.com/nks-hub/webdev-console/releases/download/binaries-php-8.0.30/php-8.0.30-macos-arm64.tar.xz",
-          "os": "macos", "arch": "arm64", "archive_type": "tar.xz", "source": "nks-hub" }
+        {
+          "url": "https://windows.php.net/downloads/releases/archives/php-8.0.30-nts-Win32-vs16-x64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "php.net"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.0.30/php-8.0.30-linux-x64.tar.xz",
+          "os": "linux",
+          "arch": "x64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.0.30/php-8.0.30-macos-arm64.tar.xz",
+          "os": "macos",
+          "arch": "arm64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
+        }
       ]
     },
     {
@@ -89,8 +179,20 @@
       "major_minor": "7.4",
       "channel": "eol",
       "downloads": [
-        { "url": "https://windows.php.net/downloads/releases/archives/php-7.4.33-nts-Win32-vc15-x64.zip",
-          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "php.net" }
+        {
+          "url": "https://windows.php.net/downloads/releases/archives/php-7.4.33-nts-Win32-vc15-x64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "php.net"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-7.4.33/php-7.4.33-linux-x64.tar.xz",
+          "os": "linux",
+          "arch": "x64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
+        }
       ]
     },
     {
@@ -98,8 +200,13 @@
       "major_minor": "7.3",
       "channel": "eol",
       "downloads": [
-        { "url": "https://windows.php.net/downloads/releases/archives/php-7.3.33-nts-Win32-VC15-x64.zip",
-          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "php.net" }
+        {
+          "url": "https://windows.php.net/downloads/releases/archives/php-7.3.33-nts-Win32-VC15-x64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "php.net"
+        }
       ]
     },
     {
@@ -107,8 +214,13 @@
       "major_minor": "7.2",
       "channel": "eol",
       "downloads": [
-        { "url": "https://windows.php.net/downloads/releases/archives/php-7.2.34-nts-Win32-VC15-x64.zip",
-          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "php.net" }
+        {
+          "url": "https://windows.php.net/downloads/releases/archives/php-7.2.34-nts-Win32-VC15-x64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "php.net"
+        }
       ]
     },
     {
@@ -116,8 +228,13 @@
       "major_minor": "7.1",
       "channel": "eol",
       "downloads": [
-        { "url": "https://windows.php.net/downloads/releases/archives/php-7.1.33-nts-Win32-VC14-x64.zip",
-          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "php.net" }
+        {
+          "url": "https://windows.php.net/downloads/releases/archives/php-7.1.33-nts-Win32-VC14-x64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "php.net"
+        }
       ]
     },
     {
@@ -125,8 +242,13 @@
       "major_minor": "7.0",
       "channel": "eol",
       "downloads": [
-        { "url": "https://windows.php.net/downloads/releases/archives/php-7.0.33-nts-Win32-VC14-x64.zip",
-          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "php.net" }
+        {
+          "url": "https://windows.php.net/downloads/releases/archives/php-7.0.33-nts-Win32-VC14-x64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "php.net"
+        }
       ]
     },
     {
@@ -134,8 +256,13 @@
       "major_minor": "5.6",
       "channel": "eol",
       "downloads": [
-        { "url": "https://windows.php.net/downloads/releases/archives/php-5.6.40-nts-Win32-VC11-x64.zip",
-          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "php.net" }
+        {
+          "url": "https://windows.php.net/downloads/releases/archives/php-5.6.40-nts-Win32-VC11-x64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "php.net"
+        }
       ]
     }
   ]
