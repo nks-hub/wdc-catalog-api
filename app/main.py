@@ -161,9 +161,11 @@ app.include_router(devices_router)
 # Mount the admin JSON API (role-gated endpoints for user management)
 from .admin_users import router as admin_users_router  # noqa: E402
 from .admin_audit import router as admin_audit_router  # noqa: E402
+from .admin_stats import router as admin_stats_router  # noqa: E402
 
 app.include_router(admin_users_router)
 app.include_router(admin_audit_router)
+app.include_router(admin_stats_router)
 
 app.mount("/static", StaticFiles(directory=_APP_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=_APP_DIR / "templates")
