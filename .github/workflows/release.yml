@@ -29,9 +29,7 @@ jobs:
       - name: Export OpenAPI spec
         env:
           NKS_WDC_CATALOG_DEV: "1"
-        run: |
-          python -c "from app.main import app; import json; \
-            open('openapi.json','w').write(json.dumps(app.openapi(), indent=2))"
+        run: python scripts/export-openapi.py --pretty --output openapi.json
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
