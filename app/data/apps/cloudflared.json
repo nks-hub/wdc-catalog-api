@@ -41,10 +41,10 @@
           "source": "nks-hub-binaries"
         },
         {
-          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-cloudflared-2026.3.0/cloudflared-2026.3.0-macos-arm64.tgz",
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-cloudflared-2026.3.0/cloudflared-2026.3.0-macos-arm64",
           "os": "macos",
           "arch": "arm64",
-          "archive_type": "tgz",
+          "archive_type": "binary",
           "source": "nks-hub-binaries"
         }
       ]
