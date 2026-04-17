@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.8.3 — 2026-04-18
+
+Audit coverage follow-through — snapshots, auto-generate, JSON auth.
+
+- `snapshot.imported` — admin UI `/admin/devices/{id}/import` now
+  records the label, set_head flag, and payload size.
+- `snapshot.restored` — captures `previous_head_id` so a rollback chain
+  is reconstructable from the audit log alone.
+- `app.auto_generated` — release-scraper runs carry limit + scraped
+  count + actually-inserted count.
+- `account.registered` — self-registration via JSON API now audited.
+- `login.ok` — successful JSON-API logins emit an event tied to
+  the authenticating account.
+- Four new quick-filter chips on `/admin/audit`: Logins, Registrations,
+  Settings, App deletions.
+
+5 new audit actions · 5 new tests (total 322 passing).
+
 ## v0.8.2 — 2026-04-18
 
 Audit-log coverage sweep — every mutation path emits a named event.
