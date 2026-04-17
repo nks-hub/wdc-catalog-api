@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Users — NKS WDC{% endblock %}
+{% block content %}
+<section class="section">
+  <header class="section-head">
+    <h1>Users ({{ total }})</h1>
+    <form method="get" class="inline-form">
+      <input type="text" name="q" placeholder="email contains…" value="{{ q or '' }}">
+      <select name="role">
+        <option value="">any role</option>
+        {% for r in roles %}<option value="{{ r }}" {% if role == r %}selected{% endif %}>{{ r }}</option>{% endfor %}
+      </select>
+      <label><input type="checkbox" name="suspended" value="1" {% if suspended_only %}checked{% endif %}> only suspended</label>
+      <button class="btn">Filter</button>
+    </form>
+  </header>
+
+  <table class="data">
+    <thead>
+      <tr><th>Email</th><th>Role</th><th>Status</th><th>Devices</th><th>Last login</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td><a href="/admin/users/{{ u.id }}">{{ u.email }}</a></td>
+        <td><span class="pill pill-role-{{ u.role }}">{{ u.role }}</span></td>
+        <td>
+          {% if u.suspended %}<span class="pill pill-suspended">suspended</span>
+          {% else %}<span class="pill pill-ok">active</span>{% endif %}
+        </td>
+        <td>{{ u.device_count }}</td>
+        <td>{{ u.last_login_at or '—' }}</td>
+        <td class="actions">
+          <a class="btn btn-sm" href="/admin/users/{{ u.id }}">view</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">No users match the filter.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if page_has_more %}
+    <a class="btn" href="?offset={{ offset + limit }}&limit={{ limit }}">Next page →</a>
+  {% endif %}
+</section>
+{% endblock %}

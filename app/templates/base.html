@@ -10,9 +10,15 @@
   <header class="topbar">
     <a href="/admin" class="brand">NKS WDC Catalog</a>
     <nav class="nav">
-      <a href="/admin">Apps</a>
-      <a href="/api/v1/catalog" target="_blank">JSON</a>
-      <a href="/docs" target="_blank">API docs</a>
+      <a href="/admin">Dashboard</a>
+      <a href="/admin/catalog">Apps</a>
+      <a href="/admin/users">Users</a>
+      <a href="/admin/invites">Invites</a>
+      <a href="/admin/devices">Devices</a>
+      <a href="/admin/retention">Retention</a>
+      <a href="/admin/audit">Audit</a>
+      <a href="/api/v1/catalog" target="_blank" rel="noopener">JSON</a>
+      <a href="/docs" target="_blank" rel="noopener">API docs</a>
     </nav>
     {% if username %}
       <div class="user">

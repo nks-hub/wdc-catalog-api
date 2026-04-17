@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Retention — NKS WDC{% endblock %}
+{% block content %}
+<section class="section">
+  <h1>Retention</h1>
+  <p class="muted">Global defaults + per-account overrides. The scheduler runs nightly at 03:00 UTC (<code>NKS_WDC_RETENTION_CRON</code>).</p>
+
+  <div class="two-col">
+    <div>
+      <h2>Current policy for <code>{{ caller_email }}</code></h2>
+      {% if policy %}
+      <div class="meta">
+        <div><strong>Keep last N auto snapshots:</strong> {{ policy.keep_last_n_auto }}</div>
+        <div><strong>Auto expire after days:</strong> {{ policy.auto_expire_days or '—' }}</div>
+        <div><strong>Keep labeled forever:</strong> {{ 'yes' if policy.keep_labeled_forever else 'no' }}</div>
+      </div>
+      {% else %}
+      <p class="muted">Using global defaults (no account-level override).</p>
+      {% endif %}
+
+      <h3>Override</h3>
+      <form method="post" action="/admin/retention/policy" class="form-grid">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <label>Keep last N auto
+          <input type="number" name="keep_last_n_auto" value="{{ policy.keep_last_n_auto if policy else 30 }}" min="1" max="500">
+        </label>
+        <label>Auto expire days (blank = never)
+          <input type="number" name="auto_expire_days" value="{{ policy.auto_expire_days if policy else '' }}" min="1" max="365">
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" name="keep_labeled_forever" value="1" {% if not policy or policy.keep_labeled_forever %}checked{% endif %}>
+          Keep labeled snapshots forever
+        </label>
+        <button class="btn btn-primary">Save policy</button>
+      </form>
+    </div>
+
+    <div>
+      <h2>Manual run</h2>
+      <p class="muted">Run the retention sweep now — useful after importing many snapshots.</p>
+      <form method="post" action="/admin/retention/run-now" onsubmit="return confirm('Run retention sweep now?');">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <button class="btn btn-warn">Run retention now</button>
+      </form>
+
+      {% if last_run %}
+      <div class="callout callout-info">
+        <div><strong>Last run:</strong></div>
+        <pre>{{ last_run | tojson(indent=2) }}</pre>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

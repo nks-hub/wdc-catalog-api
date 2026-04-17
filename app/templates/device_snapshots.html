@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ device_id }} snapshots — NKS WDC{% endblock %}
+{% block content %}
+<section class="section">
+  <p><a href="/admin/devices">← back to devices</a></p>
+  <h1>Snapshots for <code>{{ device_id }}</code></h1>
+  {% if head %}
+  <p>Current HEAD: <code>#{{ head.id }}</code> ({{ head.created_at }})</p>
+  {% endif %}
+
+  <table class="data">
+    <thead>
+      <tr><th>ID</th><th>When</th><th>Kind</th><th>Label</th><th>Size</th><th>Checksum</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for s in snapshots %}
+      <tr {% if head and s.id == head.id %}class="row-head"{% endif %}>
+        <td>#{{ s.id }}{% if head and s.id == head.id %} <span class="pill pill-ok">HEAD</span>{% endif %}</td>
+        <td class="nowrap">{{ s.created_at }}</td>
+        <td><span class="pill">{{ s.kind }}</span></td>
+        <td>{{ s.label or '—' }}</td>
+        <td>{{ s.size_bytes }}</td>
+        <td><code title="{{ s.checksum }}">{{ s.checksum[:12] }}…</code></td>
+        <td class="actions">
+          <a class="btn btn-sm" href="/api/v1/devices/{{ device_id }}/backups/{{ s.id }}/download" target="_blank" rel="noopener">download</a>
+          {% if not head or s.id != head.id %}
+          <form method="post" action="/admin/devices/{{ device_id }}/snapshots/{{ s.id }}/restore" class="inline" onsubmit="return confirm('Restore snapshot #{{ s.id }} as HEAD? A pre_restore snapshot will be taken first so this is reversible.');">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="btn btn-sm btn-warn">restore</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">No snapshots.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if total > limit %}
+  <div class="pager">
+    {% if offset > 0 %}<a class="btn" href="?offset={{ [offset - limit, 0]|max }}&limit={{ limit }}">← prev</a>{% endif %}
+    <span class="muted">{{ offset + 1 }}–{{ offset + snapshots|length }} of {{ total }}</span>
+    {% if offset + limit < total %}<a class="btn" href="?offset={{ offset + limit }}&limit={{ limit }}">next →</a>{% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

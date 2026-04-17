@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — NKS WDC{% endblock %}
+{% block content %}
+<section class="section">
+  <h1>Dashboard</h1>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <h3>Catalog</h3>
+      <div class="stat-row"><span>Apps</span><b>{{ stats.catalog.apps }}</b></div>
+      <div class="stat-row"><span>Releases</span><b>{{ stats.catalog.releases }}</b></div>
+      <div class="stat-row"><span>Downloads</span><b>{{ stats.catalog.downloads }}</b></div>
+    </div>
+
+    <div class="stat-card">
+      <h3>Users</h3>
+      <div class="stat-row"><span>Accounts</span><b>{{ stats.users.accounts_total }}</b></div>
+      <div class="stat-row"><span>Suspended</span><b>{{ stats.users.accounts_suspended }}</b></div>
+      <div class="stat-row"><span>Admin UI users</span><b>{{ stats.users.admin_ui_users }}</b></div>
+      <div class="stat-sub">
+        {% for role, count in stats.users.accounts_by_role.items() %}
+          <span class="pill pill-role-{{ role }}">{{ role }}: {{ count }}</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <h3>Devices</h3>
+      <div class="stat-row"><span>Total</span><b>{{ stats.users.devices }}</b></div>
+      <div class="stat-row"><span>Linked to accounts</span><b>{{ stats.users.devices_linked }}</b></div>
+      <div class="stat-row"><span>Online (last 5 min)</span><b>{{ stats.users.devices_online_recent }}</b></div>
+    </div>
+
+    <div class="stat-card">
+      <h3>Audit</h3>
+      <div class="stat-row"><span>Total events</span><b>{{ stats.audit.events_total }}</b></div>
+      <div class="stat-row"><span>Last 24h</span><b>{{ stats.audit.events_last_24h }}</b></div>
+      {% if stats.audit.top_actions %}
+      <div class="stat-sub">
+        <div class="muted">Top actions (24h):</div>
+        <ul class="compact">
+          {% for row in stats.audit.top_actions[:5] %}
+            <li><code>{{ row.action }}</code> <span class="muted">×{{ row.count }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <p class="muted">Generated at {{ stats.generated_at }} (in-process cache, 30 s TTL)</p>
+</section>
+{% endblock %}

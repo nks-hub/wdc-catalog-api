@@ -54,12 +54,8 @@ class OverviewResponse(BaseModel):
     generated_at: str
 
 
-@router.get("/overview", response_model=OverviewResponse)
-def overview(
-    _: Account = Depends(require_role(Role.support)),
-    db: Session = Depends(get_session),
-) -> OverviewResponse:
-    """Aggregate counters for the admin dashboard. Support role or higher.
+def build_overview(db: Session) -> OverviewResponse:
+    """Core overview-builder used by both the JSON endpoint + HTML dashboard.
 
     Cached in-process for 30 s. The dashboard refreshes manually and
     10+ COUNT(*) queries per hit was overkill.
@@ -158,4 +154,13 @@ def overview(
     return response
 
 
-__all__ = ["router"]
+@router.get("/overview", response_model=OverviewResponse)
+def overview(
+    _: Account = Depends(require_role(Role.support)),
+    db: Session = Depends(get_session),
+) -> OverviewResponse:
+    """Aggregate counters for the admin dashboard (JSON, support+)."""
+    return build_overview(db)
+
+
+__all__ = ["router", "build_overview"]

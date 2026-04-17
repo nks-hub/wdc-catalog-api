@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Audit log — NKS WDC{% endblock %}
+{% block content %}
+<section class="section">
+  <h1>Audit log ({{ total }})</h1>
+
+  <form method="get" class="inline-form">
+    <input type="text" name="action" placeholder="action (e.g. user.suspended)" value="{{ action or '' }}">
+    <input type="text" name="resource_type" placeholder="resource type" value="{{ resource_type or '' }}">
+    <input type="text" name="resource_id" placeholder="resource id" value="{{ resource_id or '' }}">
+    <input type="number" name="actor_id" placeholder="actor id" value="{{ actor_id or '' }}">
+    <button class="btn">Filter</button>
+    {% if action or resource_type or resource_id or actor_id %}
+      <a class="btn btn-ghost" href="/admin/audit">clear</a>
+    {% endif %}
+  </form>
+
+  <table class="data compact">
+    <thead>
+      <tr><th>When</th><th>Actor</th><th>Action</th><th>Resource</th><th>IP</th><th>Detail</th></tr>
+    </thead>
+    <tbody>
+      {% for e in events %}
+      <tr>
+        <td class="nowrap">{{ e.created_at }}</td>
+        <td>
+          {% if e.actor_email %}{{ e.actor_email }}{% elif e.actor_id %}#{{ e.actor_id }}{% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td><code>{{ e.action }}</code></td>
+        <td>
+          {% if e.resource_type %}<span class="pill">{{ e.resource_type }}</span>{% endif %}
+          {% if e.resource_id %}<code>{{ e.resource_id }}</code>{% endif %}
+        </td>
+        <td class="muted">{{ e.ip or '—' }}</td>
+        <td>
+          {% if e.detail %}<details><summary>view</summary><pre class="detail">{{ e.detail | tojson(indent=2) }}</pre></details>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">No audit events match the filter.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="pager">
+    {% if offset > 0 %}
+      <a class="btn" href="?{{ qs }}offset={{ [offset - limit, 0]|max }}&limit={{ limit }}">← prev</a>
+    {% endif %}
+    <span class="muted">showing {{ offset + 1 }}–{{ offset + events|length }} of {{ total }}</span>
+    {% if offset + limit < total %}
+      <a class="btn" href="?{{ qs }}offset={{ offset + limit }}&limit={{ limit }}">next →</a>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

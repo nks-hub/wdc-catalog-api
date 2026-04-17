@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Invites — NKS WDC{% endblock %}
+{% block content %}
+<section class="section">
+  <h1>Invites</h1>
+  <p class="muted">Mint a signed invite token. Hand it to the invitee; they redeem at <code>POST /api/v1/auth/accept-invite</code>.</p>
+
+  <form method="post" action="/admin/invites" class="form-grid">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Email
+      <input type="email" name="email" required autocomplete="off">
+    </label>
+    <label>Role
+      <select name="role">
+        {% for r in roles %}<option value="{{ r }}" {% if r == 'user' %}selected{% endif %}>{{ r }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>TTL hours
+      <input type="number" name="ttl_hours" value="48" min="1" max="168">
+    </label>
+    <button class="btn btn-primary">Mint invite</button>
+  </form>
+
+  {% if minted %}
+    <div class="callout callout-success">
+      <div><strong>Invite for:</strong> {{ minted.email }} ({{ minted.role }})</div>
+      <div><strong>Expires:</strong> {{ minted.expires_at }}</div>
+      <div><strong>Token (copy now — shown once):</strong></div>
+      <pre class="selectable">{{ minted.token }}</pre>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

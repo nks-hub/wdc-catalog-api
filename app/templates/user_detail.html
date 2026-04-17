@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ user.email }} — Users{% endblock %}
+{% block content %}
+<section class="section">
+  <p><a href="/admin/users">← back to users</a></p>
+  <h1>{{ user.email }}</h1>
+  <div class="pill-row">
+    <span class="pill pill-role-{{ user.role }}">{{ user.role }}</span>
+    {% if user.suspended %}<span class="pill pill-suspended">suspended</span>
+    {% else %}<span class="pill pill-ok">active</span>{% endif %}
+    <span class="pill">token v{{ user.token_version }}</span>
+    <span class="pill">devices: {{ user.device_count }}</span>
+    {% if user.failed_login_count %}
+      <span class="pill pill-warn">failed logins: {{ user.failed_login_count }}</span>
+    {% endif %}
+    {% if user.locked_until %}
+      <span class="pill pill-warn">locked until {{ user.locked_until }}</span>
+    {% endif %}
+  </div>
+
+  <div class="meta">
+    <div><strong>Created:</strong> {{ user.created_at or '—' }}</div>
+    <div><strong>Last login:</strong> {{ user.last_login_at or '—' }}</div>
+  </div>
+
+  <div class="action-grid">
+    <form method="post" action="/admin/users/{{ user.id }}/role">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <label>Change role
+        <select name="role">
+          {% for r in roles %}<option value="{{ r }}" {% if r == user.role %}selected{% endif %}>{{ r }}</option>{% endfor %}
+        </select>
+      </label>
+      <button class="btn">Update role</button>
+    </form>
+
+    {% if user.suspended %}
+      <form method="post" action="/admin/users/{{ user.id }}/resume">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <button class="btn">Resume account</button>
+      </form>
+    {% else %}
+      <form method="post" action="/admin/users/{{ user.id }}/suspend" onsubmit="return confirm('Suspend {{ user.email }}?');">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <button class="btn btn-warn">Suspend account</button>
+      </form>
+    {% endif %}
+
+    <form method="post" action="/admin/users/{{ user.id }}/revoke-tokens" onsubmit="return confirm('Invalidate every outstanding JWT for {{ user.email }}?');">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button class="btn btn-warn">Revoke all tokens</button>
+    </form>
+
+    <form method="post" action="/admin/users/{{ user.id }}/reset-password" onsubmit="return confirm('Generate a new password? The old one stops working immediately.');">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button class="btn">Reset password</button>
+    </form>
+
+    <form method="post" action="/admin/users/{{ user.id }}/delete" onsubmit="return confirm('Delete {{ user.email }}? This is permanent.');">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button class="btn btn-danger">Delete account</button>
+    </form>
+  </div>
+
+  {% if new_password %}
+  <div class="callout callout-success">
+    <strong>New password:</strong>
+    <code class="selectable">{{ new_password }}</code>
+    <div class="muted">Copy now — this is the only time it will be shown.</div>
+  </div>
+  {% endif %}
+
+  <h2>Active sessions</h2>
+  {% if sessions %}
+  <table class="data">
+    <thead><tr><th>Issued</th><th>Expires</th><th>JTI</th><th>Revoked</th></tr></thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr>
+        <td>{{ s.issued_at or '—' }}</td>
+        <td>{{ s.expires_at or '—' }}</td>
+        <td><code>{{ s.jti[:16] }}…</code></td>
+        <td>{% if s.revoked %}<span class="pill pill-suspended">revoked</span>{% else %}<span class="pill pill-ok">active</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No known sessions (this view lists only revoked tokens — active JWTs are stateless).</p>{% endif %}
+</section>
+{% endblock %}
