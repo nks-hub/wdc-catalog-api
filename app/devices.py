@@ -33,12 +33,17 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["accounts", "devices"])
 
-JWT_SECRET = os.environ.get("NKS_WDC_JWT_SECRET") or os.environ.get("NKS_WDC_CATALOG_SECRET", "")
+JWT_SECRET = os.environ.get("NKS_WDC_JWT_SECRET") or os.environ.get(
+    "NKS_WDC_CATALOG_SECRET", ""
+)
 if not JWT_SECRET:
     if os.environ.get("NKS_WDC_CATALOG_DEV") == "1":
         import secrets as _secrets
+
         JWT_SECRET = _secrets.token_urlsafe(32)
-        log.warning("NKS_WDC_CATALOG_DEV=1 → ephemeral JWT secret (tokens invalid after restart)")
+        log.warning(
+            "NKS_WDC_CATALOG_DEV=1 → ephemeral JWT secret (tokens invalid after restart)"
+        )
     else:
         raise RuntimeError(
             "NKS_WDC_JWT_SECRET (or legacy NKS_WDC_CATALOG_SECRET) must be set in production. "
@@ -51,6 +56,7 @@ security = HTTPBearer(auto_error=False)
 
 
 # ── Schemas ─────────────────────────────────────────────────────────────
+
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -112,6 +118,7 @@ class SimpleOk(BaseModel):
 
 # ── JWT helpers ─────────────────────────────────────────────────────────
 
+
 def create_token(account_id: int, email: str, *, token_version: int = 1) -> str:
     """Mint a JWT with ``jti`` + account ``tv`` (token version).
 
@@ -124,8 +131,11 @@ def create_token(account_id: int, email: str, *, token_version: int = 1) -> str:
     jti = __import__("uuid").uuid4().hex
     return jwt.encode(
         {
-            "sub": str(account_id), "email": email,
-            "exp": expire, "jti": jti, "tv": token_version,
+            "sub": str(account_id),
+            "email": email,
+            "exp": expire,
+            "jti": jti,
+            "tv": token_version,
         },
         JWT_SECRET,
         algorithm=JWT_ALGORITHM,
@@ -138,8 +148,11 @@ def decode_token(token: str) -> dict:
 
 # ── Dependencies ────────────────────────────────────────────────────────
 
+
 def get_current_account(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(security)
+    ] = None,
     db: Session = Depends(get_session),
 ) -> Account:
     if credentials is None:
@@ -159,14 +172,20 @@ def get_current_account(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Account not found")
     token_version = payload.get("tv", 1)
     if token_version != account.token_version:
-        log.info("JWT tv=%s stale for account %s (current %s)",
-                 token_version, account_id, account.token_version)
+        log.info(
+            "JWT tv=%s stale for account %s (current %s)",
+            token_version,
+            account_id,
+            account.token_version,
+        )
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token has been revoked")
     return account
 
 
 def optional_account(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(security)
+    ] = None,
     db: Session = Depends(get_session),
 ) -> Account | None:
     if credentials is None:
@@ -184,6 +203,7 @@ def optional_account(
 
 
 # ── Auth endpoints ──────────────────────────────────────────────────────
+
 
 @router.post("/auth/register", response_model=TokenResponse)
 @limiter.limit("3/hour")
@@ -224,7 +244,9 @@ def login(
 
 @router.post("/auth/logout")
 def logout(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(security)
+    ] = None,
     db: Session = Depends(get_session),
 ) -> dict:
     """Revoke the presented token by adding its jti to the denylist."""
@@ -242,10 +264,14 @@ def logout(
         expires_at = None
         if "exp" in payload:
             expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
-        db.add(RevokedToken(
-            jti=jti, account_id=account_id,
-            reason="logout", expires_at=expires_at,
-        ))
+        db.add(
+            RevokedToken(
+                jti=jti,
+                account_id=account_id,
+                reason="logout",
+                expires_at=expires_at,
+            )
+        )
     return {"ok": True, "revoked": True, "jti": jti}
 
 
@@ -257,11 +283,13 @@ def auth_me(account: Account = Depends(get_current_account)) -> AuthMe:
         role=account.role,
         created_at=account.created_at.isoformat() if account.created_at else None,
         last_login_at=account.last_login_at.isoformat()
-            if account.last_login_at else None,
+        if account.last_login_at
+        else None,
     )
 
 
 # ── Device endpoints ────────────────────────────────────────────────────
+
 
 @router.get("/devices", response_model=DeviceList)
 def list_devices(
@@ -278,13 +306,15 @@ def list_devices(
     ``is_current=true`` so the UI can highlight the local device.
     """
     from sqlalchemy import func
+
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
     stmt = select(DeviceConfig).where(DeviceConfig.user_id == account.id)
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     devices = db.scalars(
         stmt.order_by(DeviceConfig.last_seen_at.desc().nullslast())
-        .offset(offset).limit(limit)
+        .offset(offset)
+        .limit(limit)
     ).all()
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     current = (current_device_id or "").strip().lower()
@@ -297,7 +327,8 @@ def list_devices(
             site_count=d.site_count,
             last_seen_at=d.last_seen_at.isoformat() if d.last_seen_at else None,
             updated_at=d.updated_at.isoformat() if d.updated_at else None,
-            online=d.last_seen_at is not None and (now - d.last_seen_at).total_seconds() < 300,
+            online=d.last_seen_at is not None
+            and (now - d.last_seen_at).total_seconds() < 300,
             is_current=bool(current) and d.device_id == current,
         )
         for d in devices
@@ -375,6 +406,4 @@ def push_config_to_device(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Target device not found")
     target.payload = source.payload
     target.updated_at = datetime.now(timezone.utc)
-    return SimpleOk(
-        ok=True, pushed_from=body.source_device_id, pushed_to=device_id
-    )
+    return SimpleOk(ok=True, pushed_from=body.source_device_id, pushed_to=device_id)

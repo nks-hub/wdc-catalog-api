@@ -8,13 +8,11 @@ a JWT for the account that owns the device. The snapshot service in
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import audit, idempotency, snapshots
@@ -28,6 +26,7 @@ router = APIRouter(
 
 
 # ── Schemas ─────────────────────────────────────────────────────────────
+
 
 class SnapshotMeta(BaseModel):
     id: int
@@ -57,13 +56,13 @@ class CreateSnapshotRequest(BaseModel):
     payload: Optional[dict] = Field(
         None,
         description="Payload to snapshot. When omitted, the current device "
-                    "config (as reported by the last sync) is re-snapshotted.",
+        "config (as reported by the last sync) is re-snapshotted.",
     )
     encrypt: bool = Field(
         False,
         description="When true, encrypt payload at rest with the account's "
-                    "active KEK (Variant A) or with the header-supplied "
-                    "passphrase (Variant B).",
+        "active KEK (Variant A) or with the header-supplied "
+        "passphrase (Variant B).",
     )
 
 
@@ -75,6 +74,7 @@ class ImportSnapshotRequest(BaseModel):
     """Body of ``POST /backups/import``. Accepts the envelope emitted
     by ``GET /backups/{id}/download`` — ``schema`` + ``payload`` are
     mandatory, every other field is advisory (for operator context)."""
+
     schema_: str = Field(..., alias="schema", pattern=r"^nks-wdc-snapshot-v1$")
     payload: dict
     label: Optional[str] = Field(None, max_length=128)
@@ -94,6 +94,7 @@ class DiffResponse(BaseModel):
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
+
 
 def _owned_device(device_id: str, account: Account, db: Session) -> DeviceConfig:
     dev = db.get(DeviceConfig, device_id.lower())
@@ -118,6 +119,7 @@ def _row(snap: DeviceSnapshot) -> SnapshotMeta:
 
 # ── Endpoints ───────────────────────────────────────────────────────────
 
+
 @router.get("", response_model=SnapshotList)
 def list_backups(
     device_id: str,
@@ -130,8 +132,13 @@ def list_backups(
 ) -> SnapshotList:
     _owned_device(device_id, account, db)
     rows, total = snapshots.list_snapshots(
-        db, device_id=device_id.lower(), account_id=account.id,
-        kind=kind, label_like=label, offset=offset, limit=limit,
+        db,
+        device_id=device_id.lower(),
+        account_id=account.id,
+        kind=kind,
+        label_like=label,
+        offset=offset,
+        limit=limit,
     )
     head = snapshots.get_head(db, device_id.lower())
     return SnapshotList(
@@ -173,12 +180,18 @@ def create_backup(
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     audit.emit(
-        db, actor=account, action="backup.created", request=request,
-        resource_type="snapshot", resource_id=snap.id,
+        db,
+        actor=account,
+        action="backup.created",
+        request=request,
+        resource_type="snapshot",
+        resource_id=snap.id,
         detail={"device_id": device_id, "kind": snap.kind, "label": snap.label},
     )
     return idempotency.wrap_json(
-        db, request, account,
+        db,
+        request,
+        account,
         _row(snap).model_dump(),
         status_code=status.HTTP_201_CREATED,
     )
@@ -196,11 +209,13 @@ def diff_backups(
     a = db.get(DeviceSnapshot, from_id)
     b = db.get(DeviceSnapshot, to_id)
     for snap in (a, b):
-        if snap is None or snap.device_id != device_id.lower() or snap.account_id != account.id:
+        if (
+            snap is None
+            or snap.device_id != device_id.lower()
+            or snap.account_id != account.id
+        ):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot not found")
-    return DiffResponse(
-        from_id=from_id, to_id=to_id, patch=snapshots.diff(a, b, db=db)
-    )
+    return DiffResponse(from_id=from_id, to_id=to_id, patch=snapshots.diff(a, b, db=db))
 
 
 @router.get("/{snapshot_id}", response_model=SnapshotDetail)
@@ -213,7 +228,11 @@ def get_backup(
 ) -> SnapshotDetail:
     _owned_device(device_id, account, db)
     snap = db.get(DeviceSnapshot, snapshot_id)
-    if snap is None or snap.device_id != device_id.lower() or snap.account_id != account.id:
+    if (
+        snap is None
+        or snap.device_id != device_id.lower()
+        or snap.account_id != account.id
+    ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot not found")
     try:
         payload = snapshots.unpack_payload(snap, db=db, passphrase=x_wdc_passphrase)
@@ -231,7 +250,11 @@ def download_backup(
 ) -> Response:
     _owned_device(device_id, account, db)
     snap = db.get(DeviceSnapshot, snapshot_id)
-    if snap is None or snap.device_id != device_id.lower() or snap.account_id != account.id:
+    if (
+        snap is None
+        or snap.device_id != device_id.lower()
+        or snap.account_id != account.id
+    ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot not found")
     envelope = {
         "schema": "nks-wdc-snapshot-v1",
@@ -265,7 +288,11 @@ def delete_backup(
 ) -> None:
     _owned_device(device_id, account, db)
     snap = db.get(DeviceSnapshot, snapshot_id)
-    if snap is None or snap.device_id != device_id.lower() or snap.account_id != account.id:
+    if (
+        snap is None
+        or snap.device_id != device_id.lower()
+        or snap.account_id != account.id
+    ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot not found")
     head = snapshots.get_head(db, device_id.lower())
     if head is not None and head.id == snap.id:
@@ -274,8 +301,12 @@ def delete_backup(
             "Cannot delete the current HEAD — restore to another snapshot first",
         )
     audit.emit(
-        db, actor=account, action="backup.deleted", request=request,
-        resource_type="snapshot", resource_id=snap.id,
+        db,
+        actor=account,
+        action="backup.deleted",
+        request=request,
+        resource_type="snapshot",
+        resource_id=snap.id,
         detail={"device_id": device_id, "kind": snap.kind, "label": snap.label},
     )
     db.delete(snap)
@@ -315,8 +346,12 @@ def import_backup(
     except snapshots.PayloadTooLarge as exc:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, str(exc))
     audit.emit(
-        db, actor=account, action="backup.imported", request=request,
-        resource_type="snapshot", resource_id=snap.id,
+        db,
+        actor=account,
+        action="backup.imported",
+        request=request,
+        resource_type="snapshot",
+        resource_id=snap.id,
         detail={
             "device_id": device_id,
             "source_device_id": body.original_device_id,
@@ -325,7 +360,9 @@ def import_backup(
         },
     )
     return idempotency.wrap_json(
-        db, request, account,
+        db,
+        request,
+        account,
         _row(snap).model_dump(),
         status_code=status.HTTP_201_CREATED,
     )
@@ -349,7 +386,11 @@ def restore_backup(
 
     _owned_device(device_id, account, db)
     target = db.get(DeviceSnapshot, body.snapshot_id)
-    if target is None or target.device_id != device_id.lower() or target.account_id != account.id:
+    if (
+        target is None
+        or target.device_id != device_id.lower()
+        or target.account_id != account.id
+    ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Target snapshot not found")
     current = snapshots.get_head(db, device_id.lower())
     if current is not None and current.id != target.id:
@@ -363,12 +404,18 @@ def restore_backup(
         )
     snapshots.set_head(db, device_id.lower(), target.id, updated_by="restore")
     audit.emit(
-        db, actor=account, action="backup.restored", request=request,
-        resource_type="snapshot", resource_id=target.id,
+        db,
+        actor=account,
+        action="backup.restored",
+        request=request,
+        resource_type="snapshot",
+        resource_id=target.id,
         detail={"device_id": device_id, "from_head": current.id if current else None},
     )
     return idempotency.wrap_json(
-        db, request, account,
+        db,
+        request,
+        account,
         _row(target).model_dump(),
         status_code=status.HTTP_200_OK,
     )

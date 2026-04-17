@@ -60,7 +60,9 @@ class TestBackupCreateAndList:
         assert body["head_id"] is not None
 
     def test_create_returns_413_when_payload_too_big(self, client):
-        import base64, os as _os
+        import base64
+        import os as _os
+
         token = _register(client)
         dev = f"bkp-big-{uuid.uuid4().hex[:6]}"
         _seed_device(client, token, dev, {"seed": True})
@@ -95,9 +97,9 @@ class TestBackupFetch:
         dev = f"bkp-dl-{uuid.uuid4().hex[:6]}"
         _seed_device(client, token, dev, {"marker": "dl"})
         auth = {"Authorization": f"Bearer {token}"}
-        head_id = client.get(
-            f"/api/v1/devices/{dev}/backups", headers=auth
-        ).json()["head_id"]
+        head_id = client.get(f"/api/v1/devices/{dev}/backups", headers=auth).json()[
+            "head_id"
+        ]
 
         r = client.get(
             f"/api/v1/devices/{dev}/backups/{head_id}/download", headers=auth
@@ -127,9 +129,9 @@ class TestBackupDelete:
         dev = f"bkp-del-head-{uuid.uuid4().hex[:6]}"
         _seed_device(client, token, dev, {"s": 1})
         auth = {"Authorization": f"Bearer {token}"}
-        head_id = client.get(
-            f"/api/v1/devices/{dev}/backups", headers=auth
-        ).json()["head_id"]
+        head_id = client.get(f"/api/v1/devices/{dev}/backups", headers=auth).json()[
+            "head_id"
+        ]
 
         r = client.delete(f"/api/v1/devices/{dev}/backups/{head_id}", headers=auth)
         assert r.status_code == 409
@@ -155,9 +157,9 @@ class TestBackupRestore:
         dev = f"bkp-restore-{uuid.uuid4().hex[:6]}"
         auth = {"Authorization": f"Bearer {token}"}
         _seed_device(client, token, dev, {"state": "A"})
-        a_id = client.get(
-            f"/api/v1/devices/{dev}/backups", headers=auth
-        ).json()["head_id"]
+        a_id = client.get(f"/api/v1/devices/{dev}/backups", headers=auth).json()[
+            "head_id"
+        ]
         _seed_device(client, token, dev, {"state": "B"})
 
         r = client.post(
@@ -181,7 +183,9 @@ class TestBackupImport:
         _seed_device(client, token, src_dev, {"marker": "exported"})
         _seed_device(client, token, dst_dev, {"marker": "destination"})
 
-        src_head = client.get(f"/api/v1/devices/{src_dev}/backups", headers=auth).json()["head_id"]
+        src_head = client.get(
+            f"/api/v1/devices/{src_dev}/backups", headers=auth
+        ).json()["head_id"]
         envelope = client.get(
             f"/api/v1/devices/{src_dev}/backups/{src_head}/download", headers=auth
         ).json()
@@ -221,13 +225,13 @@ class TestBackupDiff:
         dev = f"bkp-diff-{uuid.uuid4().hex[:6]}"
         auth = {"Authorization": f"Bearer {token}"}
         _seed_device(client, token, dev, {"sites": ["a"]})
-        first = client.get(
-            f"/api/v1/devices/{dev}/backups", headers=auth
-        ).json()["head_id"]
+        first = client.get(f"/api/v1/devices/{dev}/backups", headers=auth).json()[
+            "head_id"
+        ]
         _seed_device(client, token, dev, {"sites": ["a", "b"]})
-        second = client.get(
-            f"/api/v1/devices/{dev}/backups", headers=auth
-        ).json()["head_id"]
+        second = client.get(f"/api/v1/devices/{dev}/backups", headers=auth).json()[
+            "head_id"
+        ]
 
         r = client.get(
             f"/api/v1/devices/{dev}/backups/diff",

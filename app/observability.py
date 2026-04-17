@@ -23,11 +23,11 @@ import os
 import time
 import uuid
 from contextvars import ContextVar
-from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+
 try:
     # python-json-logger >= 3.0 moved the module.
     from pythonjsonlogger.json import JsonFormatter  # type: ignore
@@ -48,10 +48,23 @@ HTTP_REQUESTS = Counter(
 )
 
 _HTTP_BUCKETS = (
-    0.001, 0.0025, 0.005, 0.0075,
-    0.010, 0.015, 0.020, 0.030, 0.050,
-    0.075, 0.100, 0.150, 0.250, 0.500,
-    1.0, 2.5, 5.0,
+    0.001,
+    0.0025,
+    0.005,
+    0.0075,
+    0.010,
+    0.015,
+    0.020,
+    0.030,
+    0.050,
+    0.075,
+    0.100,
+    0.150,
+    0.250,
+    0.500,
+    1.0,
+    2.5,
+    5.0,
 )
 
 HTTP_DURATION = Histogram(
@@ -74,6 +87,7 @@ RETENTION_DELETED = Counter(
 
 
 # ── Logging config ─────────────────────────────────────────────────────
+
 
 class _RequestIdInjector(logging.Filter):
     """Attach the current request_id context var to every log record."""
@@ -102,6 +116,7 @@ def configure_logging() -> None:
 
 # ── Middleware ─────────────────────────────────────────────────────────
 
+
 async def request_context_middleware(request: Request, call_next) -> Response:
     """Set request_id + collect metrics for every request."""
     req_id = request.headers.get(REQUEST_ID_HEADER) or uuid.uuid4().hex[:16]
@@ -111,9 +126,7 @@ async def request_context_middleware(request: Request, call_next) -> Response:
     try:
         response: Response = await call_next(request)
     except Exception:
-        HTTP_REQUESTS.labels(
-            method=request.method, status="500", route=route
-        ).inc()
+        HTTP_REQUESTS.labels(method=request.method, status="500", route=route).inc()
         raise
     finally:
         HTTP_DURATION.labels(method=request.method, route=route).observe(
@@ -141,6 +154,7 @@ def _route_template(request: Request) -> str:
 
 # ── /metrics endpoint ──────────────────────────────────────────────────
 
+
 def metrics_endpoint() -> Response:
     return Response(
         content=generate_latest(),
@@ -149,6 +163,7 @@ def metrics_endpoint() -> Response:
 
 
 # ── Installer ──────────────────────────────────────────────────────────
+
 
 def install(app: FastAPI) -> None:
     configure_logging()

@@ -21,10 +21,9 @@ import secrets
 from typing import Annotated
 
 import bcrypt
-from fastapi import Cookie, Depends, HTTPException, status
+from fastapi import Cookie, HTTPException, status
 from itsdangerous import BadSignature, TimestampSigner
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from .db import User, session_factory
 
@@ -45,12 +44,15 @@ def _secret_key() -> str:
     would corrupt any signed artifact that outlives a single request.
     """
     global _EPHEMERAL_DEV_KEY
-    env = os.environ.get("NKS_WDC_SESSION_SECRET") or os.environ.get("NKS_WDC_CATALOG_SECRET")
+    env = os.environ.get("NKS_WDC_SESSION_SECRET") or os.environ.get(
+        "NKS_WDC_CATALOG_SECRET"
+    )
     if env:
         return env
     if os.environ.get("NKS_WDC_CATALOG_DEV") == "1":
         if _EPHEMERAL_DEV_KEY is None:
             import secrets as _secrets
+
             _EPHEMERAL_DEV_KEY = _secrets.token_urlsafe(32)
             log.warning(
                 "NKS_WDC_CATALOG_DEV=1 → ephemeral session signer "
@@ -67,7 +69,9 @@ _signer = TimestampSigner(_secret_key())
 
 
 def hash_password(plain: str) -> str:
-    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("ascii")
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode(
+        "ascii"
+    )
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -110,7 +114,9 @@ def ensure_admin_user() -> None:
     if not password:
         if os.environ.get("NKS_WDC_CATALOG_DEV") == "1":
             password = "admin"
-            log.warning("NKS_WDC_CATALOG_DEV=1 → using fallback admin/admin credentials")
+            log.warning(
+                "NKS_WDC_CATALOG_DEV=1 → using fallback admin/admin credentials"
+            )
         else:
             log.warning(
                 "NKS_WDC_CATALOG_ADMIN_PASS not set — admin UI will accept "
@@ -127,6 +133,7 @@ def ensure_admin_user() -> None:
 
 
 # ── FastAPI dependency ─────────────────────────────────────────────────
+
 
 def current_user(
     session_cookie: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
@@ -148,6 +155,7 @@ def optional_user(
 
 
 # ── Token-free random helper for CSRF etc. ─────────────────────────────
+
 
 def random_token(nbytes: int = 24) -> str:
     return secrets.token_urlsafe(nbytes)

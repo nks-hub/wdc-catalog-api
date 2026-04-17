@@ -83,17 +83,19 @@ class TestRetentionSweeps:
         # Seed an expired row directly
         db = next(get_session())
         try:
-            db.add(IdempotencyRecord(
-                key_hash=uuid.uuid4().hex,
-                account_id=None,
-                method="POST",
-                path="/api/v1/test",
-                status_code=201,
-                response_body=b"{}",
-                content_type="application/json",
-                expires_at=datetime.now(timezone.utc).replace(tzinfo=None)
+            db.add(
+                IdempotencyRecord(
+                    key_hash=uuid.uuid4().hex,
+                    account_id=None,
+                    method="POST",
+                    path="/api/v1/test",
+                    status_code=201,
+                    response_body=b"{}",
+                    content_type="application/json",
+                    expires_at=datetime.now(timezone.utc).replace(tzinfo=None)
                     - timedelta(hours=1),
-            ))
+                )
+            )
             db.commit()
         finally:
             db.close()
@@ -110,13 +112,15 @@ class TestRetentionSweeps:
         admin_tok, _ = _register(client, role=Role.admin)
         db = next(get_session())
         try:
-            db.add(RevokedToken(
-                jti=uuid.uuid4().hex,
-                account_id=None,
-                reason="test-expired",
-                expires_at=datetime.now(timezone.utc).replace(tzinfo=None)
+            db.add(
+                RevokedToken(
+                    jti=uuid.uuid4().hex,
+                    account_id=None,
+                    reason="test-expired",
+                    expires_at=datetime.now(timezone.utc).replace(tzinfo=None)
                     - timedelta(hours=1),
-            ))
+                )
+            )
             db.commit()
         finally:
             db.close()

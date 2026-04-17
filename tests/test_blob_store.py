@@ -36,6 +36,7 @@ def s3_env(monkeypatch):
     monkeypatch.setenv("NKS_WDC_BLOB_S3_SECRET_KEY", "testing")
     with _moto_aws():
         import boto3
+
         boto3.client("s3", region_name="us-east-1").create_bucket(
             Bucket="nks-wdc-test-bucket"
         )
@@ -65,6 +66,7 @@ class TestBlobBackend:
 class TestSnapshotSpillover:
     def _account_device(self):
         from app.auth import hash_password
+
         db = next(get_session())
         try:
             acc = Account(

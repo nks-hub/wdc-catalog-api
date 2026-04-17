@@ -42,6 +42,7 @@ class TestCryptoPrimitives:
 class TestEncryptedSnapshots:
     def _fresh_account_and_device(self):
         from app.auth import hash_password
+
         db = next(get_session())
         try:
             email = f"enc-{uuid.uuid4().hex[:8]}@nks-wdc.dev"

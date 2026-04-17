@@ -7,14 +7,14 @@ so setting NKS_WDC_CATALOG_STATE_DIR again would be ignored anyway.
 
 from __future__ import annotations
 
-from app.db import create_all, session_factory, App
+from app.db import create_all, session_factory
 from app.service import create_app, list_apps
-from sqlalchemy import select
 
 
 class TestServiceCRUD:
     def test_create_app_returns_app(self):
         import uuid
+
         create_all()
         app_id = f"test-crud-{uuid.uuid4().hex[:6]}"
         with session_factory() as db:
@@ -23,6 +23,7 @@ class TestServiceCRUD:
 
     def test_list_apps_includes_created(self):
         import uuid
+
         create_all()
         app_id = f"list-{uuid.uuid4().hex[:6]}"
         with session_factory() as db:
@@ -34,7 +35,9 @@ class TestServiceCRUD:
             assert app_id in ids
 
     def test_create_duplicate_raises(self):
-        import uuid, pytest
+        import uuid
+        import pytest
+
         create_all()
         app_id = f"dup-{uuid.uuid4().hex[:6]}"
         with session_factory() as db:
@@ -47,6 +50,7 @@ class TestServiceCRUD:
 
     def test_create_app_normalizes_id_to_lowercase(self):
         import uuid
+
         create_all()
         app_id = f"UPPER-{uuid.uuid4().hex[:6]}"
         with session_factory() as db:
@@ -55,12 +59,14 @@ class TestServiceCRUD:
 
     def test_get_app_returns_none_for_unknown(self):
         from app.service import get_app
+
         create_all()
         with session_factory() as db:
             assert get_app(db, "totally-nonexistent-app") is None
 
     def test_create_app_empty_id_raises(self):
         import pytest
+
         create_all()
         with session_factory() as db:
             with pytest.raises(ValueError):

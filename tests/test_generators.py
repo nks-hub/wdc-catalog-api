@@ -22,8 +22,16 @@ from app.generators import (
 class TestGeneratorRegistry:
     def test_all_generators_registered(self):
         expected = {
-            "cloudflared", "mailpit", "caddy", "redis",
-            "php", "apache", "nginx", "mariadb", "mysql", "node",
+            "cloudflared",
+            "mailpit",
+            "caddy",
+            "redis",
+            "php",
+            "apache",
+            "nginx",
+            "mariadb",
+            "mysql",
+            "node",
         }
         assert set(GENERATORS.keys()) == expected
 
@@ -54,7 +62,9 @@ class TestMySQLGenerator:
             parts = rel.version.split(".")
             assert len(parts) == 3, f"Version {rel.version} is not semver"
             for part in parts:
-                assert part.isdigit(), f"Version segment '{part}' in {rel.version} is not numeric"
+                assert part.isdigit(), (
+                    f"Version segment '{part}' in {rel.version} is not numeric"
+                )
 
     def test_fallback_limit_respected(self):
         assert len(_mysql_fallback(limit=2)) == 2
@@ -71,7 +81,9 @@ class TestMySQLGenerator:
         releases = _mysql_fallback(limit=4)
         for rel in releases:
             for dl in rel.downloads:
-                assert rel.version in dl.url, f"URL {dl.url} should contain version {rel.version}"
+                assert rel.version in dl.url, (
+                    f"URL {dl.url} should contain version {rel.version}"
+                )
                 assert "dev.mysql.com" in dl.url
 
     def test_fallback_major_minor_matches_version(self):
@@ -84,6 +96,7 @@ class TestMySQLGenerator:
 class TestNodeGenerator:
     def test_generate_node_returns_list(self):
         from app.generators import generate_node
+
         result = generate_node(limit=2)
         assert isinstance(result, list)
         for rel in result:
@@ -92,6 +105,7 @@ class TestNodeGenerator:
 
     def test_generate_node_has_multi_platform(self):
         from app.generators import generate_node
+
         result = generate_node(limit=1)
         if result:
             downloads = result[0].downloads
@@ -100,6 +114,7 @@ class TestNodeGenerator:
 
     def test_generate_node_channel_detection(self):
         from app.generators import generate_node
+
         result = generate_node(limit=5)
         channels = {r.channel for r in result}
         assert channels <= {"stable", "lts"}
@@ -108,6 +123,7 @@ class TestNodeGenerator:
 class TestPHPGenerator:
     def test_generate_php_returns_list(self):
         from app.generators import generate_php
+
         result = generate_php(limit=2)
         assert isinstance(result, list)
         for rel in result:
@@ -117,6 +133,7 @@ class TestPHPGenerator:
 
     def test_generate_php_major_minor_format(self):
         from app.generators import generate_php
+
         result = generate_php(limit=3)
         for rel in result:
             parts = rel.major_minor.split(".")
@@ -126,6 +143,7 @@ class TestPHPGenerator:
 class TestMariaDBGenerator:
     def test_generate_mariadb_returns_list(self):
         from app.generators import generate_mariadb
+
         result = generate_mariadb(limit=2)
         assert isinstance(result, list)
         for rel in result:
@@ -134,6 +152,7 @@ class TestMariaDBGenerator:
 
     def test_generate_mariadb_downloads_are_zip(self):
         from app.generators import generate_mariadb
+
         result = generate_mariadb(limit=1)
         for rel in result:
             for dl in rel.downloads:
@@ -144,6 +163,7 @@ class TestMariaDBGenerator:
 class TestMailpitGenerator:
     def test_generate_mailpit_returns_list(self):
         from app.generators import generate_mailpit
+
         result = generate_mailpit(limit=2)
         assert isinstance(result, list)
         for rel in result:
@@ -154,6 +174,7 @@ class TestMailpitGenerator:
 class TestCaddyGenerator:
     def test_generate_caddy_returns_list(self):
         from app.generators import generate_caddy
+
         result = generate_caddy(limit=2)
         assert isinstance(result, list)
         for rel in result:
@@ -164,6 +185,7 @@ class TestCaddyGenerator:
 class TestRedisGenerator:
     def test_generate_redis_returns_list(self):
         from app.generators import generate_redis
+
         result = generate_redis(limit=2)
         assert isinstance(result, list)
         for rel in result:
@@ -174,6 +196,7 @@ class TestRedisGenerator:
 class TestNginxGenerator:
     def test_generate_nginx_returns_list(self):
         from app.generators import generate_nginx
+
         result = generate_nginx(limit=2)
         assert isinstance(result, list)
         for rel in result:
@@ -186,6 +209,7 @@ class TestNginxGenerator:
 class TestCloudflaredGenerator:
     def test_generate_cloudflared_has_exe(self):
         from app.generators import generate_cloudflared
+
         result = generate_cloudflared(limit=1)
         if result and result[0].downloads:
             exts = {dl.archive_type for dl in result[0].downloads}
@@ -195,6 +219,7 @@ class TestCloudflaredGenerator:
 class TestApacheGenerator:
     def test_generate_apache_returns_list(self):
         from app.generators import generate_apache
+
         result = generate_apache(limit=2)
         assert isinstance(result, list)
         for rel in result:

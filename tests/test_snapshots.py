@@ -29,6 +29,7 @@ def _ensure_schema():
 @pytest.fixture()
 def sample_account() -> int:
     from app.auth import hash_password
+
     db = next(get_session())
     try:
         email = f"snap-{uuid.uuid4().hex[:8]}@nks-wdc.dev"
@@ -68,6 +69,7 @@ class TestPackPayload:
     def test_medium_payload_goes_to_blob(self):
         import base64
         import os as _os
+
         # Random data → incompressible, forces the raw size over the
         # inline threshold so the blob lane is exercised even after zstd.
         big = {"k": base64.b64encode(_os.urandom(200_000)).decode("ascii")}
@@ -79,6 +81,7 @@ class TestPackPayload:
     def test_oversized_payload_raises(self):
         import base64
         import os as _os
+
         # ~3.2 MB of random base64 → compresses to ~3.2 MB → over 2 MB ceiling.
         huge = {"k": base64.b64encode(_os.urandom(3 * 1024 * 1024)).decode("ascii")}
         with pytest.raises(PayloadTooLarge):
@@ -113,12 +116,16 @@ class TestCreateSnapshot:
         db = next(get_session())
         try:
             first = create_snapshot(
-                db, device_id=sample_device, account_id=sample_account,
+                db,
+                device_id=sample_device,
+                account_id=sample_account,
                 payload={"stable": "value"},
             )
             db.commit()
             second = create_snapshot(
-                db, device_id=sample_device, account_id=sample_account,
+                db,
+                device_id=sample_device,
+                account_id=sample_account,
                 payload={"stable": "value"},
             )
             db.commit()
@@ -132,13 +139,19 @@ class TestCreateSnapshot:
         db = next(get_session())
         try:
             first = create_snapshot(
-                db, device_id=sample_device, account_id=sample_account,
+                db,
+                device_id=sample_device,
+                account_id=sample_account,
                 payload={"same": 1},
             )
             db.commit()
             labeled = create_snapshot(
-                db, device_id=sample_device, account_id=sample_account,
-                payload={"same": 1}, kind="manual", label="before-upgrade",
+                db,
+                device_id=sample_device,
+                account_id=sample_account,
+                payload={"same": 1},
+                kind="manual",
+                label="before-upgrade",
             )
             db.commit()
             assert labeled.id != first.id
@@ -152,7 +165,9 @@ class TestUnpackAndDiff:
         db = next(get_session())
         try:
             snap_row = create_snapshot(
-                db, device_id=sample_device, account_id=sample_account,
+                db,
+                device_id=sample_device,
+                account_id=sample_account,
                 payload={"sites": [1, 2, 3]},
             )
             db.commit()
@@ -165,7 +180,9 @@ class TestUnpackAndDiff:
         try:
             big = {"k": "x" * 150_000}
             snap_row = create_snapshot(
-                db, device_id=sample_device, account_id=sample_account,
+                db,
+                device_id=sample_device,
+                account_id=sample_account,
                 payload=big,
             )
             db.commit()
@@ -178,12 +195,16 @@ class TestUnpackAndDiff:
         db = next(get_session())
         try:
             a = create_snapshot(
-                db, device_id=sample_device, account_id=sample_account,
+                db,
+                device_id=sample_device,
+                account_id=sample_account,
                 payload={"sites": ["a"]},
             )
             db.commit()
             b = create_snapshot(
-                db, device_id=sample_device, account_id=sample_account,
+                db,
+                device_id=sample_device,
+                account_id=sample_account,
                 payload={"sites": ["a", "b"]},
             )
             db.commit()
@@ -198,7 +219,9 @@ class TestListSnapshots:
         db = next(get_session())
         try:
             create_snapshot(
-                db, device_id=sample_device, account_id=sample_account,
+                db,
+                device_id=sample_device,
+                account_id=sample_account,
                 payload={"x": 1},
             )
             db.commit()
@@ -221,12 +244,18 @@ class TestRetention:
             # Produce 6 auto snapshots with distinct payloads (dedup skips identical)
             for i in range(6):
                 create_snapshot(
-                    db, device_id=sample_device, account_id=sample_account,
+                    db,
+                    device_id=sample_device,
+                    account_id=sample_account,
                     payload={"version": i},
                 )
             create_snapshot(
-                db, device_id=sample_device, account_id=sample_account,
-                payload={"version": 99}, kind="manual", label="keep-me",
+                db,
+                device_id=sample_device,
+                account_id=sample_account,
+                payload={"version": 99},
+                kind="manual",
+                label="keep-me",
             )
             db.commit()
 
@@ -242,9 +271,11 @@ class TestRetention:
             assert deleted >= 1
             # Labeled survives
             remaining_labels = [
-                s.label for s in db.scalars(
-                    snap.select(DeviceSnapshot)  # type: ignore[attr-defined]
-                    .where(DeviceSnapshot.device_id == sample_device)
+                s.label
+                for s in db.scalars(
+                    snap.select(DeviceSnapshot).where(  # type: ignore[attr-defined]
+                        DeviceSnapshot.device_id == sample_device
+                    )
                 ).all()
                 if s.label is not None
             ]

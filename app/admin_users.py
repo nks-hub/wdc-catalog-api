@@ -11,19 +11,18 @@ HTML pages that share the same data will be added in a later step.
 from __future__ import annotations
 
 import secrets as _secrets
-import uuid
 from datetime import datetime, timezone
-from typing import Annotated, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import audit
 from ._cache import invalidate_stats
 from .auth import hash_password
-from .db import Account, DeviceConfig, IdempotencyRecord, RevokedToken, get_session
+from .db import Account, DeviceConfig, RevokedToken, get_session
 from .permissions import require_role
 from .roles import Role
 
@@ -31,6 +30,7 @@ router = APIRouter(prefix="/api/v1/admin/users", tags=["admin:users"])
 
 
 # ── Response models ────────────────────────────────────────────────────
+
 
 class AdminUserRow(BaseModel):
     id: int
@@ -52,7 +52,9 @@ class AdminUserList(BaseModel):
 
 
 class ChangeRoleRequest(BaseModel):
-    role: Role = Field(..., description="New role. Only `owner` may assign/remove `owner`.")
+    role: Role = Field(
+        ..., description="New role. Only `owner` may assign/remove `owner`."
+    )
 
 
 class SessionSummary(BaseModel):
@@ -77,10 +79,13 @@ class SessionDetail(SessionSummary):
 
 class ResetPasswordResponse(BaseModel):
     email: str
-    temp_password: str = Field(..., description="One-time password — show once, never again.")
+    temp_password: str = Field(
+        ..., description="One-time password — show once, never again."
+    )
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
+
 
 def _row(account: Account, device_count: int) -> AdminUserRow:
     return AdminUserRow(
@@ -89,7 +94,9 @@ def _row(account: Account, device_count: int) -> AdminUserRow:
         role=account.role,
         suspended=account.suspended_at is not None,
         created_at=account.created_at.isoformat() if account.created_at else None,
-        last_login_at=account.last_login_at.isoformat() if account.last_login_at else None,
+        last_login_at=account.last_login_at.isoformat()
+        if account.last_login_at
+        else None,
         device_count=device_count,
     )
 
@@ -117,6 +124,7 @@ def _revoke_all_for(db: Session, account_id: int, *, reason: str) -> int:
 
 
 # ── Endpoints ───────────────────────────────────────────────────────────
+
 
 @router.get("", response_model=AdminUserList)
 def list_users(
@@ -194,13 +202,20 @@ def change_role(
     new_role = body.role
 
     if new_role == Role.owner and caller_role != Role.owner:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only owners can assign owner role")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only owners can assign owner role"
+        )
     if target_role == Role.owner and caller_role != Role.owner:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only owners can modify an owner")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only owners can modify an owner"
+        )
     if target_role == Role.owner and new_role != Role.owner:
-        remaining = db.scalar(
-            select(func.count(Account.id)).where(Account.role == Role.owner.value)
-        ) or 0
+        remaining = (
+            db.scalar(
+                select(func.count(Account.id)).where(Account.role == Role.owner.value)
+            )
+            or 0
+        )
         if remaining <= 1:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
@@ -212,13 +227,22 @@ def change_role(
     db.flush()
     invalidate_stats()
     audit.emit(
-        db, actor=caller, action="user.role_changed", request=request,
-        resource_type="account", resource_id=target.id,
+        db,
+        actor=caller,
+        action="user.role_changed",
+        request=request,
+        resource_type="account",
+        resource_id=target.id,
         detail={"from": old_role, "to": new_role.value, "target_email": target.email},
     )
-    device_count = db.scalar(
-        select(func.count(DeviceConfig.device_id)).where(DeviceConfig.user_id == user_id)
-    ) or 0
+    device_count = (
+        db.scalar(
+            select(func.count(DeviceConfig.device_id)).where(
+                DeviceConfig.user_id == user_id
+            )
+        )
+        or 0
+    )
     return _row(target, device_count)
 
 
@@ -231,7 +255,9 @@ def suspend_user(
 ) -> AdminUserRow:
     target = _target_or_404(db, user_id)
     if Role(target.role) == Role.owner:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot suspend an owner account")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Cannot suspend an owner account"
+        )
     target.suspended_at = datetime.now(timezone.utc)
     # Revoke every outstanding token for the suspended account so the
     # session can't limp along until the next natural expiry.
@@ -239,13 +265,22 @@ def suspend_user(
     db.flush()
     invalidate_stats()
     audit.emit(
-        db, actor=caller, action="user.suspended", request=request,
-        resource_type="account", resource_id=target.id,
+        db,
+        actor=caller,
+        action="user.suspended",
+        request=request,
+        resource_type="account",
+        resource_id=target.id,
         detail={"target_email": target.email},
     )
-    device_count = db.scalar(
-        select(func.count(DeviceConfig.device_id)).where(DeviceConfig.user_id == user_id)
-    ) or 0
+    device_count = (
+        db.scalar(
+            select(func.count(DeviceConfig.device_id)).where(
+                DeviceConfig.user_id == user_id
+            )
+        )
+        or 0
+    )
     return _row(target, device_count)
 
 
@@ -261,13 +296,22 @@ def resume_user(
     db.flush()
     invalidate_stats()
     audit.emit(
-        db, actor=caller, action="user.resumed", request=request,
-        resource_type="account", resource_id=target.id,
+        db,
+        actor=caller,
+        action="user.resumed",
+        request=request,
+        resource_type="account",
+        resource_id=target.id,
         detail={"target_email": target.email},
     )
-    device_count = db.scalar(
-        select(func.count(DeviceConfig.device_id)).where(DeviceConfig.user_id == user_id)
-    ) or 0
+    device_count = (
+        db.scalar(
+            select(func.count(DeviceConfig.device_id)).where(
+                DeviceConfig.user_id == user_id
+            )
+        )
+        or 0
+    )
     return _row(target, device_count)
 
 
@@ -291,8 +335,12 @@ def reset_password(
     _revoke_all_for(db, target.id, reason="password-reset")
     db.flush()
     audit.emit(
-        db, actor=caller, action="user.password_reset", request=request,
-        resource_type="account", resource_id=target.id,
+        db,
+        actor=caller,
+        action="user.password_reset",
+        request=request,
+        resource_type="account",
+        resource_id=target.id,
         detail={"target_email": target.email},
     )
     return ResetPasswordResponse(email=target.email, temp_password=temp)
@@ -310,6 +358,7 @@ def list_sessions(
     exposes password hashes or raw tokens."""
     target = _target_or_404(db, user_id)
     from datetime import datetime, timezone
+
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     revoked_rows = db.scalars(
         select(RevokedToken)
@@ -317,15 +366,22 @@ def list_sessions(
         .order_by(RevokedToken.revoked_at.desc())
     ).all()
     active = [r for r in revoked_rows if r.expires_at is None or r.expires_at > now]
-    device_count = db.scalar(
-        select(func.count(DeviceConfig.device_id)).where(DeviceConfig.user_id == user_id)
-    ) or 0
+    device_count = (
+        db.scalar(
+            select(func.count(DeviceConfig.device_id)).where(
+                DeviceConfig.user_id == user_id
+            )
+        )
+        or 0
+    )
     return SessionDetail(
         email=target.email,
         token_version=target.token_version,
         revoked_tokens_active=len(active),
         devices_linked=device_count,
-        last_login_at=target.last_login_at.isoformat() if target.last_login_at else None,
+        last_login_at=target.last_login_at.isoformat()
+        if target.last_login_at
+        else None,
         suspended=target.suspended_at is not None,
         revoked_tokens=[
             RevokedTokenRow(
@@ -356,13 +412,25 @@ def revoke_user_tokens(
     _revoke_all_for(db, target.id, reason="admin-revoke")
     db.flush()
     audit.emit(
-        db, actor=caller, action="user.tokens_revoked", request=request,
-        resource_type="account", resource_id=target.id,
-        detail={"target_email": target.email, "new_token_version": target.token_version},
+        db,
+        actor=caller,
+        action="user.tokens_revoked",
+        request=request,
+        resource_type="account",
+        resource_id=target.id,
+        detail={
+            "target_email": target.email,
+            "new_token_version": target.token_version,
+        },
     )
-    device_count = db.scalar(
-        select(func.count(DeviceConfig.device_id)).where(DeviceConfig.user_id == user_id)
-    ) or 0
+    device_count = (
+        db.scalar(
+            select(func.count(DeviceConfig.device_id)).where(
+                DeviceConfig.user_id == user_id
+            )
+        )
+        or 0
+    )
     return _row(target, device_count)
 
 
@@ -380,8 +448,12 @@ def delete_user(
     if target.id == caller.id:
         raise HTTPException(status.HTTP_409_CONFLICT, "Cannot delete your own account")
     audit.emit(
-        db, actor=caller, action="user.deleted", request=request,
-        resource_type="account", resource_id=target.id,
+        db,
+        actor=caller,
+        action="user.deleted",
+        request=request,
+        resource_type="account",
+        resource_id=target.id,
         detail={"target_email": target.email},
     )
     db.delete(target)

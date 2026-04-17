@@ -30,19 +30,25 @@ def _register(client, *, role=Role.user):
             db.commit()
         finally:
             db.close()
-    tok = client.post("/api/v1/auth/login", json={"email": email, "password": pwd}).json()["token"]
+    tok = client.post(
+        "/api/v1/auth/login", json={"email": email, "password": pwd}
+    ).json()["token"]
     return tok
 
 
 def test_stats_requires_support(client):
     tok = _register(client)
-    r = client.get("/api/v1/admin/stats/overview", headers={"Authorization": f"Bearer {tok}"})
+    r = client.get(
+        "/api/v1/admin/stats/overview", headers={"Authorization": f"Bearer {tok}"}
+    )
     assert r.status_code == 403
 
 
 def test_stats_overview_for_admin(client):
     tok = _register(client, role=Role.admin)
-    r = client.get("/api/v1/admin/stats/overview", headers={"Authorization": f"Bearer {tok}"})
+    r = client.get(
+        "/api/v1/admin/stats/overview", headers={"Authorization": f"Bearer {tok}"}
+    )
     assert r.status_code == 200
     body = r.json()
     assert "catalog" in body and "users" in body and "audit" in body
@@ -54,8 +60,10 @@ def test_stats_overview_for_admin(client):
 def test_stats_counts_suspended(client):
     tok_admin = _register(client, role=Role.admin)
     victim_email = f"stats-victim-{uuid.uuid4().hex[:8]}@nks-wdc.dev"
-    client.post("/api/v1/auth/register",
-                json={"email": victim_email, "password": "pass12345678"})
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": victim_email, "password": "pass12345678"},
+    )
     db = next(get_session())
     try:
         victim_id = db.query(Account.id).filter(Account.email == victim_email).scalar()

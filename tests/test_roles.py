@@ -15,8 +15,14 @@ def test_role_string_values_are_stable():
 
 
 def test_role_rank_is_monotone():
-    ranks = [Role.readonly.rank, Role.user.rank, Role.support.rank,
-             Role.operator.rank, Role.admin.rank, Role.owner.rank]
+    ranks = [
+        Role.readonly.rank,
+        Role.user.rank,
+        Role.support.rank,
+        Role.operator.rank,
+        Role.admin.rank,
+        Role.owner.rank,
+    ]
     assert ranks == sorted(ranks)
     assert len(set(ranks)) == len(ranks)
 

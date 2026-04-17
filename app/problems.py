@@ -46,6 +46,7 @@ def _phrase(status_code: int) -> str:
 def _request_id(request: Request) -> str | None:
     try:
         from .observability import request_id_var
+
         rid = request_id_var.get()
         return rid if rid and rid != "-" else None
     except Exception:  # pragma: no cover

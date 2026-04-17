@@ -68,7 +68,9 @@ def test_admin_can_bulk_revoke_user_tokens(client):
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert revoke.status_code == 200
-    r2 = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {user_token}"})
+    r2 = client.get(
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {user_token}"}
+    )
     assert r2.status_code == 401
 
 

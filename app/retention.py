@@ -93,9 +93,12 @@ def _batched_delete(session: Session, model, filter_expr) -> int:
         # only those (portable across both sqlite + pg without relying on
         # LIMIT inside DELETE).
         pk_col = list(model.__table__.primary_key.columns)[0]
-        ids = [row[0] for row in session.execute(
-            select(pk_col).where(filter_expr).limit(_SQLITE_BATCH_SIZE)
-        ).all()]
+        ids = [
+            row[0]
+            for row in session.execute(
+                select(pk_col).where(filter_expr).limit(_SQLITE_BATCH_SIZE)
+            ).all()
+        ]
         if not ids:
             break
         res = session.execute(delete(model).where(pk_col.in_(ids)))
@@ -123,11 +126,13 @@ def _do_retention(session: Session) -> dict:
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     idempotency_purged = _batched_delete(
-        session, IdempotencyRecord,
+        session,
+        IdempotencyRecord,
         IdempotencyRecord.expires_at <= now,
     )
     revoked_purged = _batched_delete(
-        session, RevokedToken,
+        session,
+        RevokedToken,
         (RevokedToken.expires_at.is_not(None)) & (RevokedToken.expires_at <= now),
     )
     return {
@@ -153,6 +158,7 @@ def _try_acquire_leader_lock(session: Session) -> bool:
     automatically on ``session.close()``.
     """
     from sqlalchemy import text
+
     dialect = session.bind.dialect.name if session.bind else ""
     if dialect != "postgresql":
         return True
@@ -198,6 +204,7 @@ def run_retention(db: Optional[Session] = None) -> dict:
 
     try:
         from .observability import RETENTION_DELETED
+
         RETENTION_DELETED.inc(summary.get("deleted", 0))
     except Exception:
         pass
@@ -225,9 +232,13 @@ def start_scheduler() -> None:
     try:
         trigger = CronTrigger.from_crontab(cron, timezone="UTC")
     except Exception as exc:
-        log.warning("Invalid NKS_WDC_RETENTION_CRON=%s: %s — defaulting daily 03:00", cron, exc)
+        log.warning(
+            "Invalid NKS_WDC_RETENTION_CRON=%s: %s — defaulting daily 03:00", cron, exc
+        )
         trigger = CronTrigger.from_crontab("0 3 * * *", timezone="UTC")
-    sched.add_job(_scheduled_retention, trigger, id="retention-daily", replace_existing=True)
+    sched.add_job(
+        _scheduled_retention, trigger, id="retention-daily", replace_existing=True
+    )
     sched.start()
     _scheduler = sched
     log.info("retention scheduler started (cron=%s)", cron)
@@ -242,6 +253,7 @@ def _scheduled_retention() -> dict:
     and its logs can't be traced alongside request handlers.
     """
     import uuid
+
     try:
         from .observability import request_id_var
     except Exception:

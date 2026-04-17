@@ -60,15 +60,14 @@ def master_key() -> bytes:
         key = env.encode("utf-8") if isinstance(env, str) else env
         if len(key) < _AES_KEY_BYTES:
             import hashlib
+
             key = hashlib.sha256(key).digest()
         return key[:_AES_KEY_BYTES]
     if os.environ.get("NKS_WDC_CATALOG_DEV") == "1":
         if _EPHEMERAL_MASTER_KEY is None:
             _EPHEMERAL_MASTER_KEY = AESGCM.generate_key(bit_length=256)
         return _EPHEMERAL_MASTER_KEY
-    raise MasterKeyMissing(
-        "NKS_WDC_MASTER_KEY must be set for snapshot encryption."
-    )
+    raise MasterKeyMissing("NKS_WDC_MASTER_KEY must be set for snapshot encryption.")
 
 
 def _derive_kek(account_id: int, salt: bytes) -> bytes:
@@ -83,6 +82,7 @@ def _derive_kek(account_id: int, salt: bytes) -> bytes:
 
 
 # ── DEK lifecycle ──────────────────────────────────────────────────────
+
 
 def generate_dek() -> bytes:
     return AESGCM.generate_key(bit_length=256)
@@ -107,6 +107,7 @@ def _aad(account_id: int) -> bytes:
 
 
 # ── Payload encryption ─────────────────────────────────────────────────
+
 
 def encrypt_payload(
     plaintext: bytes, dek: bytes, *, aad: Optional[bytes] = None
@@ -147,6 +148,7 @@ def derive_key_from_passphrase(passphrase: str, salt: bytes) -> bytes:
     if len(salt) < 16:
         raise ValueError("Salt must be at least 16 bytes")
     from argon2.low_level import Type, hash_secret_raw
+
     return hash_secret_raw(
         secret=passphrase.encode("utf-8"),
         salt=salt,

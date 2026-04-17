@@ -24,6 +24,7 @@ log = logging.getLogger(__name__)
 
 # ── Read side — assemble the CatalogDocument for the public API ────────
 
+
 def build_catalog_document(db: Session) -> CatalogDocument:
     apps = db.scalars(
         select(App).options(selectinload(App.releases).selectinload(Release.downloads))
@@ -80,6 +81,7 @@ def _app_to_schema(app: App) -> AppDoc:
 
 # ── Write side — CRUD used by admin UI + auto-generators ───────────────
 
+
 def list_apps(db: Session) -> list[App]:
     return list(db.scalars(select(App).order_by(App.id)).all())
 
@@ -94,6 +96,7 @@ def _invalidate_catalog_cache() -> None:
     is disabled in tests."""
     try:
         from ._cache import invalidate_catalog
+
         invalidate_catalog()
     except Exception:
         pass
@@ -245,6 +248,7 @@ def _major_minor(version: str) -> str:
 
 # ── Auto-generator integration ──────────────────────────────────────────
 
+
 def apply_generated_releases(
     db: Session,
     app_id: str,
@@ -280,21 +284,24 @@ def apply_generated_releases(
         db.add(rel)
         db.flush()  # need rel.id for downloads
         for gd in gen.downloads:
-            db.add(Download(
-                release_id=rel.id,
-                url=gd.url,
-                os=gd.os,
-                arch=gd.arch,
-                archive_type=gd.archive_type,
-                source=gd.source,
-                headers=gd.headers,
-            ))
+            db.add(
+                Download(
+                    release_id=rel.id,
+                    url=gd.url,
+                    os=gd.os,
+                    arch=gd.arch,
+                    archive_type=gd.archive_type,
+                    source=gd.source,
+                    headers=gd.headers,
+                )
+            )
         inserted += 1
     db.commit()
     return inserted
 
 
 # ── Seed from existing JSON files on first run ──────────────────────────
+
 
 def seed_from_json(db: Session, data_dir: Path) -> int:
     """If the DB has zero apps, import every `*.json` file under
@@ -327,22 +334,25 @@ def seed_from_json(db: Session, data_dir: Path) -> int:
                 rel = Release(
                     app_id=app.id,
                     version=r.get("version", "0.0.0"),
-                    major_minor=r.get("major_minor") or _major_minor(r.get("version", "0.0.0")),
+                    major_minor=r.get("major_minor")
+                    or _major_minor(r.get("version", "0.0.0")),
                     channel=r.get("channel", "stable"),
                     released_at=r.get("released_at"),
                 )
                 db.add(rel)
                 db.flush()
                 for d in r.get("downloads", []):
-                    db.add(Download(
-                        release_id=rel.id,
-                        url=d.get("url", ""),
-                        os=d.get("os", "windows"),
-                        arch=d.get("arch", "x64"),
-                        archive_type=d.get("archive_type", "zip"),
-                        source=d.get("source", "seed"),
-                        headers=d.get("headers"),
-                    ))
+                    db.add(
+                        Download(
+                            release_id=rel.id,
+                            url=d.get("url", ""),
+                            os=d.get("os", "windows"),
+                            arch=d.get("arch", "x64"),
+                            archive_type=d.get("archive_type", "zip"),
+                            source=d.get("source", "seed"),
+                            headers=d.get("headers"),
+                        )
+                    )
             count += 1
         except Exception as exc:  # noqa: BLE001
             log.error("Seed parse failed for %s: %s", path, exc)

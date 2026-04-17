@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -111,6 +110,7 @@ class TestChangeRole:
         db = next(get_session())
         try:
             from sqlalchemy import func, select as _sel
+
             owner_count = db.scalar(
                 _sel(func.count(Account.id)).where(Account.role == Role.owner.value)
             )

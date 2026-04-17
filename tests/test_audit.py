@@ -7,7 +7,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
-from app.db import Account, AuditEvent, get_session
+from app.db import Account, get_session
 from app.main import app
 from app.roles import Role
 
@@ -80,7 +80,8 @@ def test_role_change_emits_audit_event(client):
     body = audit_r.json()
     assert body["total"] >= 1
     row = next(
-        i for i in body["items"]
+        i
+        for i in body["items"]
         if i["action"] == "user.role_changed" and i["resource_id"] == str(target_id)
     )
     assert row["actor_email"] == admin_email

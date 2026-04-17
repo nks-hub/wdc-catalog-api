@@ -126,10 +126,15 @@ def wrap_json(
 ) -> JSONResponse:
     """Convenience: serialize payload, persist it, return the JSONResponse."""
     import json as _json
+
     body = _json.dumps(payload).encode("utf-8")
     persist(
-        db, request, account,
-        status_code=status_code, body=body, content_type="application/json",
+        db,
+        request,
+        account,
+        status_code=status_code,
+        body=body,
+        content_type="application/json",
     )
     return JSONResponse(status_code=status_code, content=payload)
 

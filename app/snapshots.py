@@ -96,6 +96,7 @@ def _pack_from_raw(
             checksum=checksum,
         )
     from . import blob_store
+
     if blob_store.is_configured():
         uri = blob_store.upload(compressed, account_id=account_id)
         return PackedPayload(
@@ -139,6 +140,7 @@ def pack_payload(payload: dict, *, account_id: Optional[int] = None) -> PackedPa
         )
     # Overflow — upload to S3/MinIO if operator opted in.
     from . import blob_store
+
     if blob_store.is_configured():
         uri = blob_store.upload(compressed, account_id=account_id)
         return PackedPayload(
@@ -168,6 +170,7 @@ def unpack_payload(
         raw = snap.payload_blob
     elif snap.blob_uri is not None:
         from . import blob_store
+
         raw = blob_store.download(snap.blob_uri)
     else:
         raise RuntimeError(f"Snapshot {snap.id} has no payload lane populated")
@@ -175,7 +178,10 @@ def unpack_payload(
         if db is None:
             raise RuntimeError("Cannot unpack encrypted snapshot without a DB session")
         raw = _decrypt_with_kid(
-            db, snap.encryption_kid, snap.account_id, raw,
+            db,
+            snap.encryption_kid,
+            snap.account_id,
+            raw,
             passphrase=passphrase,
         )
     if snap.compression == "zstd":
@@ -184,6 +190,7 @@ def unpack_payload(
 
 
 # ── Encryption helpers ─────────────────────────────────────────────────
+
 
 def _active_key(
     db: Session, account_id: int, *, passphrase: Optional[str] = None
@@ -195,15 +202,19 @@ def _active_key(
     supply the same passphrase — the server cannot unwrap it otherwise.
     When absent, fallback to the master-key (KMS/env) Variant A.
     """
-    filters = [AccountEncryptionKey.account_id == account_id,
-               AccountEncryptionKey.retired_at.is_(None)]
+    filters = [
+        AccountEncryptionKey.account_id == account_id,
+        AccountEncryptionKey.retired_at.is_(None),
+    ]
     if passphrase is not None:
         filters.append(AccountEncryptionKey.kek_source == "password-derived")
     else:
         filters.append(AccountEncryptionKey.kek_source != "password-derived")
     row = db.scalar(
-        select(AccountEncryptionKey).where(*filters)
-        .order_by(AccountEncryptionKey.created_at.desc()).limit(1)
+        select(AccountEncryptionKey)
+        .where(*filters)
+        .order_by(AccountEncryptionKey.created_at.desc())
+        .limit(1)
     )
     if row is not None:
         return row
@@ -251,9 +262,9 @@ def _pack_wrapped_dek(wrapped: bytes, salt: bytes) -> bytes:
 
 def _unpack_wrapped_dek(blob: bytes) -> tuple[bytes, bytes]:
     if blob.startswith(_WRAPPED_DEK_MAGIC):
-        body = blob[len(_WRAPPED_DEK_MAGIC):]
+        body = blob[len(_WRAPPED_DEK_MAGIC) :]
         n = int.from_bytes(body[:4], "big")
-        return body[4:4 + n], body[4 + n:]
+        return body[4 : 4 + n], body[4 + n :]
     # Legacy rows written before the v1 magic — fall back to the old
     # separator-based partition. New writes always go through the
     # length-prefixed format, so this branch is read-only.
@@ -368,6 +379,7 @@ def create_snapshot(
     set_head(db, device_id, snap.id, updated_by=kind)
     try:
         from .observability import SNAPSHOTS_CREATED
+
         SNAPSHOTS_CREATED.labels(kind=kind).inc()
     except Exception:
         pass  # metrics are optional — never fail a write because of them
@@ -434,6 +446,7 @@ def diff(
 ) -> list[dict]:
     """RFC 6902 JSON Patch going *from* ``a`` *to* ``b``."""
     import jsonpatch
+
     payload_a = unpack_payload(a, db=db)
     payload_b = unpack_payload(b, db=db)
     return list(jsonpatch.make_patch(payload_a, payload_b).patch)
@@ -485,11 +498,15 @@ def purge_auto_older_than(
             if snap.blob_uri:
                 try:
                     from . import blob_store
+
                     blob_store.delete(snap.blob_uri)
                 except Exception as exc:  # noqa: BLE001
                     import logging as _log
+
                     _log.getLogger(__name__).warning(
-                        "failed to delete blob %s: %s", snap.blob_uri, exc,
+                        "failed to delete blob %s: %s",
+                        snap.blob_uri,
+                        exc,
                     )
             db.delete(snap)
             deleted += 1

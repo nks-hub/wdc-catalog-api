@@ -13,13 +13,12 @@ base64-encoded payload separated by `.`.
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -46,6 +45,7 @@ def _serializer() -> URLSafeTimedSerializer:
 
 # ── Schemas ─────────────────────────────────────────────────────────────
 
+
 class CreateInviteRequest(BaseModel):
     email: str = Field(..., max_length=128)
     role: Role = Role.user
@@ -71,6 +71,7 @@ class AcceptInviteResponse(BaseModel):
 
 
 # ── Admin endpoints ─────────────────────────────────────────────────────
+
 
 @admin_router.post("")
 def create_invite(
@@ -109,13 +110,19 @@ def create_invite(
     token = _serializer().dumps(payload)
 
     audit.emit(
-        db, actor=caller, action="invite.created", request=request,
-        resource_type="invite", resource_id=email,
+        db,
+        actor=caller,
+        action="invite.created",
+        request=request,
+        resource_type="invite",
+        resource_id=email,
         detail={"role": body.role.value, "expires_at": expires.isoformat()},
     )
 
     return idempotency.wrap_json(
-        db, request, caller,
+        db,
+        request,
+        caller,
         CreateInviteResponse(
             token=token,
             email=email,
@@ -127,6 +134,7 @@ def create_invite(
 
 
 # ── Public accept endpoint ──────────────────────────────────────────────
+
 
 @public_router.post("/accept-invite", response_model=AcceptInviteResponse)
 @limiter.limit("10/hour")
@@ -164,8 +172,12 @@ def accept_invite(
     db.flush()
     account.last_login_at = datetime.now(timezone.utc)
     audit.emit(
-        db, actor=None, action="invite.accepted", request=request,
-        resource_type="account", resource_id=account.id,
+        db,
+        actor=None,
+        action="invite.accepted",
+        request=request,
+        resource_type="account",
+        resource_id=account.id,
         detail={"email": email, "role": role.value},
     )
     token = create_token(account.id, email, token_version=account.token_version)

@@ -32,7 +32,16 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Iterator
 
-from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request, Response, status
+from fastapi import (
+    Cookie,
+    Depends,
+    FastAPI,
+    Form,
+    HTTPException,
+    Request,
+    Response,
+    status,
+)
 
 from .csrf import require_csrf
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,7 +57,6 @@ from .auth import (
     SESSION_MAX_AGE,
     current_user,
     ensure_admin_user,
-    hash_password,
     issue_session,
     optional_user,
     verify_password,
@@ -58,7 +66,6 @@ from .devices import router as devices_router, optional_account, get_current_acc
 from .generators import GENERATORS, run_generator
 from .schemas import (
     AppDoc,
-    CatalogDocument,
     ConfigSyncEntry,
     ConfigSyncListResponse,
     ConfigSyncUploadRequest,
@@ -98,6 +105,7 @@ async def lifespan(_app: FastAPI) -> Iterator[None]:
         if count:
             log.info("Seeded %d apps from %s", count, _SEED_DIR)
     from . import retention as _retention
+
     _retention.start_scheduler()
     try:
         yield
@@ -128,9 +136,9 @@ if os.environ.get("NKS_WDC_CATALOG_ALLOW_CORS") == "1":
 
 # Rate limiting — protects auth + sync endpoints from brute force + DoS.
 # Tests opt out with NKS_WDC_DISABLE_RATE_LIMITS=1.
-from slowapi.errors import RateLimitExceeded
+from slowapi.errors import RateLimitExceeded  # noqa: E402
 
-from .ratelimit import limiter
+from .ratelimit import limiter  # noqa: E402
 
 app.state.limiter = limiter
 
@@ -141,6 +149,7 @@ async def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONR
     # ``application/problem+json`` shape — the raw 429 used to leak a
     # plain ``{"detail": ...}`` body outside the problem contract.
     from .problems import problem_response
+
     return problem_response(
         request,
         429,
@@ -162,6 +171,7 @@ async def _limit_payload_size(request: Request, call_next):
         try:
             if int(cl) > MAX_REQUEST_BYTES:
                 from .problems import problem_response
+
                 return problem_response(
                     request,
                     413,
@@ -174,11 +184,15 @@ async def _limit_payload_size(request: Request, call_next):
     # Keep the CSRF cookie fresh on every admin-UI HTML response so forms
     # always have a valid token paired with the session. Ignored by JSON
     # API consumers (they don't render HTML and don't inspect it).
-    if request.url.path.startswith(("/admin", "/login")) and "text/html" in response.headers.get("content-type", ""):
+    if request.url.path.startswith(
+        ("/admin", "/login")
+    ) and "text/html" in response.headers.get("content-type", ""):
         from .csrf import ensure_csrf_cookie
+
         existing = request.cookies.get("nks_wdc_csrf")
         ensure_csrf_cookie(response, existing)
     return response
+
 
 # Mount the accounts + devices router (JWT-authenticated endpoints)
 app.include_router(devices_router)
@@ -243,6 +257,7 @@ def _base_context(request: Request, username: str | None, **extra) -> dict:
 # Health
 # ─────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/healthz", tags=["health"])
 def healthz(db: Session = Depends(get_session)) -> JSONResponse:
     """Liveness + readiness probe — verifies DB connectivity.
@@ -254,7 +269,12 @@ def healthz(db: Session = Depends(get_session)) -> JSONResponse:
     try:
         db.execute(select(1)).scalar()
         return JSONResponse(
-            {"ok": True, "service": "nks-wdc-catalog-api", "version": __version__, "db": "up"}
+            {
+                "ok": True,
+                "service": "nks-wdc-catalog-api",
+                "version": __version__,
+                "db": "up",
+            }
         )
     except Exception as exc:
         log.warning("healthz db probe failed: %s", exc)
@@ -284,12 +304,16 @@ def api_get_catalog(request: Request, db: Session = Depends(get_session)) -> Res
     Admin mutations invalidate the cache via ``invalidate_catalog()``.
     """
     from ._cache import catalog_response_cache
+
     cached = catalog_response_cache.get("catalog")
     if cached is None:
         import hashlib
+
         doc = build_catalog_document(db)
         apps_dump = doc.model_dump(by_alias=True, include={"apps", "schema_version"})
-        etag_seed = json.dumps(apps_dump, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        etag_seed = json.dumps(apps_dump, sort_keys=True, separators=(",", ":")).encode(
+            "utf-8"
+        )
         etag = '"' + hashlib.sha256(etag_seed).hexdigest()[:16] + '"'
 
         # Reuse previous ``generated_at`` when content didn't change —
@@ -337,7 +361,8 @@ def api_get_app(app_name: str, db: Session = Depends(get_session)) -> AppDoc:
 # device_configs table. This is defence-in-depth — SQLAlchemy already
 # parameterizes the SQL, so the risk is cosmetic storage pollution, not
 # injection.
-import re as _re
+import re as _re  # noqa: E402
+
 _DEVICE_ID_RE = _re.compile(r"^[a-z0-9][a-z0-9-]{2,63}$")
 
 
@@ -419,6 +444,7 @@ def api_upsert_config(
     # attribute storage against.
     if account is not None:
         from . import snapshots as _snap
+
         try:
             _snap.create_snapshot(
                 db,
@@ -434,7 +460,8 @@ def api_upsert_config(
             # detect a growing cohort of oversized syncs.
             log.warning(
                 "sync bridge skipped snapshot for device=%s: %s",
-                device_id, exc,
+                device_id,
+                exc,
             )
 
     return ConfigSyncEntry(
@@ -468,7 +495,9 @@ def _require_owned_row(
     return row
 
 
-@app.get("/api/v1/sync/config/{device_id}", response_model=ConfigSyncEntry, tags=["sync"])
+@app.get(
+    "/api/v1/sync/config/{device_id}", response_model=ConfigSyncEntry, tags=["sync"]
+)
 def api_get_config(
     device_id: str,
     account: Account = Depends(get_current_account),
@@ -496,9 +525,7 @@ def api_head_config(
         return Response(status_code=status.HTTP_404_NOT_FOUND)
     headers = {}
     if row.updated_at is not None:
-        headers["Last-Modified"] = row.updated_at.strftime(
-            "%a, %d %b %Y %H:%M:%S GMT"
-        )
+        headers["Last-Modified"] = row.updated_at.strftime("%a, %d %b %Y %H:%M:%S GMT")
     return Response(status_code=status.HTTP_200_OK, headers=headers)
 
 
@@ -548,6 +575,7 @@ def api_delete_config(
 # Auth (login / logout / session cookie)
 # ─────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/", include_in_schema=False)
 def root(user: Annotated[str | None, Depends(optional_user)] = None):
     return RedirectResponse("/admin" if user else "/login")
@@ -555,7 +583,9 @@ def root(user: Annotated[str | None, Depends(optional_user)] = None):
 
 @app.get("/login", response_class=HTMLResponse, include_in_schema=False)
 def login_form(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "login.html", _base_context(request, None))
+    return templates.TemplateResponse(
+        request, "login.html", _base_context(request, None)
+    )
 
 
 @app.post("/login", include_in_schema=False, dependencies=[Depends(require_csrf)])
@@ -600,7 +630,9 @@ def logout() -> RedirectResponse:
 from .cookies import cookie_secure as _cookie_secure  # noqa: E402  — re-export for legacy callsites
 
 
-def _redirect(url: str, flash_kind: str | None = None, flash_message: str | None = None) -> RedirectResponse:
+def _redirect(
+    url: str, flash_kind: str | None = None, flash_message: str | None = None
+) -> RedirectResponse:
     response = RedirectResponse(url, status_code=status.HTTP_303_SEE_OTHER)
     if flash_kind and flash_message:
         # Flash via short-lived cookie so the next GET picks it up.
@@ -707,7 +739,9 @@ def admin_app_detail(
     return response
 
 
-@app.get("/admin/apps/{app_id}/edit", response_class=HTMLResponse, include_in_schema=False)
+@app.get(
+    "/admin/apps/{app_id}/edit", response_class=HTMLResponse, include_in_schema=False
+)
 def admin_edit_app(
     request: Request,
     app_id: str,
@@ -724,7 +758,11 @@ def admin_edit_app(
     )
 
 
-@app.post("/admin/apps/{app_id}/edit", include_in_schema=False, dependencies=[Depends(require_csrf)])
+@app.post(
+    "/admin/apps/{app_id}/edit",
+    include_in_schema=False,
+    dependencies=[Depends(require_csrf)],
+)
 def admin_save_app(
     app_id: str,
     username: Annotated[str, Depends(current_user)],
@@ -736,7 +774,8 @@ def admin_save_app(
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
     app_row = update_app(
-        db, app_id,
+        db,
+        app_id,
         display_name=display_name,
         category=category,
         description=description,
@@ -748,7 +787,11 @@ def admin_save_app(
     return _redirect(f"/admin/apps/{app_row.id}", "success", "Saved")
 
 
-@app.post("/admin/apps/{app_id}/delete", include_in_schema=False, dependencies=[Depends(require_csrf)])
+@app.post(
+    "/admin/apps/{app_id}/delete",
+    include_in_schema=False,
+    dependencies=[Depends(require_csrf)],
+)
 def admin_delete_app(
     app_id: str,
     username: Annotated[str, Depends(current_user)],
@@ -758,7 +801,11 @@ def admin_delete_app(
     return _redirect("/admin", "success", f"Deleted {app_id}")
 
 
-@app.post("/admin/apps/{app_id}/releases", include_in_schema=False, dependencies=[Depends(require_csrf)])
+@app.post(
+    "/admin/apps/{app_id}/releases",
+    include_in_schema=False,
+    dependencies=[Depends(require_csrf)],
+)
 def admin_add_release(
     app_id: str,
     username: Annotated[str, Depends(current_user)],
@@ -768,7 +815,9 @@ def admin_add_release(
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
     rel = add_release(
-        db, app_id, version,
+        db,
+        app_id,
+        version,
         channel=channel,
         released_at=released_at or None,
     )
@@ -777,7 +826,11 @@ def admin_add_release(
     return _redirect(f"/admin/apps/{app_id}", "success", f"Added {version}")
 
 
-@app.post("/admin/releases/{release_id}/delete", include_in_schema=False, dependencies=[Depends(require_csrf)])
+@app.post(
+    "/admin/releases/{release_id}/delete",
+    include_in_schema=False,
+    dependencies=[Depends(require_csrf)],
+)
 def admin_delete_release(
     release_id: int,
     username: Annotated[str, Depends(current_user)],
@@ -788,10 +841,16 @@ def admin_delete_release(
     rel = db.get(ReleaseModel, release_id)
     app_id = rel.app_id if rel else None
     delete_release(db, release_id)
-    return _redirect(f"/admin/apps/{app_id}" if app_id else "/admin", "success", "Release removed")
+    return _redirect(
+        f"/admin/apps/{app_id}" if app_id else "/admin", "success", "Release removed"
+    )
 
 
-@app.post("/admin/releases/{release_id}/downloads", include_in_schema=False, dependencies=[Depends(require_csrf)])
+@app.post(
+    "/admin/releases/{release_id}/downloads",
+    include_in_schema=False,
+    dependencies=[Depends(require_csrf)],
+)
 def admin_add_download(
     release_id: int,
     username: Annotated[str, Depends(current_user)],
@@ -808,13 +867,22 @@ def admin_add_download(
     if not rel:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown release")
     add_download(
-        db, release_id,
-        url=url, os=os, arch=arch, archive_type=archive_type, source=source,
+        db,
+        release_id,
+        url=url,
+        os=os,
+        arch=arch,
+        archive_type=archive_type,
+        source=source,
     )
     return _redirect(f"/admin/apps/{rel.app_id}", "success", "Download added")
 
 
-@app.post("/admin/downloads/{download_id}/delete", include_in_schema=False, dependencies=[Depends(require_csrf)])
+@app.post(
+    "/admin/downloads/{download_id}/delete",
+    include_in_schema=False,
+    dependencies=[Depends(require_csrf)],
+)
 def admin_delete_download(
     download_id: int,
     username: Annotated[str, Depends(current_user)],
@@ -828,10 +896,16 @@ def admin_delete_download(
         rel = db.get(ReleaseModel, dl.release_id)
         app_id = rel.app_id if rel else None
     delete_download(db, download_id)
-    return _redirect(f"/admin/apps/{app_id}" if app_id else "/admin", "success", "Download removed")
+    return _redirect(
+        f"/admin/apps/{app_id}" if app_id else "/admin", "success", "Download removed"
+    )
 
 
-@app.post("/admin/apps/{app_id}/auto-generate", include_in_schema=False, dependencies=[Depends(require_csrf)])
+@app.post(
+    "/admin/apps/{app_id}/auto-generate",
+    include_in_schema=False,
+    dependencies=[Depends(require_csrf)],
+)
 def admin_auto_generate(
     app_id: str,
     username: Annotated[str, Depends(current_user)],
@@ -842,7 +916,9 @@ def admin_auto_generate(
     if not app_row:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Unknown app '{app_id}'")
     if app_id.lower() not in GENERATORS:
-        return _redirect(f"/admin/apps/{app_id}", "error", f"No generator for '{app_id}'")
+        return _redirect(
+            f"/admin/apps/{app_id}", "error", f"No generator for '{app_id}'"
+        )
     releases = run_generator(app_id, limit=limit)
     inserted = apply_generated_releases(db, app_id, releases)
     return _redirect(

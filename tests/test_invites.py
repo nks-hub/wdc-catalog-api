@@ -71,7 +71,10 @@ def test_admin_cannot_invite_owner(client):
     _, admin_token = _register(client, role=Role.admin)
     r = client.post(
         "/api/v1/admin/invites",
-        json={"email": f"new-owner-{uuid.uuid4().hex[:8]}@nks-wdc.dev", "role": "owner"},
+        json={
+            "email": f"new-owner-{uuid.uuid4().hex[:8]}@nks-wdc.dev",
+            "role": "owner",
+        },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert r.status_code == 403

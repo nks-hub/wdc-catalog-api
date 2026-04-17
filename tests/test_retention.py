@@ -82,6 +82,7 @@ def test_try_acquire_leader_lock_returns_true_on_sqlite(client):
     """SQLite has no advisory lock primitive — helper must just say yes."""
     from app.db import get_session
     from app.retention import _try_acquire_leader_lock
+
     db = next(get_session())
     try:
         assert _try_acquire_leader_lock(db) is True

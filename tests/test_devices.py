@@ -19,19 +19,25 @@ _test_password = "testpass123"
 
 @pytest.fixture(scope="module")
 def auth_token(client: TestClient) -> str:
-    r = client.post("/api/v1/auth/register", json={
-        "email": _test_email,
-        "password": _test_password,
-    })
+    r = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": _test_email,
+            "password": _test_password,
+        },
+    )
     assert r.status_code == 200, f"Register failed ({r.status_code}): {r.text}"
     return r.json()["token"]
 
 
 def test_register_creates_account(client: TestClient) -> None:
-    r = client.post("/api/v1/auth/register", json={
-        "email": "another@nks-wdc.dev",
-        "password": "pass4567long",
-    })
+    r = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "another@nks-wdc.dev",
+            "password": "pass4567long",
+        },
+    )
     assert r.status_code == 200
     body = r.json()
     assert body["email"] == "another@nks-wdc.dev"
@@ -40,27 +46,36 @@ def test_register_creates_account(client: TestClient) -> None:
 
 def test_register_duplicate_email_rejects(client: TestClient, auth_token: str) -> None:
     # auth_token fixture registers test@nks-wdc.dev first, so this is a dup
-    r = client.post("/api/v1/auth/register", json={
-        "email": _test_email,
-        "password": "anything",
-    })
+    r = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": _test_email,
+            "password": "anything",
+        },
+    )
     assert r.status_code == 409
 
 
 def test_login_valid_credentials(client: TestClient) -> None:
-    r = client.post("/api/v1/auth/login", json={
-        "email": _test_email,
-        "password": "testpass123",
-    })
+    r = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": _test_email,
+            "password": "testpass123",
+        },
+    )
     assert r.status_code == 200
     assert r.json()["email"] == _test_email
 
 
 def test_login_bad_password(client: TestClient) -> None:
-    r = client.post("/api/v1/auth/login", json={
-        "email": _test_email,
-        "password": "wrong",
-    })
+    r = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": _test_email,
+            "password": "wrong",
+        },
+    )
     assert r.status_code == 401
 
 
@@ -84,18 +99,24 @@ def test_devices_empty_initially(client: TestClient, auth_token: str) -> None:
 
 
 def test_sync_push_auto_links_device(client: TestClient, auth_token: str) -> None:
-    r = client.post("/api/v1/sync/config", json={
-        "device_id": "test-device-001",
-        "payload": {
-            "settings": {"sync.deviceName": "Test PC"},
-            "sites": [{"domain": "a.loc"}, {"domain": "b.loc"}],
-            "system": {"os": {"tag": "windows", "arch": "x64"}},
+    r = client.post(
+        "/api/v1/sync/config",
+        json={
+            "device_id": "test-device-001",
+            "payload": {
+                "settings": {"sync.deviceName": "Test PC"},
+                "sites": [{"domain": "a.loc"}, {"domain": "b.loc"}],
+                "system": {"os": {"tag": "windows", "arch": "x64"}},
+            },
         },
-    }, headers={"Authorization": f"Bearer {auth_token}"})
+        headers={"Authorization": f"Bearer {auth_token}"},
+    )
     assert r.status_code == 200
 
     # Device should now appear in the fleet
-    r2 = client.get("/api/v1/devices", headers={"Authorization": f"Bearer {auth_token}"})
+    r2 = client.get(
+        "/api/v1/devices", headers={"Authorization": f"Bearer {auth_token}"}
+    )
     devices = r2.json()["items"]
     assert len(devices) == 1
     d = devices[0]
@@ -145,10 +166,14 @@ def test_list_devices_is_current_flag(client: TestClient, auth_token: str) -> No
 
 def test_push_config_between_devices(client: TestClient, auth_token: str) -> None:
     # Create a second device
-    client.post("/api/v1/sync/config", json={
-        "device_id": "test-device-002",
-        "payload": {"settings": {}, "sites": []},
-    }, headers={"Authorization": f"Bearer {auth_token}"})
+    client.post(
+        "/api/v1/sync/config",
+        json={
+            "device_id": "test-device-002",
+            "payload": {"settings": {}, "sites": []},
+        },
+        headers={"Authorization": f"Bearer {auth_token}"},
+    )
 
     # Push from device-001 to device-002
     r = client.post(
@@ -201,6 +226,7 @@ class TestSyncOwnershipGuards:
     ) -> None:
         """A different account's token must also be rejected."""
         import uuid
+
         other_email = f"other-{uuid.uuid4().hex[:8]}@nks-wdc.dev"
         reg = client.post(
             "/api/v1/auth/register",
@@ -256,6 +282,7 @@ class TestSyncConfigAuthRequired:
 
     def test_other_account_sees_404(self, client: TestClient, auth_token: str) -> None:
         import uuid
+
         dev = "auth-required-dev-2"
         client.post(
             "/api/v1/sync/config",
@@ -285,6 +312,8 @@ def test_delete_device(client: TestClient, auth_token: str) -> None:
     assert r.json()["removed"] == "test-device-002"
 
     # Should be gone from fleet
-    r2 = client.get("/api/v1/devices", headers={"Authorization": f"Bearer {auth_token}"})
+    r2 = client.get(
+        "/api/v1/devices", headers={"Authorization": f"Bearer {auth_token}"}
+    )
     device_ids = {d["device_id"] for d in r2.json()["items"]}
     assert "test-device-002" not in device_ids

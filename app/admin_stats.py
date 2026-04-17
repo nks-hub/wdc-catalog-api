@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -66,6 +65,7 @@ def overview(
     10+ COUNT(*) queries per hit was overkill.
     """
     from ._cache import stats_overview_cache
+
     cached = stats_overview_cache.get("overview")
     if cached is not None:
         return cached
@@ -85,19 +85,24 @@ def overview(
         accounts_total=db.scalar(select(func.count(Account.id))) or 0,
         accounts_suspended=db.scalar(
             select(func.count(Account.id)).where(Account.suspended_at.is_not(None))
-        ) or 0,
+        )
+        or 0,
         accounts_by_role=by_role,
         admin_ui_users=db.scalar(select(func.count(User.id))) or 0,
         devices=db.scalar(select(func.count(DeviceConfig.device_id))) or 0,
         devices_linked=db.scalar(
-            select(func.count(DeviceConfig.device_id)).where(DeviceConfig.user_id.is_not(None))
-        ) or 0,
+            select(func.count(DeviceConfig.device_id)).where(
+                DeviceConfig.user_id.is_not(None)
+            )
+        )
+        or 0,
         devices_online_recent=db.scalar(
             select(func.count(DeviceConfig.device_id)).where(
                 DeviceConfig.last_seen_at.is_not(None),
                 DeviceConfig.last_seen_at > five_min_ago,
             )
-        ) or 0,
+        )
+        or 0,
     )
 
     day_ago = datetime.now(timezone.utc) - timedelta(hours=24)
@@ -111,7 +116,8 @@ def overview(
         events_total=db.scalar(select(func.count(AuditEvent.id))) or 0,
         events_last_24h=db.scalar(
             select(func.count(AuditEvent.id)).where(AuditEvent.created_at > day_ago)
-        ) or 0,
+        )
+        or 0,
         top_actions=[{"action": a, "count": c} for a, c in top_actions_rows],
     )
 

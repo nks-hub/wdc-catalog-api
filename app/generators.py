@@ -35,7 +35,9 @@ import httpx
 log = logging.getLogger(__name__)
 
 HTTP_TIMEOUT = httpx.Timeout(20.0, connect=10.0)
-DEFAULT_UA = "NKS-WebDevConsole-Catalog/0.1 (+https://github.com/nks-hub/webdev-console)"
+DEFAULT_UA = (
+    "NKS-WebDevConsole-Catalog/0.1 (+https://github.com/nks-hub/webdev-console)"
+)
 
 
 @dataclass
@@ -58,6 +60,7 @@ class GenRelease:
 
 
 # ── GitHub helper ───────────────────────────────────────────────────────
+
 
 def _github_releases(repo: str, limit: int = 10) -> list[dict]:
     """Fetch the last `limit` releases from a public GitHub repo."""
@@ -82,6 +85,7 @@ def _major_minor(version: str) -> str:
 
 
 # ── cloudflared ─────────────────────────────────────────────────────────
+
 
 def generate_cloudflared(limit: int = 5) -> list[GenRelease]:
     releases: list[GenRelease] = []
@@ -108,16 +112,19 @@ def generate_cloudflared(limit: int = 5) -> list[GenRelease]:
             elif name.endswith("-darwin-arm64.tgz"):
                 downloads.append(GenDownload(url, "macos", "arm64", "tgz", "github"))
         if downloads:
-            releases.append(GenRelease(
-                version=tag,
-                major_minor=_major_minor(tag),
-                released_at=(rel.get("published_at") or "")[:10] or None,
-                downloads=downloads,
-            ))
+            releases.append(
+                GenRelease(
+                    version=tag,
+                    major_minor=_major_minor(tag),
+                    released_at=(rel.get("published_at") or "")[:10] or None,
+                    downloads=downloads,
+                )
+            )
     return releases
 
 
 # ── mailpit ────────────────────────────────────────────────────────────
+
 
 def generate_mailpit(limit: int = 5) -> list[GenRelease]:
     releases: list[GenRelease] = []
@@ -138,16 +145,19 @@ def generate_mailpit(limit: int = 5) -> list[GenRelease]:
             elif name == "mailpit-darwin-arm64.tar.gz":
                 downloads.append(GenDownload(url, "macos", "arm64", "tar.gz", "github"))
         if downloads:
-            releases.append(GenRelease(
-                version=tag,
-                major_minor=_major_minor(tag),
-                released_at=(rel.get("published_at") or "")[:10] or None,
-                downloads=downloads,
-            ))
+            releases.append(
+                GenRelease(
+                    version=tag,
+                    major_minor=_major_minor(tag),
+                    released_at=(rel.get("published_at") or "")[:10] or None,
+                    downloads=downloads,
+                )
+            )
     return releases
 
 
 # ── caddy ──────────────────────────────────────────────────────────────
+
 
 def generate_caddy(limit: int = 5) -> list[GenRelease]:
     releases: list[GenRelease] = []
@@ -168,16 +178,19 @@ def generate_caddy(limit: int = 5) -> list[GenRelease]:
             elif name.endswith("_mac_arm64.tar.gz"):
                 downloads.append(GenDownload(url, "macos", "arm64", "tar.gz", "github"))
         if downloads:
-            releases.append(GenRelease(
-                version=tag,
-                major_minor=_major_minor(tag),
-                released_at=(rel.get("published_at") or "")[:10] or None,
-                downloads=downloads,
-            ))
+            releases.append(
+                GenRelease(
+                    version=tag,
+                    major_minor=_major_minor(tag),
+                    released_at=(rel.get("published_at") or "")[:10] or None,
+                    downloads=downloads,
+                )
+            )
     return releases
 
 
 # ── redis (redis-windows fork) ─────────────────────────────────────────
+
 
 def generate_redis(limit: int = 5) -> list[GenRelease]:
     releases: list[GenRelease] = []
@@ -192,15 +205,19 @@ def generate_redis(limit: int = 5) -> list[GenRelease]:
             if not name or not url:
                 continue
             if "Windows" in name and name.endswith(".zip"):
-                downloads.append(GenDownload(url, "windows", "x64", "zip", "github/redis-windows"))
+                downloads.append(
+                    GenDownload(url, "windows", "x64", "zip", "github/redis-windows")
+                )
                 break
         if downloads:
-            releases.append(GenRelease(
-                version=tag,
-                major_minor=_major_minor(tag),
-                released_at=(rel.get("published_at") or "")[:10] or None,
-                downloads=downloads,
-            ))
+            releases.append(
+                GenRelease(
+                    version=tag,
+                    major_minor=_major_minor(tag),
+                    released_at=(rel.get("published_at") or "")[:10] or None,
+                    downloads=downloads,
+                )
+            )
     return releases
 
 
@@ -219,7 +236,9 @@ def generate_php(limit: int = 10) -> list[GenRelease]:
     releases: list[GenRelease] = []
     for list_url, pattern in _PHP_ROWS:
         try:
-            r = httpx.get(list_url, timeout=HTTP_TIMEOUT, headers={"User-Agent": DEFAULT_UA})
+            r = httpx.get(
+                list_url, timeout=HTTP_TIMEOUT, headers={"User-Agent": DEFAULT_UA}
+            )
             r.raise_for_status()
             seen: set[str] = set()
             for m in pattern.finditer(r.text):
@@ -228,17 +247,25 @@ def generate_php(limit: int = 10) -> list[GenRelease]:
                     continue
                 seen.add(version)
                 download_url = list_url + filename
-                releases.append(GenRelease(
-                    version=version,
-                    major_minor=_major_minor(version),
-                    downloads=[GenDownload(download_url, "windows", "x64", "zip", "php.net")],
-                ))
+                releases.append(
+                    GenRelease(
+                        version=version,
+                        major_minor=_major_minor(version),
+                        downloads=[
+                            GenDownload(
+                                download_url, "windows", "x64", "zip", "php.net"
+                            )
+                        ],
+                    )
+                )
                 if len(releases) >= limit:
                     break
         except Exception as exc:  # noqa: BLE001
             log.warning("PHP scrape failed for %s: %s", list_url, exc)
     # Sort descending by semver-ish key
-    releases.sort(key=lambda r: tuple(int(x) for x in r.version.split(".")), reverse=True)
+    releases.sort(
+        key=lambda r: tuple(int(x) for x in r.version.split(".")), reverse=True
+    )
     return releases[:limit]
 
 
@@ -260,13 +287,24 @@ def generate_apache(limit: int = 5) -> list[GenRelease]:
         )
         r.raise_for_status()
         for m in _APACHE_PATTERN.finditer(r.text):
-            rel_path, filename, version = m.group(1), m.group(2), m.group(3)
+            rel_path, _filename, version = m.group(1), m.group(2), m.group(3)
             url = "https://www.apachelounge.com/download/" + rel_path
-            releases.append(GenRelease(
-                version=version,
-                major_minor=_major_minor(version),
-                downloads=[GenDownload(url, "windows", "x64", "zip", "apachelounge", {"User-Agent": DEFAULT_UA})],
-            ))
+            releases.append(
+                GenRelease(
+                    version=version,
+                    major_minor=_major_minor(version),
+                    downloads=[
+                        GenDownload(
+                            url,
+                            "windows",
+                            "x64",
+                            "zip",
+                            "apachelounge",
+                            {"User-Agent": DEFAULT_UA},
+                        )
+                    ],
+                )
+            )
             if len(releases) >= limit:
                 break
     except Exception as exc:  # noqa: BLE001
@@ -331,11 +369,13 @@ def generate_mariadb(limit: int = 5) -> list[GenRelease]:
         except Exception:  # noqa: BLE001
             continue
 
-        releases.append(GenRelease(
-            version=version,
-            major_minor=_major_minor(version),
-            downloads=[GenDownload(url, "windows", "x64", "zip", "mariadb.org")],
-        ))
+        releases.append(
+            GenRelease(
+                version=version,
+                major_minor=_major_minor(version),
+                downloads=[GenDownload(url, "windows", "x64", "zip", "mariadb.org")],
+            )
+        )
 
     return releases
 
@@ -361,11 +401,13 @@ def generate_nginx(limit: int = 5) -> list[GenRelease]:
                 continue
             seen.add(version)
             url = f"https://nginx.org/download/{filename}"
-            releases.append(GenRelease(
-                version=version,
-                major_minor=_major_minor(version),
-                downloads=[GenDownload(url, "windows", "x64", "zip", "nginx.org")],
-            ))
+            releases.append(
+                GenRelease(
+                    version=version,
+                    major_minor=_major_minor(version),
+                    downloads=[GenDownload(url, "windows", "x64", "zip", "nginx.org")],
+                )
+            )
             if len(releases) >= limit:
                 break
     except Exception as exc:  # noqa: BLE001
@@ -428,17 +470,21 @@ def generate_mysql(limit: int = 5) -> list[GenRelease]:
         # HEAD probe to confirm the archive exists (some point releases
         # skip the Windows zip or use a different naming scheme).
         try:
-            head = httpx.head(url, timeout=httpx.Timeout(5.0, connect=5.0), follow_redirects=True)
+            head = httpx.head(
+                url, timeout=httpx.Timeout(5.0, connect=5.0), follow_redirects=True
+            )
             if head.status_code >= 400:
                 continue
         except Exception:  # noqa: BLE001
             continue
 
-        releases.append(GenRelease(
-            version=version,
-            major_minor=mm,
-            downloads=[GenDownload(url, "windows", "x64", "zip", "dev.mysql.com")],
-        ))
+        releases.append(
+            GenRelease(
+                version=version,
+                major_minor=mm,
+                downloads=[GenDownload(url, "windows", "x64", "zip", "dev.mysql.com")],
+            )
+        )
 
     if not releases:
         return _mysql_fallback(limit)
@@ -455,14 +501,21 @@ def _mysql_fallback(limit: int) -> list[GenRelease]:
     ]
     releases: list[GenRelease] = []
     for ver, mm in fallback[:limit]:
-        releases.append(GenRelease(
-            version=ver,
-            major_minor=mm,
-            downloads=[GenDownload(
-                _MYSQL_CDN.format(mm=mm, ver=ver),
-                "windows", "x64", "zip", "dev.mysql.com (fallback)",
-            )],
-        ))
+        releases.append(
+            GenRelease(
+                version=ver,
+                major_minor=mm,
+                downloads=[
+                    GenDownload(
+                        _MYSQL_CDN.format(mm=mm, ver=ver),
+                        "windows",
+                        "x64",
+                        "zip",
+                        "dev.mysql.com (fallback)",
+                    )
+                ],
+            )
+        )
     return releases
 
 
@@ -499,28 +552,48 @@ def generate_node(limit: int = 5) -> list[GenRelease]:
         downloads: list[GenDownload] = []
         # Windows x64 zip
         if "win-x64-zip" in files:
-            downloads.append(GenDownload(
-                url=f"https://nodejs.org/dist/{version_raw}/node-{version_raw}-win-x64.zip",
-                os="windows", arch="x64", archive_type="zip", source="nodejs.org",
-            ))
+            downloads.append(
+                GenDownload(
+                    url=f"https://nodejs.org/dist/{version_raw}/node-{version_raw}-win-x64.zip",
+                    os="windows",
+                    arch="x64",
+                    archive_type="zip",
+                    source="nodejs.org",
+                )
+            )
         # Linux x64 tar.xz
         if "linux-x64" in files:
-            downloads.append(GenDownload(
-                url=f"https://nodejs.org/dist/{version_raw}/node-{version_raw}-linux-x64.tar.xz",
-                os="linux", arch="x64", archive_type="tar.xz", source="nodejs.org",
-            ))
+            downloads.append(
+                GenDownload(
+                    url=f"https://nodejs.org/dist/{version_raw}/node-{version_raw}-linux-x64.tar.xz",
+                    os="linux",
+                    arch="x64",
+                    archive_type="tar.xz",
+                    source="nodejs.org",
+                )
+            )
         # macOS arm64
         if "osx-arm64-tar" in files:
-            downloads.append(GenDownload(
-                url=f"https://nodejs.org/dist/{version_raw}/node-{version_raw}-darwin-arm64.tar.gz",
-                os="macos", arch="arm64", archive_type="tar.gz", source="nodejs.org",
-            ))
+            downloads.append(
+                GenDownload(
+                    url=f"https://nodejs.org/dist/{version_raw}/node-{version_raw}-darwin-arm64.tar.gz",
+                    os="macos",
+                    arch="arm64",
+                    archive_type="tar.gz",
+                    source="nodejs.org",
+                )
+            )
         # macOS x64
         if "osx-x64-tar" in files:
-            downloads.append(GenDownload(
-                url=f"https://nodejs.org/dist/{version_raw}/node-{version_raw}-darwin-x64.tar.gz",
-                os="macos", arch="x64", archive_type="tar.gz", source="nodejs.org",
-            ))
+            downloads.append(
+                GenDownload(
+                    url=f"https://nodejs.org/dist/{version_raw}/node-{version_raw}-darwin-x64.tar.gz",
+                    os="macos",
+                    arch="x64",
+                    archive_type="tar.gz",
+                    source="nodejs.org",
+                )
+            )
 
         if not downloads:
             continue
@@ -529,12 +602,14 @@ def generate_node(limit: int = 5) -> list[GenRelease]:
         lts = entry.get("lts")
         channel = "lts" if lts else "stable"
 
-        releases.append(GenRelease(
-            version=version,
-            major_minor=_major_minor(version),
-            channel=channel,
-            downloads=downloads,
-        ))
+        releases.append(
+            GenRelease(
+                version=version,
+                major_minor=_major_minor(version),
+                channel=channel,
+                downloads=downloads,
+            )
+        )
 
     return releases
 

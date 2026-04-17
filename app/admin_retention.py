@@ -32,8 +32,12 @@ def run_now(
     opens its own session."""
     summary = retention.run_retention(db=db)
     audit.emit(
-        db, actor=caller, action="retention.manual_run", request=request,
-        resource_type="retention", resource_id="global",
+        db,
+        actor=caller,
+        action="retention.manual_run",
+        request=request,
+        resource_type="retention",
+        resource_id="global",
         detail=summary,
     )
     return RunNowResponse(**summary)

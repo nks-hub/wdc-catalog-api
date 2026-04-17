@@ -77,6 +77,7 @@ def _client():
     # Lazy-imported so apps that never upload > 2 MiB payloads don't pay
     # boto3's ~30 MB import cost at startup.
     import boto3
+
     cfg = _config()
     kwargs = {
         "service_name": "s3",
@@ -109,7 +110,10 @@ def upload(body: bytes, *, account_id: Optional[int] = None) -> str:
     client.put_object(**put_kwargs)
     log.info(
         "uploaded blob %s/%s (%d bytes, account=%s)",
-        cfg.bucket, key, len(body), account_id,
+        cfg.bucket,
+        key,
+        len(body),
+        account_id,
     )
     return f"s3://{cfg.bucket}/{key}"
 

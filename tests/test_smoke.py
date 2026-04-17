@@ -9,7 +9,6 @@ CI before it breaks the daemon.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 import pytest
 
@@ -44,11 +43,20 @@ def test_catalog_contains_seeded_apps(client: TestClient) -> None:
     assert body["schema_version"] == "1"
     # Every seed JSON under app/data/apps/ should round-trip into the db.
     expected = {
-        "apache", "caddy", "cloudflared", "mailpit", "mariadb",
-        "mkcert", "mysql", "nginx", "php", "redis",
+        "apache",
+        "caddy",
+        "cloudflared",
+        "mailpit",
+        "mariadb",
+        "mkcert",
+        "mysql",
+        "nginx",
+        "php",
+        "redis",
     }
-    assert expected.issubset(set(body["apps"].keys())), \
+    assert expected.issubset(set(body["apps"].keys())), (
         f"missing apps: {expected - set(body['apps'].keys())}"
+    )
 
 
 def test_catalog_app_shape_matches_csharp_contract(client: TestClient) -> None:
@@ -160,6 +168,7 @@ def test_payload_size_limit_rejects_oversized(client: TestClient) -> None:
 def smoke_token(client: TestClient) -> str:
     """Register a throw-away account and return a JWT for smoke tests."""
     import uuid
+
     email = f"smoke-{uuid.uuid4().hex[:8]}@nks-wdc.dev"
     r = client.post(
         "/api/v1/auth/register",

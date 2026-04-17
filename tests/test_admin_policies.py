@@ -30,7 +30,9 @@ def _register(client, *, role=Role.user):
             db.commit()
         finally:
             db.close()
-    tok = client.post("/api/v1/auth/login", json={"email": email, "password": pwd}).json()["token"]
+    tok = client.post(
+        "/api/v1/auth/login", json={"email": email, "password": pwd}
+    ).json()["token"]
     return tok
 
 

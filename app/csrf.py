@@ -34,6 +34,7 @@ def ensure_csrf_cookie(response: Response, existing: Optional[str]) -> str:
     cookie policy (browser won't send cross-site), not cryptography.
     """
     from .cookies import cookie_secure
+
     token = existing if existing and len(existing) >= 32 else secrets.token_urlsafe(32)
     response.set_cookie(
         key=CSRF_COOKIE,

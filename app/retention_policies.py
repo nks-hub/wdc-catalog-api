@@ -8,7 +8,6 @@ with ``device_id`` set override the default for that single device.
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -24,6 +23,7 @@ router = APIRouter(prefix="/api/v1/retention/policies", tags=["retention"])
 
 
 # ── Schemas ─────────────────────────────────────────────────────────────
+
 
 class PolicyRow(BaseModel):
     id: int
@@ -44,7 +44,7 @@ class PolicyUpsert(BaseModel):
     device_id: Optional[str] = Field(
         None,
         description="Specific device scope. Omit or null to set the "
-                    "account-wide default.",
+        "account-wide default.",
     )
     keep_last_n_auto: int = Field(30, ge=1, le=1000)
     auto_expire_days: Optional[int] = Field(None, ge=1, le=3650)
@@ -53,6 +53,7 @@ class PolicyUpsert(BaseModel):
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
+
 
 def _row_to_model(row: SnapshotRetentionPolicy) -> PolicyRow:
     return PolicyRow(
@@ -82,6 +83,7 @@ def _assert_device_owned(
 
 # ── Endpoints ───────────────────────────────────────────────────────────
 
+
 @router.get("", response_model=PolicyList)
 def list_policies(
     device_id: Optional[str] = Query(
@@ -96,7 +98,9 @@ def list_policies(
     )
     if device_id is not None:
         stmt = stmt.where(SnapshotRetentionPolicy.device_id == device_id.lower())
-    rows = db.scalars(stmt.order_by(SnapshotRetentionPolicy.device_id.nullsfirst())).all()
+    rows = db.scalars(
+        stmt.order_by(SnapshotRetentionPolicy.device_id.nullsfirst())
+    ).all()
     return PolicyList(items=[_row_to_model(r) for r in rows], total=len(rows))
 
 
@@ -118,7 +122,8 @@ def upsert_policy(
     row = db.scalar(
         select(SnapshotRetentionPolicy).where(
             SnapshotRetentionPolicy.account_id == account.id,
-            SnapshotRetentionPolicy.device_id.is_(device_id) if device_id is None
+            SnapshotRetentionPolicy.device_id.is_(device_id)
+            if device_id is None
             else SnapshotRetentionPolicy.device_id == device_id,
         )
     )
@@ -139,8 +144,12 @@ def upsert_policy(
         row.max_total_bytes = body.max_total_bytes
     db.flush()
     audit.emit(
-        db, actor=account, action="retention.policy_set", request=request,
-        resource_type="retention_policy", resource_id=str(row.id),
+        db,
+        actor=account,
+        action="retention.policy_set",
+        request=request,
+        resource_type="retention_policy",
+        resource_id=str(row.id),
         detail={
             "device_id": device_id,
             "keep_last_n_auto": body.keep_last_n_auto,
@@ -163,8 +172,12 @@ def delete_policy(
     if row is None or row.account_id != account.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Policy not found")
     audit.emit(
-        db, actor=account, action="retention.policy_deleted", request=request,
-        resource_type="retention_policy", resource_id=str(policy_id),
+        db,
+        actor=account,
+        action="retention.policy_deleted",
+        request=request,
+        resource_type="retention_policy",
+        resource_id=str(policy_id),
         detail={"device_id": row.device_id},
     )
     db.delete(row)

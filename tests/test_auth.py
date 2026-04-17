@@ -15,6 +15,7 @@ class TestStartupSecretValidation:
         monkeypatch.delenv("NKS_WDC_CATALOG_SECRET", raising=False)
         monkeypatch.delenv("NKS_WDC_CATALOG_DEV", raising=False)
         import app.auth as auth_module
+
         with pytest.raises(RuntimeError, match="NKS_WDC_SESSION_SECRET"):
             importlib.reload(auth_module)
         # Restore for subsequent tests
@@ -27,6 +28,7 @@ class TestStartupSecretValidation:
         monkeypatch.delenv("NKS_WDC_CATALOG_SECRET", raising=False)
         monkeypatch.delenv("NKS_WDC_CATALOG_DEV", raising=False)
         import app.devices as devices_module
+
         with pytest.raises(RuntimeError, match="NKS_WDC_JWT_SECRET"):
             importlib.reload(devices_module)
         monkeypatch.setenv("NKS_WDC_CATALOG_DEV", "1")
@@ -73,7 +75,6 @@ class TestJWT:
 
     def test_decode_invalid_token_raises(self):
         import pytest
+
         with pytest.raises(Exception):
             decode_token("not.a.valid.token")
-
-

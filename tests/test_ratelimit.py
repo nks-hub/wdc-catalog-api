@@ -14,10 +14,13 @@ def test_auth_login_rate_limited(monkeypatch) -> None:
     """F-21 guard: /auth/login must throttle at 5 req/min per IP."""
     monkeypatch.setenv("NKS_WDC_DISABLE_RATE_LIMITS", "0")
     import app.ratelimit as rl
+
     importlib.reload(rl)
     import app.devices as dv
+
     importlib.reload(dv)
     import app.main as main_mod
+
     importlib.reload(main_mod)
     try:
         with TestClient(main_mod.app) as c:

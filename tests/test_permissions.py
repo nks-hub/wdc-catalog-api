@@ -21,6 +21,7 @@ def perm_app() -> FastAPI:
     # Ensure schema exists — main app's lifespan does this but this module
     # runs an isolated FastAPI instance.
     from app.db import create_all
+
     create_all()
 
     app = FastAPI()

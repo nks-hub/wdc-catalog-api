@@ -88,8 +88,12 @@ def update_policy(
         row.updated_by_email = caller.email
         db.flush()
         audit.emit(
-            db, actor=caller, action="policy.updated", request=request,
-            resource_type="global_policy", resource_id="1",
+            db,
+            actor=caller,
+            action="policy.updated",
+            request=request,
+            resource_type="global_policy",
+            resource_id="1",
             detail={"changes": changes},
         )
     return _to_response(row)

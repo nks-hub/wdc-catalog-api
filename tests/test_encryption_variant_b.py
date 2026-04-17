@@ -18,6 +18,7 @@ def _ensure_schema():
 
 def _account_device() -> tuple[int, str]:
     from app.auth import hash_password
+
     db = next(get_session())
     try:
         acc = Account(
@@ -75,6 +76,7 @@ class TestVariantBSnapshots:
 
             # Key row must record Variant B source
             from app.db import AccountEncryptionKey
+
             key = db.get(AccountEncryptionKey, snap.encryption_kid)
             assert key.kek_source == "password-derived"
 
@@ -120,9 +122,7 @@ class TestVariantBSnapshots:
             )
             db.commit()
             with pytest.raises(Exception):
-                snapshots.unpack_payload(
-                    snap, db=db, passphrase="totally-different-pw"
-                )
+                snapshots.unpack_payload(snap, db=db, passphrase="totally-different-pw")
         finally:
             db.close()
 
@@ -131,13 +131,21 @@ class TestVariantBSnapshots:
         db = next(get_session())
         try:
             snap_a = snapshots.create_snapshot(
-                db, device_id=device_id, account_id=account_id,
-                payload={"mode": "A"}, kind="manual", label="a",
+                db,
+                device_id=device_id,
+                account_id=account_id,
+                payload={"mode": "A"},
+                kind="manual",
+                label="a",
                 encrypt=True,
             )
             snap_b = snapshots.create_snapshot(
-                db, device_id=device_id, account_id=account_id,
-                payload={"mode": "B"}, kind="manual", label="b",
+                db,
+                device_id=device_id,
+                account_id=account_id,
+                payload={"mode": "B"},
+                kind="manual",
+                label="b",
                 passphrase="variant-b-secret-pw",
             )
             db.commit()
@@ -158,6 +166,7 @@ class TestVariantBOverHTTP:
     def test_create_and_get_via_header(self):
         from fastapi.testclient import TestClient
         from app.main import app
+
         with TestClient(app) as client:
             email = f"v-b-http-{uuid.uuid4().hex[:8]}@nks-wdc.dev"
             r = client.post(
@@ -176,8 +185,11 @@ class TestVariantBOverHTTP:
 
             create = client.post(
                 f"/api/v1/devices/{dev}/backups",
-                json={"kind": "manual", "label": "zero-knowledge",
-                      "payload": {"secret": "data"}},
+                json={
+                    "kind": "manual",
+                    "label": "zero-knowledge",
+                    "payload": {"secret": "data"},
+                },
                 headers={**auth, "X-WDC-Passphrase": "my-unique-pw-1234"},
             )
             assert create.status_code == 201
