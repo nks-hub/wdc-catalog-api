@@ -1319,6 +1319,13 @@ details > summary:hover { color: var(--accent-hover); }
   margin-bottom: var(--space-4);
   box-shadow: var(--shadow-sm);
 }
+/* Disable sticky thead for tables nested inside release cards —
+   sticky positioning fights the card's bounded scroll context and
+   overlaps the first data row. The full-page tables (users/audit/…)
+   still get sticky via the general ``.data thead th`` rule. */
+.release-block .data thead th {
+  position: static;
+}
 .release-head {
   display: flex;
   align-items: center;
