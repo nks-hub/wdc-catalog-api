@@ -30,7 +30,18 @@ from .db import User, session_factory
 log = logging.getLogger(__name__)
 
 SESSION_COOKIE = "nks_wdc_catalog_session"
-SESSION_MAX_AGE = 60 * 60 * 24 * 7  # 1 week
+# Reduced from 7 days → 24 hours. Admin sessions are interactive; a
+# week-long cookie gives a stolen copy far too long to be useful.
+# Operators who want shorter / longer windows can override via env.
+SESSION_MAX_AGE = int(os.environ.get("NKS_WDC_SESSION_MAX_AGE", 60 * 60 * 24))
+# Idle-timeout ceiling: when the cookie's signed timestamp shows the
+# session hasn't been active for this long, treat it as expired even
+# if the absolute ``max_age`` window hasn't elapsed. Re-signing on
+# every request (see ``refresh_session``) keeps live sessions alive
+# without extending the dormant ones.
+SESSION_IDLE_TIMEOUT = int(
+    os.environ.get("NKS_WDC_SESSION_IDLE_TIMEOUT", 60 * 60 * 2)
+)
 
 
 _EPHEMERAL_DEV_KEY: str | None = None
@@ -114,8 +125,12 @@ def issue_session(username: str) -> str:
 def read_session(cookie_value: str | None) -> str | None:
     if not cookie_value:
         return None
+    # Enforce the tighter of (absolute max-age, idle timeout). A fresh
+    # cookie re-signed on each request keeps ``idle_timeout`` forgiving
+    # for active users; forgotten tabs expire on the shorter window.
+    effective = min(SESSION_MAX_AGE, SESSION_IDLE_TIMEOUT)
     try:
-        raw = _signer.unsign(cookie_value.encode("ascii"), max_age=SESSION_MAX_AGE)
+        raw = _signer.unsign(cookie_value.encode("ascii"), max_age=effective)
         return raw.decode("utf-8")
     except BadSignature:
         return None

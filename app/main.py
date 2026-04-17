@@ -223,6 +223,25 @@ async def _limit_payload_size(request: Request, call_next):
 
         existing = request.cookies.get("nks_wdc_csrf")
         ensure_csrf_cookie(response, existing)
+    # Session-refresh: when the admin user makes any authenticated hit,
+    # re-issue the signed cookie so idle-timeout resets. Dormant sessions
+    # hit ``SESSION_IDLE_TIMEOUT`` on the next visit and get kicked to
+    # the login page.
+    if request.url.path.startswith("/admin") and response.status_code < 400:
+        existing_session = request.cookies.get(SESSION_COOKIE)
+        if existing_session:
+            from .auth import read_session
+
+            username = read_session(existing_session)
+            if username:
+                response.set_cookie(
+                    key=SESSION_COOKIE,
+                    value=issue_session(username),
+                    max_age=SESSION_MAX_AGE,
+                    httponly=True,
+                    samesite="strict",
+                    secure=_cookie_secure(),
+                )
     return response
 
 
