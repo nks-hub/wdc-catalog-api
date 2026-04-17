@@ -15,11 +15,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from . import audit
 from .auth import hash_password
 from .db import Account, DeviceConfig, get_session
 from .permissions import require_role
@@ -140,6 +141,7 @@ def get_user(
 def change_role(
     user_id: int,
     body: ChangeRoleRequest,
+    request: Request,
     caller: Account = Depends(require_role(Role.admin)),
     db: Session = Depends(get_session),
 ) -> AdminUserRow:
@@ -169,8 +171,14 @@ def change_role(
                 "Cannot demote the last owner",
             )
 
+    old_role = target.role
     target.role = new_role.value
     db.flush()
+    audit.emit(
+        db, actor=caller, action="user.role_changed", request=request,
+        resource_type="account", resource_id=target.id,
+        detail={"from": old_role, "to": new_role.value, "target_email": target.email},
+    )
     device_count = db.scalar(
         select(func.count(DeviceConfig.device_id)).where(DeviceConfig.user_id == user_id)
     ) or 0
@@ -180,6 +188,7 @@ def change_role(
 @router.post("/{user_id}/suspend", response_model=AdminUserRow)
 def suspend_user(
     user_id: int,
+    request: Request,
     caller: Account = Depends(require_role(Role.admin)),
     db: Session = Depends(get_session),
 ) -> AdminUserRow:
@@ -188,6 +197,11 @@ def suspend_user(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot suspend an owner account")
     target.suspended_at = datetime.now(timezone.utc)
     db.flush()
+    audit.emit(
+        db, actor=caller, action="user.suspended", request=request,
+        resource_type="account", resource_id=target.id,
+        detail={"target_email": target.email},
+    )
     device_count = db.scalar(
         select(func.count(DeviceConfig.device_id)).where(DeviceConfig.user_id == user_id)
     ) or 0
@@ -197,12 +211,18 @@ def suspend_user(
 @router.post("/{user_id}/resume", response_model=AdminUserRow)
 def resume_user(
     user_id: int,
+    request: Request,
     caller: Account = Depends(require_role(Role.admin)),
     db: Session = Depends(get_session),
 ) -> AdminUserRow:
     target = _target_or_404(db, user_id)
     target.suspended_at = None
     db.flush()
+    audit.emit(
+        db, actor=caller, action="user.resumed", request=request,
+        resource_type="account", resource_id=target.id,
+        detail={"target_email": target.email},
+    )
     device_count = db.scalar(
         select(func.count(DeviceConfig.device_id)).where(DeviceConfig.user_id == user_id)
     ) or 0
@@ -212,27 +232,32 @@ def resume_user(
 @router.post("/{user_id}/reset-password", response_model=ResetPasswordResponse)
 def reset_password(
     user_id: int,
+    request: Request,
     caller: Account = Depends(require_role(Role.support)),
     db: Session = Depends(get_session),
 ) -> ResetPasswordResponse:
     """Generate a one-time 16-char password, bcrypt-hash it, return in
-    plaintext so the operator can relay it via an out-of-band channel.
-    The next successful login MUST prompt the user to change it — this
-    enforcement belongs to the desktop client and is tracked for later."""
+    plaintext so the operator can relay it via an out-of-band channel."""
     target = _target_or_404(db, user_id)
     if Role(target.role) == Role.owner and Role(caller.role) != Role.owner:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "Only owners can reset an owner's password"
         )
-    temp = _secrets.token_urlsafe(12)  # ~16 printable chars
+    temp = _secrets.token_urlsafe(12)
     target.password_hash = hash_password(temp)
     db.flush()
+    audit.emit(
+        db, actor=caller, action="user.password_reset", request=request,
+        resource_type="account", resource_id=target.id,
+        detail={"target_email": target.email},
+    )
     return ResetPasswordResponse(email=target.email, temp_password=temp)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
     user_id: int,
+    request: Request,
     caller: Account = Depends(require_role(Role.admin)),
     db: Session = Depends(get_session),
 ) -> None:
@@ -242,6 +267,11 @@ def delete_user(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot delete an owner account")
     if target.id == caller.id:
         raise HTTPException(status.HTTP_409_CONFLICT, "Cannot delete your own account")
+    audit.emit(
+        db, actor=caller, action="user.deleted", request=request,
+        resource_type="account", resource_id=target.id,
+        detail={"target_email": target.email},
+    )
     db.delete(target)
 
 

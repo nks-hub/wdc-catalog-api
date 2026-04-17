@@ -157,6 +157,30 @@ class Account(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class AuditEvent(Base):
+    """Append-only audit trail for admin + security actions.
+
+    Every mutation that crosses a trust boundary (role change, suspend,
+    password reset, account delete, etc.) emits one of these. Rows are
+    immutable — no UPDATE path — so the trail survives tampering by
+    anyone without DB-level write access.
+    """
+    __tablename__ = "audit_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    actor_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
+    actor_email: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    action: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    resource_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    resource_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, index=True)
+
+
 class DeviceConfig(Base):
     __tablename__ = "device_configs"
 
