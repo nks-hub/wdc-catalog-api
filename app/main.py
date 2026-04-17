@@ -369,9 +369,7 @@ def readyz(db: Session = Depends(get_session)) -> JSONResponse:
     return JSONResponse(
         body,
         status_code=(
-            status.HTTP_200_OK
-            if overall_ok
-            else status.HTTP_503_SERVICE_UNAVAILABLE
+            status.HTTP_200_OK if overall_ok else status.HTTP_503_SERVICE_UNAVAILABLE
         ),
     )
 

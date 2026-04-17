@@ -77,10 +77,18 @@ def _secret_key() -> str:
 _signer = TimestampSigner(_secret_key())
 
 
+# Bcrypt work factor. 12 rounds ≈ 250 ms on a modern CPU and follows
+# OWASP's 2024 baseline. Operators on beefier hardware can raise it via
+# ``NKS_WDC_BCRYPT_ROUNDS`` — doubling cost for every +1. Clamp between
+# 10 (a bit lax, but useful in tests) and 14 (≈ 2 s / hash, upper edge of
+# interactive-tolerable).
+BCRYPT_ROUNDS = max(10, min(14, int(os.environ.get("NKS_WDC_BCRYPT_ROUNDS", "12"))))
+
+
 def hash_password(plain: str) -> str:
-    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode(
-        "ascii"
-    )
+    return bcrypt.hashpw(
+        plain.encode("utf-8"), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
+    ).decode("ascii")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -99,9 +107,10 @@ def verify_password(plain: str, hashed: str) -> bool:
 # Pre-computed dummy hash used by ``verify_dummy_password`` so bcrypt work
 # runs even when the account doesn't exist — eliminates the timing side
 # channel that would otherwise let an attacker enumerate valid usernames
-# by measuring response latency.
+# by measuring response latency. Must match the real cost factor so the
+# timing alignment holds across ``NKS_WDC_BCRYPT_ROUNDS`` overrides.
 _DUMMY_HASH = bcrypt.hashpw(
-    b"nks-wdc-dummy-value-00", bcrypt.gensalt(rounds=12)
+    b"nks-wdc-dummy-value-00", bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
 ).decode("ascii")
 
 
