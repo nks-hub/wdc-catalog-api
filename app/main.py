@@ -31,7 +31,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Iterator
 
-from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request, status
+from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -181,9 +181,32 @@ def healthz(db: Session = Depends(get_session)) -> JSONResponse:
 # Public JSON API (consumed by C# CatalogClient)
 # ─────────────────────────────────────────────────────────────────────────
 
-@app.get("/api/v1/catalog", response_model=CatalogDocument, tags=["catalog"])
-def api_get_catalog(db: Session = Depends(get_session)) -> CatalogDocument:
-    return build_catalog_document(db)
+_CATALOG_CACHE_SECONDS = int(os.environ.get("NKS_WDC_CATALOG_CACHE_SECONDS", "60"))
+
+
+@app.get("/api/v1/catalog", tags=["catalog"])
+def api_get_catalog(request: Request, db: Session = Depends(get_session)) -> Response:
+    """Public JSON catalog with ETag + Cache-Control.
+
+    A hash-derived ETag lets clients (C# daemon, browsers, reverse proxies)
+    skip re-downloading on restart. `Cache-Control: public, max-age=60`
+    lets CDNs (Cloudflare) shield the origin from read-heavy traffic.
+    """
+    import hashlib
+    doc = build_catalog_document(db)
+    # ETag is derived from the apps payload only — excluding `generated_at`
+    # so identical catalog content yields identical hashes across calls.
+    apps_dump = doc.model_dump(by_alias=True, include={"apps", "schema_version"})
+    etag_seed = str(sorted(apps_dump.items())).encode("utf-8")
+    etag = '"' + hashlib.sha256(etag_seed).hexdigest()[:16] + '"'
+    headers = {
+        "ETag": etag,
+        "Cache-Control": f"public, max-age={_CATALOG_CACHE_SECONDS}",
+    }
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    body = doc.model_dump_json(by_alias=True)
+    return Response(content=body, media_type="application/json", headers=headers)
 
 
 @app.get("/api/v1/catalog/{app_name}", response_model=AppDoc, tags=["catalog"])

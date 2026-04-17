@@ -109,6 +109,21 @@ def test_login_accepts_dev_admin(client: TestClient) -> None:
     assert "samesite=strict" in set_cookie
 
 
+def test_catalog_etag_round_trip(client: TestClient) -> None:
+    """Catalog endpoint must emit ETag + Cache-Control and honor If-None-Match."""
+    r = client.get("/api/v1/catalog")
+    assert r.status_code == 200
+    etag = r.headers.get("etag")
+    assert etag is not None
+    cache_control = r.headers.get("cache-control")
+    assert cache_control is not None
+    assert "max-age" in cache_control
+
+    # Round-trip with If-None-Match → 304
+    r2 = client.get("/api/v1/catalog", headers={"If-None-Match": etag})
+    assert r2.status_code == 304
+
+
 def test_healthz_reports_db_up(client: TestClient) -> None:
     r = client.get("/healthz")
     assert r.status_code == 200
