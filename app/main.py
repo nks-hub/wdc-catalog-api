@@ -276,9 +276,12 @@ def api_get_catalog(request: Request, db: Session = Depends(get_session)) -> Res
     """Public JSON catalog with ETag + Cache-Control.
 
     Hot path: an in-process TTL cache (``_cache.catalog_response_cache``)
-    stores the serialized body + ETag so identical requests skip the
-    SQLAlchemy hydrate + ETag hash. Admin mutations invalidate the cache
-    via ``invalidate_catalog()``.
+    stores the serialized body + ETag + the ``generated_at`` timestamp
+    keyed by content hash. A cache refresh whose hash matches the prior
+    build reuses the prior timestamp — so clients doing naïve JSON diff
+    don't see the catalog "change" every TTL window (code-review M7).
+
+    Admin mutations invalidate the cache via ``invalidate_catalog()``.
     """
     from ._cache import catalog_response_cache
     cached = catalog_response_cache.get("catalog")
@@ -286,11 +289,21 @@ def api_get_catalog(request: Request, db: Session = Depends(get_session)) -> Res
         import hashlib
         doc = build_catalog_document(db)
         apps_dump = doc.model_dump(by_alias=True, include={"apps", "schema_version"})
-        # ``json.dumps(sort_keys=True)`` is O(n log n) over primitives;
-        # ``str(sorted(apps_dump.items()))`` would re-stringify every
-        # nested dict during comparisons — quadratic-ish on deep trees.
         etag_seed = json.dumps(apps_dump, sort_keys=True, separators=(",", ":")).encode("utf-8")
         etag = '"' + hashlib.sha256(etag_seed).hexdigest()[:16] + '"'
+
+        # Reuse previous ``generated_at`` when content didn't change —
+        # the TTL window is about cache freshness, not about resource
+        # modification time.
+        stable = catalog_response_cache.get("stable")
+        if stable is not None and stable["etag"] == etag:
+            doc.generated_at = stable["generated_at"]
+        else:
+            catalog_response_cache.set(
+                "stable",
+                {"etag": etag, "generated_at": doc.generated_at},
+                ttl=24 * 3600,
+            )
         body = doc.model_dump_json(by_alias=True)
         cached = (etag, body)
         catalog_response_cache.set("catalog", cached)
