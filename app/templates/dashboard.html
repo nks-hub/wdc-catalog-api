@@ -36,15 +36,44 @@
       <div class="stat-row"><span>Total events</span><b>{{ stats.audit.events_total }}</b></div>
       <div class="stat-row"><span>Last 24h</span><b>{{ stats.audit.events_last_24h }}</b></div>
       {% if sparkline %}
-      <svg class="sparkline" viewBox="0 0 240 40" xmlns="http://www.w3.org/2000/svg" aria-label="Events per hour, last 24h">
+      {# Build polyline points + area-fill polygon for the hourly sparkline.
+         Each hour maps to 10 px wide, 64 px tall canvas with 2 px top/bottom
+         padding so the stroke doesn't clip. #}
+      {% set _sl_points = [] %}
+      {% for b in sparkline %}
+        {% set x = loop.index0 * 10 + 5 %}
+        {% set y = 62 - ((b.count / sparkline_max * 58) if sparkline_max else 0) %}
+        {% set _ = _sl_points.append(x ~ "," ~ y) %}
+      {% endfor %}
+      <svg class="sparkline" viewBox="0 0 245 68" preserveAspectRatio="none"
+           xmlns="http://www.w3.org/2000/svg"
+           aria-label="Events per hour, last 24h">
+        {# dotted baseline #}
+        <line x1="0" y1="62" x2="245" y2="62"
+              stroke="currentColor" stroke-width="1" stroke-dasharray="2 3"
+              opacity="0.12"/>
+        {# area fill — closed polygon running line → right edge → left edge #}
+        <polygon points="5,62 {{ _sl_points | join(' ') }} {{ 5 + (sparkline|length - 1) * 10 }},62"
+                 fill="currentColor" opacity="0.12"/>
+        {# stroke on top #}
+        <polyline points="{{ _sl_points | join(' ') }}"
+                  fill="none" stroke="currentColor" stroke-width="1.5"
+                  stroke-linejoin="round" stroke-linecap="round"/>
+        {# per-hour tooltip targets (transparent hit areas with native <title>) #}
         {% for b in sparkline %}
-          {% set x = loop.index0 * 10 %}
-          {% set h = (b.count / sparkline_max * 34) if sparkline_max else 0 %}
-          <rect x="{{ x }}" y="{{ 38 - h }}" width="8" height="{{ h if h > 0 else 1 }}"
-                fill="currentColor" opacity="{{ 0.35 + (b.count / sparkline_max * 0.55) if sparkline_max else 0.2 }}">
+          {% set cx = loop.index0 * 10 + 5 %}
+          {% set cy = 62 - ((b.count / sparkline_max * 58) if sparkline_max else 0) %}
+          <circle cx="{{ cx }}" cy="{{ cy }}" r="4" fill="transparent">
             <title>{{ b.hour }}: {{ b.count }} event{{ 's' if b.count != 1 else '' }}</title>
-          </rect>
+          </circle>
         {% endfor %}
+        {# end-dot marker — marks "now" end of the trend #}
+        {% set last = sparkline[-1] %}
+        {% set ex = (sparkline|length - 1) * 10 + 5 %}
+        {% set ey = 62 - ((last.count / sparkline_max * 58) if sparkline_max else 0) %}
+        <circle cx="{{ ex }}" cy="{{ ey }}" r="3" fill="currentColor"/>
+        <circle cx="{{ ex }}" cy="{{ ey }}" r="5" fill="none"
+                stroke="currentColor" stroke-width="1" opacity="0.4"/>
       </svg>
       <div class="spark-axis">
         <span>{{ sparkline[0].hour }}</span>

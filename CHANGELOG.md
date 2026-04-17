@@ -1,5 +1,57 @@
 # Changelog
 
+## v0.7.0 — 2026-04-18
+
+Design review implementation — warm palette, refined tables, friendlier
+empty states + helper text. 10 commits on top of v0.6.0.
+
+### Design
+
+- **Warm paper palette** — `--bg #f5f3ee` (warm off-white) instead of
+  cold slate `#fbfcfd`. Neutral warm black `#1a1a1a` text. Cards stay
+  pure white so they out-bright the page.
+- **Navy topbar** kept from v0.6.0, now contrasted against the warm page.
+- **Tables redesigned** — zebra stripes on even rows, single 2 px
+  `--border-strong` underline under header row (was per-row 1 px
+  borders), sentence-case column names (was 10 px uppercase
+  micro-caps), hover row gets `inset 3px 0 0 var(--accent)` left-edge
+  indicator.
+- **Form labels sentence-case** — drop the uppercase + letter-spacing
+  styling on `.form-grid label` to match Linear / Stripe / Vercel.
+- **Mono stat numbers** — `.stat-row b` now `font-mono +
+  tabular-nums + 1.286rem` so KPIs are the visual hero of the card.
+- **Sparkline polish** — 64 px tall (was 40 px), area fill under the
+  stroke, dotted baseline, per-hour hover circles with `<title>`
+  tooltips, end-dot marker for "now".
+- **`.empty-state` block** — icon + headline + max-42ch copy + CTA.
+  Applied to users list, devices list, audit log (filter-aware:
+  "No matching users" vs "No accounts yet").
+- **`.hint` class** — helper text under form inputs (Invites page
+  uses it for email/role/TTL explanations).
+- **Split accent token** — `--accent` stays for structural indigo,
+  new `--action #c2410c` burnt orange ready for future CTA separation.
+
+### `app_detail` redesign (the page the user flagged as "za hovno")
+
+Full rewrite from `page-head/card/card-header` to
+`section-head + release-block` cards. Release metadata is a
+`.pill-row` (version pill / channel / date), Downloads is now a
+proper `.data.compact` table with OS pills, mono code cells for arch
+/ archive_type, and a URL cell with word-break + mono. "Add download"
+became a collapsible `<details>` with a proper form-grid.
+Add-release-manually got labeled 3-col grid instead of 3 stretched
+full-width inputs.
+
+### Bugfixes
+
+- Sticky `.data thead th` disabled inside `.release-block` cards —
+  was causing the thead to overlap the first tbody row inside nested
+  tables.
+
+### Tests
+
+- 269 passing (was 268 in v0.6.0). Ruff + format clean.
+
 ## v0.6.0 — 2026-04-17
 
 Authentication expansion + security headers + design iteration. 8 commits on top of v0.5.0.
