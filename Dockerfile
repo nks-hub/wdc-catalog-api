@@ -7,7 +7,7 @@
 #   docker run -p 8765:8765 -v nks-wdc-catalog-state:/state \
 #     -e NKS_WDC_CATALOG_STATE_DIR=/state nks-wdc-catalog-api
 # ─────────────────────────────────────────────────────────────────────────
-FROM python:3.12-slim AS base
+FROM python:3.14-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
