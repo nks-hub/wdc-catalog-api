@@ -199,6 +199,11 @@ from . import observability  # noqa: E402
 
 observability.install(app)
 
+# Install RFC 7807 problem+json handlers for HTTPException + validation.
+from .problems import install_problem_handlers  # noqa: E402
+
+install_problem_handlers(app)
+
 app.mount("/static", StaticFiles(directory=_APP_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=_APP_DIR / "templates")
 
