@@ -117,6 +117,27 @@ if os.environ.get("NKS_WDC_CATALOG_ALLOW_CORS") == "1":
         allow_headers=["*"],
     )
 
+
+# Payload size ceiling — the config-sync endpoint accepts free-form JSON
+# so an unbounded request body is a cheap DoS + storage-exhaust vector.
+# 1 MiB covers legitimate WDC snapshots (seen in the wild: 50–300 KB).
+MAX_REQUEST_BYTES = int(os.environ.get("NKS_WDC_MAX_REQUEST_BYTES", 1024 * 1024))
+
+
+@app.middleware("http")
+async def _limit_payload_size(request: Request, call_next):
+    cl = request.headers.get("content-length")
+    if cl is not None:
+        try:
+            if int(cl) > MAX_REQUEST_BYTES:
+                return JSONResponse(
+                    {"detail": f"Request body exceeds {MAX_REQUEST_BYTES} bytes"},
+                    status_code=413,
+                )
+        except ValueError:
+            pass
+    return await call_next(request)
+
 # Mount the accounts + devices router (JWT-authenticated endpoints)
 app.include_router(devices_router)
 
@@ -136,8 +157,24 @@ def _base_context(request: Request, username: str | None, **extra) -> dict:
 # ─────────────────────────────────────────────────────────────────────────
 
 @app.get("/healthz", tags=["health"])
-def healthz() -> dict:
-    return {"ok": True, "service": "nks-wdc-catalog-api", "version": __version__}
+def healthz(db: Session = Depends(get_session)) -> JSONResponse:
+    """Liveness + readiness probe — verifies DB connectivity.
+
+    Kubernetes/Docker compose both use this endpoint. Returning 503 when
+    the DB is unreachable prevents the orchestrator from sending traffic
+    to a broken replica.
+    """
+    try:
+        db.execute(select(1)).scalar()
+        return JSONResponse(
+            {"ok": True, "service": "nks-wdc-catalog-api", "version": __version__, "db": "up"}
+        )
+    except Exception as exc:
+        log.warning("healthz db probe failed: %s", exc)
+        return JSONResponse(
+            {"ok": False, "service": "nks-wdc-catalog-api", "db": "down"},
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────

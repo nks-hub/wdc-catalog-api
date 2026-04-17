@@ -109,6 +109,26 @@ def test_login_accepts_dev_admin(client: TestClient) -> None:
     assert "samesite=strict" in set_cookie
 
 
+def test_healthz_reports_db_up(client: TestClient) -> None:
+    r = client.get("/healthz")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["db"] == "up"
+
+
+def test_payload_size_limit_rejects_oversized(client: TestClient) -> None:
+    """Content-Length > 1 MiB must be rejected with 413 before routing."""
+    # 2 MB synthetic body — don't actually ship, just set the header.
+    big_body = "x" * (2 * 1024 * 1024)
+    r = client.post(
+        "/api/v1/sync/config",
+        content=big_body,
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.status_code == 413
+
+
 @pytest.fixture
 def smoke_token(client: TestClient) -> str:
     """Register a throw-away account and return a JWT for smoke tests."""
