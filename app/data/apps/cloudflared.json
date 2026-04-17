@@ -13,46 +13,39 @@
       "released_at": "2026-03-05",
       "downloads": [
         {
-          "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.3.0/cloudflared-windows-amd64.exe",
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-cloudflared-2026.3.0/cloudflared-2026.3.0-windows-x64.exe",
           "os": "windows",
           "arch": "x64",
           "archive_type": "exe",
-          "source": "github"
+          "source": "nks-hub-binaries"
         },
         {
-          "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.3.0/cloudflared-windows-386.exe",
-          "os": "windows",
-          "arch": "x86",
-          "archive_type": "exe",
-          "source": "github"
-        },
-        {
-          "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.3.0/cloudflared-linux-amd64",
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-cloudflared-2026.3.0/cloudflared-2026.3.0-linux-x64",
           "os": "linux",
           "arch": "x64",
-          "archive_type": "bin",
-          "source": "github"
+          "archive_type": "binary",
+          "source": "nks-hub-binaries"
         },
         {
-          "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.3.0/cloudflared-linux-arm64",
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-cloudflared-2026.3.0/cloudflared-2026.3.0-linux-arm64",
           "os": "linux",
           "arch": "arm64",
-          "archive_type": "bin",
-          "source": "github"
+          "archive_type": "binary",
+          "source": "nks-hub-binaries"
         },
         {
-          "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.3.0/cloudflared-darwin-amd64.tgz",
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-cloudflared-2026.3.0/cloudflared-2026.3.0-macos-x64",
           "os": "macos",
           "arch": "x64",
-          "archive_type": "tgz",
-          "source": "github"
+          "archive_type": "binary",
+          "source": "nks-hub-binaries"
         },
         {
-          "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.3.0/cloudflared-darwin-arm64.tgz",
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-cloudflared-2026.3.0/cloudflared-2026.3.0-macos-arm64.tgz",
           "os": "macos",
           "arch": "arm64",
           "archive_type": "tgz",
-          "source": "github"
+          "source": "nks-hub-binaries"
         }
       ]
     }

@@ -12,25 +12,25 @@
       "channel": "stable",
       "downloads": [
         {
-          "url": "https://github.com/axllent/mailpit/releases/download/v1.29.6/mailpit-windows-amd64.zip",
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mailpit-1.29.6/mailpit-1.29.6-windows-x64.zip",
           "os": "windows",
           "arch": "x64",
           "archive_type": "zip",
-          "source": "github"
+          "source": "nks-hub-binaries"
         },
         {
-          "url": "https://github.com/axllent/mailpit/releases/download/v1.29.6/mailpit-linux-amd64.tar.gz",
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mailpit-1.29.6/mailpit-1.29.6-linux-x64.tar.gz",
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.gz",
-          "source": "github"
+          "source": "nks-hub-binaries"
         },
         {
-          "url": "https://github.com/axllent/mailpit/releases/download/v1.29.6/mailpit-darwin-arm64.tar.gz",
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mailpit-1.29.6/mailpit-1.29.6-macos-arm64.tar.gz",
           "os": "macos",
           "arch": "arm64",
           "archive_type": "tar.gz",
-          "source": "github"
+          "source": "nks-hub-binaries"
         }
       ]
     }

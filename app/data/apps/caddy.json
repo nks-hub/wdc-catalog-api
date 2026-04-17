@@ -12,25 +12,25 @@
       "channel": "stable",
       "downloads": [
         {
-          "url": "https://github.com/caddyserver/caddy/releases/download/v2.10.2/caddy_2.10.2_windows_amd64.zip",
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-caddy-2.10.2/caddy-2.10.2-windows-x64.zip",
           "os": "windows",
           "arch": "x64",
           "archive_type": "zip",
-          "source": "github"
+          "source": "nks-hub-binaries"
         },
         {
-          "url": "https://github.com/caddyserver/caddy/releases/download/v2.10.2/caddy_2.10.2_linux_amd64.tar.gz",
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-caddy-2.10.2/caddy-2.10.2-linux-x64.tar.gz",
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.gz",
-          "source": "github"
+          "source": "nks-hub-binaries"
         },
         {
-          "url": "https://github.com/caddyserver/caddy/releases/download/v2.10.2/caddy_2.10.2_mac_arm64.tar.gz",
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-caddy-2.10.2/caddy-2.10.2-macos-arm64.tar.gz",
           "os": "macos",
           "arch": "arm64",
           "archive_type": "tar.gz",
-          "source": "github"
+          "source": "nks-hub-binaries"
         }
       ]
     }
