@@ -158,6 +158,11 @@ async def _limit_payload_size(request: Request, call_next):
 # Mount the accounts + devices router (JWT-authenticated endpoints)
 app.include_router(devices_router)
 
+# Mount the admin JSON API (role-gated endpoints for user management)
+from .admin_users import router as admin_users_router  # noqa: E402
+
+app.include_router(admin_users_router)
+
 app.mount("/static", StaticFiles(directory=_APP_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=_APP_DIR / "templates")
 
