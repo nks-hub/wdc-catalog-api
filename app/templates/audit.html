@@ -9,13 +9,13 @@
 
   <div class="filter-chips">
     <span class="muted">Quick filters:</span>
-    <a class="chip" href="/admin/audit?action=user.suspended">Suspensions</a>
-    <a class="chip" href="/admin/audit?action=user.role_changed">Role changes</a>
-    <a class="chip" href="/admin/audit?action=permission.denied">RBAC denials</a>
-    <a class="chip" href="/admin/audit?resource_type=snapshot">Snapshot ops</a>
-    <a class="chip" href="/admin/audit?resource_type=invite">Invites</a>
-    <a class="chip" href="/admin/audit?action=backup.restored">Restores</a>
-    <a class="chip" href="/admin/audit?action=user.deleted">Deletions</a>
+    <a class="chip {% if action == 'user.suspended' %}chip-active{% endif %}" href="/admin/audit?action=user.suspended">Suspensions</a>
+    <a class="chip {% if action == 'user.role_changed' %}chip-active{% endif %}" href="/admin/audit?action=user.role_changed">Role changes</a>
+    <a class="chip {% if action == 'permission.denied' %}chip-active{% endif %}" href="/admin/audit?action=permission.denied">RBAC denials</a>
+    <a class="chip {% if resource_type == 'snapshot' and not action %}chip-active{% endif %}" href="/admin/audit?resource_type=snapshot">Snapshot ops</a>
+    <a class="chip {% if resource_type == 'invite' and not action %}chip-active{% endif %}" href="/admin/audit?resource_type=invite">Invites</a>
+    <a class="chip {% if action == 'backup.restored' %}chip-active{% endif %}" href="/admin/audit?action=backup.restored">Restores</a>
+    <a class="chip {% if action == 'user.deleted' %}chip-active{% endif %}" href="/admin/audit?action=user.deleted">Deletions</a>
   </div>
 
   <form method="get" class="inline-form">

@@ -1384,6 +1384,29 @@ details > summary:hover { color: var(--accent-hover); }
   border-color: var(--accent);
   color: var(--accent);
 }
+/* Active chip — filled accent so the user sees what filter produced the
+   current result set, not just what's under the cursor. */
+.chip-active,
+.chip-active:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* --------------------------------------------------------------------------
+   Motion — respect users who requested reduced motion at the OS level.
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  .btn-primary:active { transform: none; }
+}
 
 /* --------------------------------------------------------------------------
    Sparkline
