@@ -259,7 +259,10 @@ class DeviceSnapshot(Base):
         Index("ix_snap_account_kind_created", "account_id", "kind", "created_at"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True, autoincrement=True,
+    )
     device_id: Mapped[str] = mapped_column(
         String(64),
         ForeignKey("device_configs.device_id", ondelete="CASCADE"),
@@ -272,7 +275,12 @@ class DeviceSnapshot(Base):
     label: Mapped[str | None] = mapped_column(String(128), nullable=True)
     kind: Mapped[str] = mapped_column(String(16), default="auto", nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
-    payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # ``none_as_null=True`` makes Python ``None`` persist as SQL NULL
+    # rather than the JSON literal string ``null`` — required for the
+    # exactly-one-storage CHECK constraint.
+    payload_json: Mapped[dict | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
     payload_blob: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     blob_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
     checksum: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -340,7 +348,10 @@ class SnapshotExport(Base):
     """Audit trail for snapshot exports + restores + imports."""
     __tablename__ = "snapshot_exports"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True, autoincrement=True,
+    )
     account_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("accounts.id", ondelete="CASCADE"), index=True,
     )
