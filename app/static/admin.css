@@ -1079,6 +1079,80 @@ main.container {
   max-width: 880px;
 }
 
+/* Hero token block — rendered once, right after the admin mints a PAT
+   or an invite. The plaintext is shown a single time, so the block
+   is visually loud on purpose: heavy border, mono block, obvious copy
+   button, explicit "shown once" warning. */
+.token-hero {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--success) 6%, var(--surface)) 0%,
+    var(--surface) 60%
+  );
+  border: 1px solid color-mix(in srgb, var(--success) 40%, var(--border));
+  border-left: 4px solid var(--success);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--success) 12%, transparent),
+              var(--shadow-sm);
+}
+.token-hero-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.token-hero-label {
+  display: block;
+  font-size: 0.786rem;
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: 0.02em;
+  margin-bottom: 2px;
+}
+.token-hero-name {
+  font-size: 1.143rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.token-hero-value {
+  background: var(--surface-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.929rem;
+  color: var(--text);
+  word-break: break-all;
+  white-space: pre-wrap;
+  user-select: all;
+  line-height: 1.5;
+}
+.token-hero-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: 0.821rem;
+}
+.token-hero-warn {
+  color: var(--warning);
+  font-weight: 500;
+}
+.btn-copy.is-copied {
+  background: var(--success) !important;
+  border-color: var(--success) !important;
+  color: #fff !important;
+}
+
 /* Empty state blocks — icon + headline + supporting copy + CTA.
    NN/g 2021: always give the user a next step, never leave them at
    italic grey "No results." */

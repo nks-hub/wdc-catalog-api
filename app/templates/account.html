@@ -33,11 +33,23 @@
   </p>
 
   {% if minted_pat %}
-  <div class="callout callout-success">
-    <div><strong>New token:</strong> {{ minted_pat.name }}</div>
-    <div><strong>Copy now (shown once):</strong></div>
-    <pre class="selectable">{{ minted_pat.token }}</pre>
-    {% if minted_pat.expires_at %}<div class="muted">Expires {{ minted_pat.expires_at }}</div>{% endif %}
+  <div class="token-hero">
+    <div class="token-hero-head">
+      <div>
+        <span class="token-hero-label">New personal access token</span>
+        <b class="token-hero-name">{{ minted_pat.name }}</b>
+      </div>
+      <button type="button" class="btn btn-primary btn-copy" data-copy-target="new-pat-value">Copy token</button>
+    </div>
+    <pre id="new-pat-value" class="token-hero-value selectable">{{ minted_pat.token }}</pre>
+    <div class="token-hero-meta">
+      <span class="token-hero-warn">Shown once — if you miss it you'll need to revoke and mint again.</span>
+      {% if minted_pat.expires_at %}
+        <span class="muted">Expires {{ minted_pat.expires_at }}</span>
+      {% else %}
+        <span class="muted">Never expires</span>
+      {% endif %}
+    </div>
   </div>
   {% endif %}
 

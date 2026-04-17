@@ -28,11 +28,18 @@
   </form>
 
   {% if minted %}
-    <div class="callout callout-success">
-      <div><strong>Invite for:</strong> {{ minted.email }} ({{ minted.role }})</div>
-      <div><strong>Expires:</strong> {{ minted.expires_at }}</div>
-      <div><strong>Token (copy now — shown once):</strong></div>
-      <pre class="selectable">{{ minted.token }}</pre>
+    <div class="token-hero">
+      <div class="token-hero-head">
+        <div>
+          <span class="token-hero-label">Invite minted for {{ minted.email }}</span>
+          <b class="token-hero-name">{{ minted.role }} · expires {{ minted.expires_at }}</b>
+        </div>
+        <button type="button" class="btn btn-primary btn-copy" data-copy-target="new-invite-value">Copy token</button>
+      </div>
+      <pre id="new-invite-value" class="token-hero-value selectable">{{ minted.token }}</pre>
+      <div class="token-hero-meta">
+        <span class="token-hero-warn">Shown once — hand it to the invitee directly (Signal / 1Password, not email).</span>
+      </div>
     </div>
   {% endif %}
 </section>
