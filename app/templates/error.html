@@ -5,7 +5,7 @@
   <div class="error-hero">
     <div class="error-code">{{ status_code }}</div>
     <h1>{{ title }}</h1>
-    {% if detail %}<p class="muted">{{ detail }}</p>{% endif %}
+    {% if detail and detail != title %}<p class="muted">{{ detail }}</p>{% endif %}
   </div>
 
   <div class="action-grid">
