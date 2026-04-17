@@ -45,8 +45,6 @@ from .csrf import require_csrf
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import __version__
@@ -56,11 +54,8 @@ from .auth import (
     current_user,
     ensure_admin_user,
     issue_session,
-    optional_user,
-    verify_dummy_password,
-    verify_password,
 )
-from .db import User, create_all, get_session, session_factory
+from .db import create_all, get_session, session_factory
 from .devices import router as devices_router
 from .generators import GENERATORS, run_generator
 from .service import (
@@ -283,26 +278,10 @@ from .problems import install_problem_handlers  # noqa: E402
 install_problem_handlers(app)
 
 app.mount("/static", StaticFiles(directory=_APP_DIR / "static"), name="static")
-templates = Jinja2Templates(directory=_APP_DIR / "templates")
 
-
-def _base_context(request: Request, username: str | None, **extra) -> dict:
-    """Shared template context — version always present so base.html renders.
-
-    Includes the active CSRF token so admin templates can embed it as a
-    hidden input on every form. The cookie itself is refreshed by the
-    GET handler right before the template renders.
-    """
-    csrf = request.cookies.get("nks_wdc_csrf") or ""
-    ctx = {
-        "request": request,
-        "username": username,
-        "version": __version__,
-        "flash": None,
-        "csrf_token": csrf,
-    }
-    ctx.update(extra)
-    return ctx
+# Shared Jinja environment + base context live in ``app.templating``;
+# aliased here so the admin HTML routes below keep their short names.
+from .templating import base_context as _base_context, templates  # noqa: E402
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -345,60 +324,10 @@ _CATALOG_CACHE_SECONDS = int(os.environ.get("NKS_WDC_CATALOG_CACHE_SECONDS", "60
 # ─────────────────────────────────────────────────────────────────────────
 
 
-@app.get("/", include_in_schema=False)
-def root(user: Annotated[str | None, Depends(optional_user)] = None):
-    return RedirectResponse("/admin" if user else "/login")
+# /, /login, /logout live in ``app.api_auth_ui`` — mounted below.
+from .api_auth_ui import router as auth_ui_router  # noqa: E402
 
-
-@app.get("/login", response_class=HTMLResponse, include_in_schema=False)
-def login_form(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(
-        request, "login.html", _base_context(request, None)
-    )
-
-
-@app.post("/login", include_in_schema=False, dependencies=[Depends(require_csrf)])
-@limiter.limit("5/minute")
-def login_submit(
-    request: Request,
-    username: Annotated[str, Form()],
-    password: Annotated[str, Form()],
-    db: Session = Depends(get_session),
-):
-    user = db.scalar(select(User).where(User.username == username.strip()))
-    if user is None:
-        verify_dummy_password(password)
-        return templates.TemplateResponse(
-            request,
-            "login.html",
-            _base_context(request, None, error="Invalid username or password"),
-            status_code=401,
-        )
-    if not verify_password(password, user.password_hash):
-        return templates.TemplateResponse(
-            request,
-            "login.html",
-            _base_context(request, None, error="Invalid username or password"),
-            status_code=401,
-        )
-    token = issue_session(user.username)
-    response = RedirectResponse("/admin", status_code=status.HTTP_303_SEE_OTHER)
-    response.set_cookie(
-        key=SESSION_COOKIE,
-        value=token,
-        max_age=SESSION_MAX_AGE,
-        httponly=True,
-        samesite="strict",
-        secure=_cookie_secure(),
-    )
-    return response
-
-
-@app.post("/logout", include_in_schema=False, dependencies=[Depends(require_csrf)])
-def logout() -> RedirectResponse:
-    response = RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
-    response.delete_cookie(SESSION_COOKIE)
-    return response
+app.include_router(auth_ui_router)
 
 
 # ─────────────────────────────────────────────────────────────────────────
