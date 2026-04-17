@@ -297,6 +297,8 @@ def apply_generated_releases(
             )
         inserted += 1
     db.commit()
+    if inserted or replace:
+        _invalidate_catalog_cache()
     return inserted
 
 

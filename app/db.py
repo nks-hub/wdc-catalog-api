@@ -237,7 +237,9 @@ class RevokedToken(Base):
     )
     reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
     revoked_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, index=True
+    )
 
 
 class ConsumedInvite(Base):
@@ -325,7 +327,9 @@ class DeviceConfig(Base):
     os: Mapped[str | None] = mapped_column(String(16), nullable=True)
     arch: Mapped[str | None] = mapped_column(String(16), nullable=True)
     site_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, index=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utc_now, onupdate=_utc_now
     )
@@ -505,6 +509,14 @@ class AccountEncryptionKey(Base):
     kek_source: Mapped[str] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
     retired_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Partial unique index on (account_id, kek_source) WHERE retired_at IS
+    # NULL — created via the Alembic migration (uses raw CREATE UNIQUE
+    # INDEX so the WHERE clause passes through verbatim on both Postgres
+    # and SQLite). Declarative ``__table_args__`` is intentionally empty:
+    # SQLAlchemy's Index kwargs accept strings but emit them through the
+    # compiler, which trips up on ``CREATE TABLE … embedded`` paths used
+    # by ``create_all`` for SQLite tests.
 
 
 # ── Session helper ──────────────────────────────────────────────────────

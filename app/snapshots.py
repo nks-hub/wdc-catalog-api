@@ -27,6 +27,7 @@ from typing import Optional
 
 import zstandard as zstd
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import crypto as _crypto
@@ -250,8 +251,22 @@ def _active_key(
         wrap_algo="aes-256-gcm",
         kek_source=kek_source,
     )
-    db.add(row)
-    db.flush()
+    # Partial unique index on (account_id, kek_source) WHERE retired_at
+    # IS NULL makes the race between two concurrent snapshot creations
+    # visible as an IntegrityError on the losing transaction. Instead of
+    # bubbling the 500, retry the SELECT inside a SAVEPOINT — the winner
+    # has committed its row by now and the loser reuses it.
+    try:
+        with db.begin_nested():
+            db.add(row)
+            db.flush()
+    except IntegrityError:
+        existing = db.scalar(
+            select(AccountEncryptionKey).where(*filters).limit(1)
+        )
+        if existing is None:
+            raise
+        return existing
     return row
 
 
