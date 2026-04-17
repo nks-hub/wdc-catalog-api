@@ -18,11 +18,13 @@
   --border:       #dde0e8;
   --border-strong:#b8bdd0;
 
-  /* Text */
-  --text:         #111827;
-  --text-2:       #374151;
-  --text-3:       #6b7280;
-  --text-4:       #9ca3af;
+  /* Text — bumped contrast of --text-3 from #6b7280 → #4b5563 and
+     --text-4 from #9ca3af → #6b7280 so "muted" labels still read
+     WCAG-AA against the light surface. */
+  --text:         #0f172a;
+  --text-2:       #1f2937;
+  --text-3:       #4b5563;
+  --text-4:       #6b7280;
 
   /* Accent — indigo */
   --accent:       #4f46e5;
@@ -360,10 +362,16 @@ select, input, textarea, button {
   align-items: center;
   gap: 2px;
   flex: 1;
+  flex-wrap: wrap;
+  row-gap: 4px;
   overflow-x: auto;
   scrollbar-width: none;
 }
 .nav::-webkit-scrollbar { display: none; }
+@media (max-width: 880px) {
+  .nav { gap: 0; }
+  .nav a { padding: var(--space-1) var(--space-2); font-size: 0.786rem; }
+}
 
 .nav a {
   padding: var(--space-1) var(--space-3);
@@ -691,16 +699,40 @@ main.container {
 }
 .form textarea { resize: vertical; min-height: 80px; }
 
-/* .form-grid — two-column form (invites) */
+/* .form-grid — responsive multi-column form. Auto-fit with a sane
+   minimum so labels never collapse to 1-word-per-line, and fields
+   stack into a single column on narrow viewports instead of trying to
+   cram 4 columns into 600 px. */
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr auto auto;
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3) var(--space-4);
   align-items: end;
   padding: var(--space-4);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+}
+.form-grid .span-all { grid-column: 1 / -1; }
+.form-grid button[type="submit"],
+.form-grid .btn {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.form-grid .checkbox {
+  flex-direction: row !important;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 500;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.929rem;
+}
+.form-grid .checkbox input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
 }
 .form-grid label {
   display: flex;
