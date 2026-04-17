@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Compare snapshots — {{ device_id }}{% endblock %}
+{% block content %}
+<section class="section">
+  <p><a href="/admin/devices/{{ device_id }}/snapshots">← back to snapshots</a></p>
+  <h1>Compare snapshots on <code>{{ device_id }}</code></h1>
+
+  <form method="get" class="inline-form">
+    <label>A
+      <select name="a" required>
+        <option value="">—</option>
+        {% for s in choices %}
+          <option value="{{ s.id }}" {% if a_id == s.id %}selected{% endif %}>#{{ s.id }} · {{ s.kind }} · {{ s.label or '—' }} · {{ s.created_at[:19] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>B
+      <select name="b" required>
+        <option value="">—</option>
+        {% for s in choices %}
+          <option value="{{ s.id }}" {% if b_id == s.id %}selected{% endif %}>#{{ s.id }} · {{ s.kind }} · {{ s.label or '—' }} · {{ s.created_at[:19] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="btn btn-primary">Compare</button>
+  </form>
+
+  {% if error %}
+    <div class="callout">{{ error }}</div>
+  {% elif diff_text is not none %}
+    <h2>Diff A → B</h2>
+    {% if diff_text == '[]' %}
+      <p class="muted">Snapshots are identical — zero operations needed to transform A into B.</p>
+    {% else %}
+    <details open>
+      <summary>RFC 6902 JSON Patch ({{ op_count }} operation{% if op_count != 1 %}s{% endif %})</summary>
+      <pre class="detail selectable">{{ diff_text }}</pre>
+    </details>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

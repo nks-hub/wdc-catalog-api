@@ -51,5 +51,59 @@
       {% endif %}
     </div>
   </div>
+
+  <h2>Per-device overrides</h2>
+  <p class="muted">
+    Override the account-level policy for individual devices — useful when one device
+    generates much denser snapshots than the rest (e.g. the CI box vs the admin's laptop).
+  </p>
+
+  <table class="data">
+    <thead>
+      <tr><th>Device</th><th>Keep last N</th><th>Expire days</th><th>Keep labeled</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for p in device_policies %}
+      <tr>
+        <td><a href="/admin/devices/{{ p.device_id }}"><code>{{ p.device_id }}</code></a></td>
+        <td>{{ p.keep_last_n_auto }}</td>
+        <td>{{ p.auto_expire_days or '—' }}</td>
+        <td>{{ 'yes' if p.keep_labeled_forever else 'no' }}</td>
+        <td class="actions">
+          <form method="post" action="/admin/retention/device/{{ p.device_id }}/delete" class="inline" onsubmit="return confirm('Remove override and fall back to account default?');">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="btn btn-sm btn-warn">remove</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">No per-device overrides — all devices use the account policy above.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3>Add override</h3>
+  <form method="post" action="/admin/retention/device" class="form-grid">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Device
+      <select name="device_id" required>
+        <option value="">—</option>
+        {% for d in devices %}
+          <option value="{{ d.device_id }}">{{ d.device_id }}{% if d.name %} ({{ d.name }}){% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Keep last N auto
+      <input type="number" name="keep_last_n_auto" value="30" min="1" max="500">
+    </label>
+    <label>Expire days (blank = never)
+      <input type="number" name="auto_expire_days" min="1" max="365">
+    </label>
+    <label class="checkbox">
+      <input type="checkbox" name="keep_labeled_forever" value="1" checked>
+      Keep labeled forever
+    </label>
+    <button class="btn btn-primary">Add override</button>
+  </form>
 </section>
 {% endblock %}

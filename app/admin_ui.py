@@ -877,7 +877,7 @@ def admin_retention_page(
 ) -> HTMLResponse:
     from sqlalchemy import select as _sel
 
-    from .db import SnapshotRetentionPolicy
+    from .db import DeviceConfig, SnapshotRetentionPolicy
 
     acct = _admin_account(db, username)
     row = db.scalar(
@@ -895,17 +895,123 @@ def admin_retention_page(
         if row is not None
         else None
     )
+    device_rows = db.scalars(
+        _sel(SnapshotRetentionPolicy)
+        .where(
+            SnapshotRetentionPolicy.account_id == acct.id,
+            SnapshotRetentionPolicy.device_id.is_not(None),
+        )
+        .order_by(SnapshotRetentionPolicy.device_id)
+    ).all()
+    device_policies = [
+        {
+            "device_id": p.device_id,
+            "keep_last_n_auto": p.keep_last_n_auto,
+            "auto_expire_days": p.auto_expire_days,
+            "keep_labeled_forever": p.keep_labeled_forever,
+        }
+        for p in device_rows
+    ]
+    # Devices available for new overrides — exclude those already with a policy.
+    taken = {p["device_id"] for p in device_policies}
+    devices_rows = db.scalars(
+        _sel(DeviceConfig)
+        .where(DeviceConfig.user_id == acct.id)
+        .order_by(DeviceConfig.device_id)
+    ).all()
+    devices = [
+        {"device_id": d.device_id, "name": d.name}
+        for d in devices_rows
+        if d.device_id not in taken
+    ]
+
     ctx = base_context(
         request,
         username,
         caller_email=acct.email,
         policy=policy,
+        device_policies=device_policies,
+        devices=devices,
         last_run=None,
         flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "retention.html", ctx)
     _clear_flash(response)
     return response
+
+
+@router.post("/admin/retention/device", dependencies=[Depends(require_csrf)])
+def admin_add_device_retention(
+    username: Annotated[str, Depends(current_user)],
+    device_id: Annotated[str, Form()],
+    keep_last_n_auto: Annotated[int, Form()] = 30,
+    auto_expire_days: Annotated[str, Form()] = "",
+    keep_labeled_forever: Annotated[str, Form()] = "",
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    from sqlalchemy import select as _sel
+
+    from .db import DeviceConfig, SnapshotRetentionPolicy
+    from .device_ids import normalize_device_id
+
+    acct = _admin_account(db, username)
+    dev_id = normalize_device_id(device_id)
+    dev = db.get(DeviceConfig, dev_id)
+    if dev is None or dev.user_id != acct.id:
+        return _redirect(
+            "/admin/retention", "error", "Device not found on your account"
+        )
+
+    existing = db.scalar(
+        _sel(SnapshotRetentionPolicy).where(
+            SnapshotRetentionPolicy.account_id == acct.id,
+            SnapshotRetentionPolicy.device_id == dev_id,
+        )
+    )
+    if existing is not None:
+        return _redirect(
+            "/admin/retention", "error", f"Override for {dev_id} already exists"
+        )
+
+    db.add(
+        SnapshotRetentionPolicy(
+            account_id=acct.id,
+            device_id=dev_id,
+            keep_last_n_auto=max(1, min(keep_last_n_auto, 500)),
+            auto_expire_days=int(auto_expire_days)
+            if auto_expire_days.strip()
+            else None,
+            keep_labeled_forever=bool(keep_labeled_forever),
+        )
+    )
+    return _redirect("/admin/retention", "success", f"Added override for {dev_id}")
+
+
+@router.post(
+    "/admin/retention/device/{device_id}/delete", dependencies=[Depends(require_csrf)]
+)
+def admin_delete_device_retention(
+    device_id: str,
+    username: Annotated[str, Depends(current_user)],
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    from sqlalchemy import select as _sel
+
+    from .db import SnapshotRetentionPolicy
+    from .device_ids import normalize_device_id
+
+    acct = _admin_account(db, username)
+    dev_id = normalize_device_id(device_id)
+    row = db.scalar(
+        _sel(SnapshotRetentionPolicy).where(
+            SnapshotRetentionPolicy.account_id == acct.id,
+            SnapshotRetentionPolicy.device_id == dev_id,
+        )
+    )
+    if row is None:
+        return _redirect("/admin/retention", "error", "Override not found")
+    db.delete(row)
+    return _redirect("/admin/retention", "success", f"Override for {dev_id} removed")
 
 
 @router.post("/admin/retention/policy", dependencies=[Depends(require_csrf)])
@@ -1408,6 +1514,94 @@ def admin_device_import(
         "success",
         f"Imported #{snap.id} ({default_label})",
     )
+
+
+# ── Snapshot compare (diff between any two) ─────────────────────────
+
+
+@router.get("/admin/devices/{device_id}/snapshots/compare", response_class=HTMLResponse)
+def admin_snapshot_compare(
+    request: Request,
+    device_id: str,
+    username: Annotated[str, Depends(current_user)],
+    a: int | None = None,
+    b: int | None = None,
+    flash: Annotated[str | None, Cookie(alias="flash")] = None,
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    """Render a diff between any two snapshots on this device.
+
+    Complements the single-snapshot view (which diffs against HEAD only)
+    — use this to inspect what changed between e.g. snapshot #42 and
+    snapshot #50 without bouncing HEAD around.
+    """
+    import json as _json
+
+    from . import snapshots as _snap
+    from .db import DeviceSnapshot
+    from .device_ids import normalize_device_id
+
+    acct = _admin_account(db, username)
+    dev_id = normalize_device_id(device_id)
+
+    rows, _ = _snap.list_snapshots(
+        db, device_id=dev_id, account_id=acct.id, offset=0, limit=200
+    )
+    choices = [
+        {
+            "id": s.id,
+            "kind": s.kind,
+            "label": s.label,
+            "created_at": s.created_at.isoformat() if s.created_at else "",
+        }
+        for s in rows
+    ]
+
+    diff_text = None
+    op_count = 0
+    error = None
+    if a and b:
+        if a == b:
+            error = "Pick two different snapshots."
+        else:
+            snap_a = db.get(DeviceSnapshot, a)
+            snap_b = db.get(DeviceSnapshot, b)
+            if (
+                snap_a is None
+                or snap_b is None
+                or snap_a.device_id != dev_id
+                or snap_b.device_id != dev_id
+                or snap_a.account_id != acct.id
+                or snap_b.account_id != acct.id
+            ):
+                error = "Snapshot not found on this device."
+            else:
+                try:
+                    patch = _snap.diff(snap_a, snap_b, db=db)
+                    op_count = len(patch)
+                    diff_text = _json.dumps(
+                        patch, indent=2, sort_keys=True, ensure_ascii=False
+                    )
+                except PermissionError:
+                    error = "Can't diff — one of the snapshots is passphrase-encrypted."
+                except Exception as exc:  # noqa: BLE001
+                    error = f"Diff failed: {exc}"
+
+    ctx = base_context(
+        request,
+        username,
+        device_id=dev_id,
+        choices=choices,
+        a_id=a,
+        b_id=b,
+        diff_text=diff_text,
+        op_count=op_count,
+        error=error,
+        flash=_pop_flash(flash),
+    )
+    response = templates.TemplateResponse(request, "snapshot_compare.html", ctx)
+    _clear_flash(response)
+    return response
 
 
 # ── Revoked-tokens viewer ───────────────────────────────────────────
