@@ -285,6 +285,8 @@ def optional_account(
 def register(
     request: Request, body: RegisterRequest, db: Session = Depends(get_session)
 ) -> TokenResponse:
+    from . import audit as _audit
+
     # EmailStr + min_length=8 already validated by Pydantic; we only
     # need to normalize casing here.
     email = body.email.strip().lower()
@@ -297,6 +299,15 @@ def register(
     )
     db.add(account)
     db.flush()
+    _audit.emit(
+        db,
+        request=request,
+        actor=account,
+        action="account.registered",
+        resource_type="account",
+        resource_id=str(account.id),
+        detail={"email": email, "role": account.role},
+    )
     token = create_token(account.id, email, token_version=account.token_version)
     return TokenResponse(token=token, email=email)
 
@@ -347,6 +358,15 @@ def login(
     account.failed_login_count = 0
     account.locked_until = None
     account.last_login_at = datetime.now(timezone.utc)
+    from . import audit as _audit
+    _audit.emit(
+        db,
+        request=request,
+        actor=account,
+        action="login.ok",
+        resource_type="account",
+        resource_id=str(account.id),
+    )
     token = create_token(account.id, email, token_version=account.token_version)
     return TokenResponse(token=token, email=email)
 
