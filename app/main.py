@@ -259,6 +259,13 @@ from . import observability  # noqa: E402
 
 observability.install(app)
 
+# Transport-level security headers (CSP, HSTS, X-Frame-Options, …).
+# Applied last so it wraps every handler, including the problem-json
+# and rate-limit exception handlers registered below.
+from . import security_headers  # noqa: E402
+
+security_headers.install(app)
+
 # Install RFC 7807 problem+json handlers for HTTPException + validation.
 from .problems import install_problem_handlers  # noqa: E402
 

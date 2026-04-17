@@ -193,6 +193,25 @@ def test_admin_theme_toggle_cycles_cookie(admin_client: TestClient) -> None:
     ) in (None, "")
 
 
+def test_security_headers_present_on_admin_pages(admin_client: TestClient) -> None:
+    """CSP + nosniff + X-Frame-Options must stamp every admin HTML
+    response. HSTS is DEV-gated so it isn't asserted here."""
+    r = admin_client.get("/admin")
+    assert r.status_code == 200
+    assert "content-security-policy" in r.headers
+    assert r.headers.get("x-content-type-options") == "nosniff"
+    assert r.headers.get("x-frame-options") == "DENY"
+    assert "referrer-policy" in r.headers
+
+
+def test_security_headers_skip_metrics(admin_client: TestClient) -> None:
+    """Prometheus scrapers don't need CSP — it'd clutter the plain-text
+    metrics body for scanners that parse headers."""
+    r = admin_client.get("/metrics")
+    assert r.status_code == 200
+    assert "content-security-policy" not in r.headers
+
+
 def test_first_visit_csrf_bootstrap_lets_login_succeed() -> None:
     """Fresh browser with no cookies must be able to complete the login
     flow on its *first* visit. The form field + response cookie must
