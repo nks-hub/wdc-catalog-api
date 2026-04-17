@@ -8,27 +8,35 @@
    Design tokens — light mode
    -------------------------------------------------------------------------- */
 :root {
-  /* Surfaces — pure white cards on a very-slightly-warm off-white page */
-  --bg:           #f6f7fb;
+  /* Surfaces — warm paper (#f5f3ee) instead of cold slate. NN/g trust
+     research 2023: warm neutrals read as higher quality in B2B admin
+     surfaces. Cards stay pure white to out-bright the page. */
+  --bg:           #f5f3ee;
   --surface:      #ffffff;
-  --surface-2:    #f0f1f8;
-  --surface-3:    #e4e6f0;
+  --surface-2:    #ebe7de;
+  --surface-3:    #ddd8cb;
 
-  /* Borders */
-  --border:       #dde0ea;
-  --border-strong:#b0b8cc;
+  /* Borders — single token, used only on inputs + dividers; cards
+     get edges from shadow instead. */
+  --border:       #d9d3c6;
+  --border-strong:#a39c8c;
 
-  /* Text — deep navy-slate for maximum contrast */
-  --text:         #0f172a;
-  --text-2:       #1e293b;
-  --text-3:       #3e4d6c;
-  --text-4:       #64748b;
+  /* Text — neutral warm black (not blue-black) against warm paper. */
+  --text:         #1a1a1a;
+  --text-2:       #2a2a2a;
+  --text-3:       #555552;
+  --text-4:       #77746c;
 
-  /* Accent — vivid indigo-violet */
+  /* Accent — structural indigo stays for links + brand. A second
+     ``--action`` token carries primary CTAs so buttons pop in the
+     warm context instead of blending with the topbar. */
   --accent:       #4f46e5;
   --accent-hover: #3730a3;
-  --accent-subtle:#eef2ff;
+  --accent-subtle:#efeadf;  /* warm cream for chip hover + version pill */
   --accent-text:  #312e81;
+
+  --action:       #c2410c;  /* burnt orange CTA */
+  --action-hover: #9a3412;
 
   /* Topbar */
   --topbar-bg:    #1e1b4b;
@@ -500,23 +508,28 @@ main.container {
 }
 
 .stat-card h3 {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--accent);
+  font-size: 0.929rem;
+  font-weight: 600;
+  color: var(--text-3);
   margin: 0;
   padding-bottom: var(--space-2);
-  border-bottom: 2px solid var(--accent-subtle);
+  border-bottom: 1px solid var(--border);
 }
 
 .stat-row {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  font-size: 0.857rem;
+  font-size: 0.929rem;
 }
 .stat-row span { color: var(--text-3); }
+.stat-row b {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.286rem;
+  font-weight: 600;
+  color: var(--text);
+}
 .stat-row b {
   font-size: 1.2rem;
   font-weight: 700;
@@ -758,12 +771,12 @@ main.container {
 .form-grid label {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  gap: 6px;
+  /* Sentence-case + normal weight — matches Linear/Stripe/Vercel
+     admin conventions, more readable than 10 px uppercase. */
+  font-size: 0.857rem;
+  font-weight: 500;
+  color: var(--text-2);
 }
 .form-grid input,
 .form-grid select {
@@ -855,35 +868,46 @@ main.container {
 }
 
 .data thead tr {
-  background: var(--surface-2);
-  border-bottom: 2px solid var(--border);
+  background: transparent;
+  /* Single heavier underline under the header row replaces per-row
+     borders below. NN/g data-table research 2019: zebra + heavy
+     header underline + hover reads faster than a 1 px grid. */
+  border-bottom: 2px solid var(--border-strong);
 }
 .data thead th {
   position: sticky;
   top: 56px;
   z-index: 2;
-  background: var(--surface-2);
+  background: var(--surface);
 }
 .data th {
   padding: var(--space-3) var(--space-4);
   text-align: left;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-3);
+  /* Sentence-case, weight 600 — modern admin tables (Linear, Stripe
+     dashboard, GitHub) moved away from uppercase micro-caps. */
+  font-size: 0.821rem;
+  font-weight: 600;
+  color: var(--text-2);
   white-space: nowrap;
 }
 
 .data td {
-  padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--border);
+  padding: 12px var(--space-4);
   color: var(--text-2);
   vertical-align: middle;
   transition: background 100ms ease;
 }
-.data tbody tr:first-child td { border-top: none; }
-.data tbody tr:hover td { background: var(--surface-2); }
+/* Zebra — subtle warm stripe so long lists read left-to-right
+   without the eye re-locking per row. Row borders removed
+   because zebra + underline-below-header does the same job with
+   less visual noise. */
+.data tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--surface-2) 50%, transparent);
+}
+.data tbody tr:hover td {
+  background: var(--accent-subtle);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
 .data tbody tr:focus-within td { background: var(--accent-subtle); }
 
 .data.compact th { padding: var(--space-2) var(--space-4); }
