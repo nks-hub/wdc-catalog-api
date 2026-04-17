@@ -307,6 +307,16 @@ def _unwrap(row: AccountEncryptionKey, *, passphrase: Optional[str] = None) -> b
     return _crypto.unwrap_dek(wrapped, row.account_id, salt)
 
 
+def _aad_for(account_id: Optional[int], kid: str) -> bytes:
+    """Build the AAD string pinning a ciphertext to (account, kid).
+
+    Including ``kid`` means a ciphertext encrypted under DEK A cannot be
+    spliced onto a row that points at DEK B within the same account —
+    defence-in-depth against DEK rotation foot-guns.
+    """
+    return f"nks-wdc-snapshot-{account_id or 0}-{kid}".encode("ascii")
+
+
 def _decrypt_with_kid(
     db: Session,
     kid: str,
@@ -319,8 +329,17 @@ def _decrypt_with_kid(
     if row is None:
         raise RuntimeError(f"Encryption key {kid} no longer exists")
     dek = _unwrap(row, passphrase=passphrase)
-    aad = f"nks-wdc-snapshot-{account_id or 0}".encode("ascii")
-    return _crypto.decrypt_payload(ciphertext, dek, aad=aad)
+    # Try the new AAD (kid-pinned) first, fall back to the legacy shape
+    # on InvalidTag so snapshots written before this change still decrypt.
+    from cryptography.exceptions import InvalidTag
+
+    try:
+        return _crypto.decrypt_payload(
+            ciphertext, dek, aad=_aad_for(account_id, kid)
+        )
+    except InvalidTag:
+        legacy_aad = f"nks-wdc-snapshot-{account_id or 0}".encode("ascii")
+        return _crypto.decrypt_payload(ciphertext, dek, aad=legacy_aad)
 
 
 def create_snapshot(
@@ -385,8 +404,9 @@ def create_snapshot(
         # ``raw`` and ``checksum`` were computed above; reuse both.
         compressed = _ZSTD_CMP_HIGH.compress(raw)
         dek = _unwrap(key_row, passphrase=passphrase)
-        aad = f"nks-wdc-snapshot-{account_id}".encode("ascii")
-        envelope = _crypto.encrypt_payload(compressed, dek, aad=aad)
+        envelope = _crypto.encrypt_payload(
+            compressed, dek, aad=_aad_for(account_id, encryption_kid)
+        )
         packed = PackedPayload(
             column="payload_blob",
             json_value=None,
