@@ -55,6 +55,9 @@ def base_context(request: Request, username: str | None, **extra) -> dict:
     admin page.
     """
     csrf = request.cookies.get("nks_wdc_csrf") or ""
+    theme = request.cookies.get("nks_wdc_theme")
+    if theme not in ("light", "dark"):
+        theme = ""  # empty = fall through to prefers-color-scheme
     ctx = {
         "request": request,
         "username": username,
@@ -62,6 +65,7 @@ def base_context(request: Request, username: str | None, **extra) -> dict:
         "flash": None,
         "csrf_token": csrf,
         "banner": _current_banner(),
+        "theme": theme,
     }
     ctx.update(extra)
     return ctx

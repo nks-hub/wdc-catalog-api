@@ -49,5 +49,32 @@
   </div>
 
   <p class="muted">Generated at {{ stats.generated_at }} (in-process cache, 30 s TTL)</p>
+
+  {% if recent_events %}
+  <h2>Recent activity</h2>
+  <table class="data compact">
+    <thead>
+      <tr><th>When</th><th>Actor</th><th>Action</th><th>Resource</th></tr>
+    </thead>
+    <tbody>
+      {% for e in recent_events %}
+      <tr>
+        <td class="nowrap">{{ e.created_at[:19] }}</td>
+        <td>
+          {% if e.actor_email %}{{ e.actor_email }}
+          {% elif e.actor_id %}#{{ e.actor_id }}
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td><code>{{ e.action }}</code></td>
+        <td>
+          {% if e.resource_type %}<span class="pill">{{ e.resource_type }}</span>{% endif %}
+          {% if e.resource_id %}<code class="muted">{{ e.resource_id[:32] }}</code>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p><a class="btn btn-ghost" href="/admin/audit">View full audit log →</a></p>
+  {% endif %}
 </section>
 {% endblock %}

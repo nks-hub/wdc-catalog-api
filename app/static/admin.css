@@ -122,8 +122,19 @@
 /* --------------------------------------------------------------------------
    Dark mode overrides
    -------------------------------------------------------------------------- */
+/* Dark-mode tokens as a reusable mixin. Both the media-query block and
+   the explicit html.theme-dark override below point at this ruleset, so
+   the manual cookie toggle beats prefers-color-scheme while the default
+   OS preference still works when no cookie is set. */
+html.theme-dark {
+  color-scheme: dark;
+}
+html.theme-light {
+  color-scheme: light;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  html:not(.theme-light) {
     --bg:           #0d0f14;
     --surface:      #151820;
     --surface-2:    #1c2030;
@@ -197,6 +208,56 @@
     --shadow-sm:  0 1px 2px rgba(0,0,0,.4);
     --shadow:     0 2px 8px rgba(0,0,0,.5);
   }
+}
+
+/* Explicit opt-in dark (cookie-set) — same tokens, independent of OS
+   preference. Duplicated because CSS can't inherit custom-property
+   blocks; in practice operators edit tokens rarely and both blocks
+   stay in sync via the same color ladder. */
+html.theme-dark {
+  --bg:           #0d0f14;
+  --surface:      #151820;
+  --surface-2:    #1c2030;
+  --surface-3:    #232840;
+  --border:       rgba(255,255,255,0.09);
+  --border-strong:rgba(255,255,255,0.22);
+  --text:         #e8eaf0;
+  --text-2:       #b8bdd0;
+  --text-3:       #7880a0;
+  --text-4:       #4b5168;
+  --accent:       #818cf8;
+  --accent-hover: #a5b4fc;
+  --accent-subtle:#1e1b4b;
+  --accent-text:  #a5b4fc;
+  --success:      #4ade80;
+  --success-bg:   #052e16;
+  --success-border:#14532d;
+  --warning:      #fbbf24;
+  --warning-bg:   #1c0f00;
+  --warning-border:#78350f;
+  --danger:       #f87171;
+  --danger-bg:    #1a0000;
+  --danger-border:#7f1d1d;
+  --info:         #38bdf8;
+  --info-bg:      #0c1a24;
+  --info-border:  #0c4a6e;
+  --role-readonly:#9ca3af; --role-readonly-bg:#1f2937; --role-readonly-border:#374151;
+  --role-user:#38bdf8; --role-user-bg:#0c1a24; --role-user-border:#0c4a6e;
+  --role-support:#2dd4bf; --role-support-bg:#042f2e; --role-support-border:#134e4a;
+  --role-operator:#c4b5fd; --role-operator-bg:#2e1065; --role-operator-border:#4c1d95;
+  --role-admin:#fbbf24; --role-admin-bg:#1c0f00; --role-admin-border:#78350f;
+  --role-owner:#f87171; --role-owner-bg:#1a0000; --role-owner-border:#7f1d1d;
+  --ok-color:#4ade80; --ok-bg:#052e16; --ok-border:#14532d;
+  --suspended-color:#f87171;
+  --warn-color:#fbbf24; --warn-bg:#1c0f00; --warn-border:#78350f;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  --shadow:    0 2px 8px rgba(0,0,0,.5);
+}
+
+.theme-toggle {
+  font-size: 1rem;
+  line-height: 1;
+  padding: var(--space-1) var(--space-2);
 }
 
 /* --------------------------------------------------------------------------

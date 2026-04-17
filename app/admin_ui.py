@@ -395,12 +395,38 @@ def admin_dashboard(
 ) -> HTMLResponse:
     """Dashboard landing — pulls the same aggregate the /admin/stats JSON
     endpoint returns, rendered into a template."""
+    from sqlalchemy import select as _sel
+
     from .admin_stats import build_overview
+    from .db import AuditEvent
 
     _admin_account(db, username)
     stats = build_overview(db)  # reuses the cached aggregate
+
+    # Recent audit events — 10 most recent, rendered compact under the
+    # stats cards so operators spot admin ops without clicking through.
+    recent_rows = db.scalars(
+        _sel(AuditEvent)
+        .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+        .limit(10)
+    ).all()
+    recent_events = [
+        {
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+            "actor_id": r.actor_id,
+            "actor_email": r.actor_email,
+            "action": r.action,
+            "resource_type": r.resource_type,
+            "resource_id": r.resource_id,
+        }
+        for r in recent_rows
+    ]
     ctx = base_context(
-        request, username, stats=stats.model_dump(), flash=_pop_flash(flash)
+        request,
+        username,
+        stats=stats.model_dump(),
+        recent_events=recent_events,
+        flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "dashboard.html", ctx)
     _clear_flash(response)
@@ -1925,6 +1951,46 @@ def admin_device_delete(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
     db.delete(dev)
     return _redirect("/admin/devices", "success", f"Device {dev_id} deleted")
+
+
+# ── Theme toggle (cookie, cycles auto→light→dark→auto) ──────────────
+
+
+@router.post("/admin/theme", dependencies=[Depends(require_csrf)])
+def admin_toggle_theme(
+    username: Annotated[str, Depends(current_user)],
+    next: Annotated[str, Form()] = "/admin",
+    current_theme: Annotated[str | None, Cookie(alias="nks_wdc_theme")] = None,
+) -> RedirectResponse:
+    """Cycle between auto (no cookie) → light → dark → auto.
+
+    Cookie-driven override of ``prefers-color-scheme`` so the choice
+    sticks across reloads. Redirects back to ``next`` so the URL in the
+    address bar doesn't change when the user hits the button.
+    """
+    next_target = next if next.startswith("/admin") or next == "/" else "/admin"
+    response = RedirectResponse(next_target, status_code=status.HTTP_303_SEE_OTHER)
+    if current_theme == "light":
+        response.set_cookie(
+            "nks_wdc_theme",
+            "dark",
+            max_age=60 * 60 * 24 * 365,
+            httponly=False,
+            samesite="lax",
+            secure=cookie_secure(),
+        )
+    elif current_theme == "dark":
+        response.delete_cookie("nks_wdc_theme")
+    else:
+        response.set_cookie(
+            "nks_wdc_theme",
+            "light",
+            max_age=60 * 60 * 24 * 365,
+            httponly=False,
+            samesite="lax",
+            secure=cookie_secure(),
+        )
+    return response
 
 
 # ── Self-service account page ────────────────────────────────────────

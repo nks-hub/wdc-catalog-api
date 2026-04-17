@@ -155,6 +155,55 @@ def test_api_404_stays_problem_json(admin_client: TestClient) -> None:
     assert "application/problem+json" in r.headers["content-type"].lower()
 
 
+def test_admin_theme_toggle_cycles_cookie(admin_client: TestClient) -> None:
+    """Three POSTs cycle auto → light → dark → auto again."""
+    csrf = admin_client.cookies.get("nks_wdc_csrf") or ""
+
+    # Starting state: no cookie (auto).
+    if "nks_wdc_theme" in admin_client.cookies:
+        admin_client.cookies.delete("nks_wdc_theme")
+
+    r1 = admin_client.post(
+        "/admin/theme",
+        data={"_csrf": csrf, "next": "/admin"},
+        follow_redirects=False,
+    )
+    assert r1.status_code == 303
+    assert admin_client.cookies.get("nks_wdc_theme") == "light"
+
+    csrf = admin_client.cookies.get("nks_wdc_csrf") or ""
+    r2 = admin_client.post(
+        "/admin/theme",
+        data={"_csrf": csrf, "next": "/admin"},
+        follow_redirects=False,
+    )
+    assert r2.status_code == 303
+    assert admin_client.cookies.get("nks_wdc_theme") == "dark"
+
+    csrf = admin_client.cookies.get("nks_wdc_csrf") or ""
+    r3 = admin_client.post(
+        "/admin/theme",
+        data={"_csrf": csrf, "next": "/admin"},
+        follow_redirects=False,
+    )
+    assert r3.status_code == 303
+    # Cookie cleared on the auto step.
+    assert "nks_wdc_theme" not in admin_client.cookies or admin_client.cookies.get(
+        "nks_wdc_theme"
+    ) in (None, "")
+
+
+def test_dashboard_renders_recent_activity(admin_client: TestClient) -> None:
+    """The dashboard pulls the last 10 audit rows and renders the
+    "Recent activity" section if any events exist."""
+    r = admin_client.get("/admin")
+    assert r.status_code == 200
+    # Either we have events (Recent activity shown) or the markup stays
+    # absent — both are valid. The critical regression is the route not
+    # 500'ing when it prepares the recent_events list.
+    assert "Dashboard" in r.text
+
+
 def test_admin_invite_mint_shows_token_once(admin_client: TestClient) -> None:
     """Minting an invite should render the signed token inline in the
     response — it's the only time it's shown."""

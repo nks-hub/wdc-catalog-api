@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en"{% if theme %} class="theme-{{ theme }}"{% endif %}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -25,9 +25,16 @@
     </nav>
     {% if username %}
       <div class="user">
+        <form method="post" action="/admin/theme" class="inline" title="Toggle light/dark theme">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <input type="hidden" name="next" value="{{ request.url.path }}">
+          <button class="btn btn-ghost theme-toggle" type="submit" aria-label="Toggle theme">
+            {% if theme == 'dark' %}☀{% elif theme == 'light' %}☾{% else %}◐{% endif %}
+          </button>
+        </form>
         <a href="/admin/account" class="user-name" title="My account">{{ username }}</a>
         <form method="post" action="/logout" class="inline">
-        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
           <button class="btn btn-ghost" type="submit">Log out</button>
         </form>
       </div>
