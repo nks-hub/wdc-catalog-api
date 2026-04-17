@@ -872,6 +872,73 @@ main.container {
   border-bottom: 1px solid var(--border);
   width: 100%;
 }
+/* Span-all helper that works inside .form-fieldset's auto-fit grid
+   (the existing .form-grid .span-all targets the .form-grid selector). */
+.form-fieldset .span-all { grid-column: 1 / -1; }
+.form-fieldset label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.857rem;
+  color: var(--text-2);
+}
+.form-fieldset label.checkbox {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.form-fieldset label.checkbox .hint { flex-basis: 100%; }
+.form-fieldset label .hint {
+  font-size: 0.786rem;
+  color: var(--text-3);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+.form-fieldset input[type="text"],
+.form-fieldset input[type="number"],
+.form-fieldset input[type="email"],
+.form-fieldset select,
+.form-fieldset textarea {
+  padding: 8px var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.929rem;
+  font-family: inherit;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+  width: 100%;
+}
+.form-fieldset input:focus,
+.form-fieldset select:focus,
+.form-fieldset textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* Primary actions sit on a single row below the fieldsets (Gestalt:
+   the action belongs to the form as a whole, not a specific group). */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-2);
+}
+.form-actions .btn-ghost { margin-right: auto; }
+
+/* Settings / retention surfaces get a single container wrapper so the
+   fieldsets stack cleanly on narrow screens without a full-width form
+   border fighting the stats elsewhere on the page. */
+.form-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 880px;
+}
 
 /* Empty state blocks — icon + headline + supporting copy + CTA.
    NN/g 2021: always give the user a next step, never leave them at

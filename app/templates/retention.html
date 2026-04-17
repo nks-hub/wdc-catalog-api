@@ -18,20 +18,29 @@
       <p class="muted">Using global defaults (no account-level override).</p>
       {% endif %}
 
-      <h3>Override</h3>
-      <form method="post" action="/admin/retention/policy" class="form-grid">
+      <form method="post" action="/admin/retention/policy" class="form form-settings">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-        <label>Keep last N auto
-          <input type="number" name="keep_last_n_auto" value="{{ policy.keep_last_n_auto if policy else 30 }}" min="1" max="500">
-        </label>
-        <label>Auto expire days (blank = never)
-          <input type="number" name="auto_expire_days" value="{{ policy.auto_expire_days if policy else '' }}" min="1" max="365">
-        </label>
-        <label class="checkbox">
-          <input type="checkbox" name="keep_labeled_forever" value="1" {% if not policy or policy.keep_labeled_forever %}checked{% endif %}>
-          Keep labeled snapshots forever
-        </label>
-        <button class="btn btn-primary">Save policy</button>
+
+        <fieldset class="form-fieldset">
+          <legend>Account override</legend>
+          <label>Keep last N auto
+            <input type="number" name="keep_last_n_auto" value="{{ policy.keep_last_n_auto if policy else 30 }}" min="1" max="500">
+            <span class="hint">Per-account floor; older auto snapshots are pruned by the nightly sweep.</span>
+          </label>
+          <label>Auto expire days
+            <input type="number" name="auto_expire_days" value="{{ policy.auto_expire_days if policy else '' }}" min="1" max="365">
+            <span class="hint">Blank = never. Labeled snapshots are exempt if the checkbox below stays set.</span>
+          </label>
+          <label class="checkbox span-all">
+            <input type="checkbox" name="keep_labeled_forever" value="1" {% if not policy or policy.keep_labeled_forever %}checked{% endif %}>
+            Keep labeled snapshots forever
+            <span class="hint">Labeled snapshots (ones with a non-empty <code>label</code>) are never GC'd.</span>
+          </label>
+        </fieldset>
+
+        <div class="form-actions">
+          <button class="btn btn-primary">Save policy</button>
+        </div>
       </form>
     </div>
 
@@ -82,28 +91,35 @@
     </tbody>
   </table>
 
-  <h3>Add override</h3>
-  <form method="post" action="/admin/retention/device" class="form-grid">
+  <form method="post" action="/admin/retention/device" class="form form-settings">
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-    <label>Device
-      <select name="device_id" required>
-        <option value="">—</option>
-        {% for d in devices %}
-          <option value="{{ d.device_id }}">{{ d.device_id }}{% if d.name %} ({{ d.name }}){% endif %}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Keep last N auto
-      <input type="number" name="keep_last_n_auto" value="30" min="1" max="500">
-    </label>
-    <label>Expire days (blank = never)
-      <input type="number" name="auto_expire_days" min="1" max="365">
-    </label>
-    <label class="checkbox">
-      <input type="checkbox" name="keep_labeled_forever" value="1" checked>
-      Keep labeled forever
-    </label>
-    <button class="btn btn-primary">Add override</button>
+    <fieldset class="form-fieldset">
+      <legend>Add device override</legend>
+      <label>Device
+        <select name="device_id" required>
+          <option value="">—</option>
+          {% for d in devices %}
+            <option value="{{ d.device_id }}">{{ d.device_id }}{% if d.name %} ({{ d.name }}){% endif %}</option>
+          {% endfor %}
+        </select>
+        <span class="hint">Only devices belonging to accounts you manage are listed.</span>
+      </label>
+      <label>Keep last N auto
+        <input type="number" name="keep_last_n_auto" value="30" min="1" max="500">
+        <span class="hint">Overrides the account default for this device only.</span>
+      </label>
+      <label>Expire days
+        <input type="number" name="auto_expire_days" min="1" max="365">
+        <span class="hint">Blank = never.</span>
+      </label>
+      <label class="checkbox span-all">
+        <input type="checkbox" name="keep_labeled_forever" value="1" checked>
+        Keep labeled forever
+      </label>
+    </fieldset>
+    <div class="form-actions">
+      <button class="btn btn-primary">Add override</button>
+    </div>
   </form>
 </section>
 {% endblock %}
