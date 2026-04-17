@@ -47,10 +47,18 @@ HTTP_REQUESTS = Counter(
     ["method", "status", "route"],
 )
 
+_HTTP_BUCKETS = (
+    0.001, 0.0025, 0.005, 0.0075,
+    0.010, 0.015, 0.020, 0.030, 0.050,
+    0.075, 0.100, 0.150, 0.250, 0.500,
+    1.0, 2.5, 5.0,
+)
+
 HTTP_DURATION = Histogram(
     "nks_wdc_http_request_duration_seconds",
     "HTTP request duration in seconds",
     ["method", "route"],
+    buckets=_HTTP_BUCKETS,
 )
 
 SNAPSHOTS_CREATED = Counter(

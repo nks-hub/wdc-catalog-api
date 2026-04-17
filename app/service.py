@@ -88,6 +88,17 @@ def get_app(db: Session, app_id: str) -> App | None:
     return db.scalar(select(App).where(App.id == app_id.lower()))
 
 
+def _invalidate_catalog_cache() -> None:
+    """Called after every catalog-mutating commit. Late-import keeps
+    ``service.py`` free of a ``_cache`` dependency when catalog-caching
+    is disabled in tests."""
+    try:
+        from ._cache import invalidate_catalog
+        invalidate_catalog()
+    except Exception:
+        pass
+
+
 def create_app(
     db: Session,
     *,
@@ -111,6 +122,7 @@ def create_app(
     )
     db.add(app)
     db.commit()
+    _invalidate_catalog_cache()
     return app
 
 
@@ -138,6 +150,7 @@ def update_app(
     if license is not None:
         app.license = license or None
     db.commit()
+    _invalidate_catalog_cache()
     return app
 
 
@@ -147,6 +160,7 @@ def delete_app(db: Session, app_id: str) -> bool:
         return False
     db.delete(app)
     db.commit()
+    _invalidate_catalog_cache()
     return True
 
 
@@ -171,6 +185,7 @@ def add_release(
     )
     db.add(rel)
     db.commit()
+    _invalidate_catalog_cache()
     return rel
 
 
@@ -180,6 +195,7 @@ def delete_release(db: Session, release_id: int) -> bool:
         return False
     db.delete(rel)
     db.commit()
+    _invalidate_catalog_cache()
     return True
 
 
@@ -208,6 +224,7 @@ def add_download(
     )
     db.add(dl)
     db.commit()
+    _invalidate_catalog_cache()
     return dl
 
 
@@ -217,6 +234,7 @@ def delete_download(db: Session, download_id: int) -> bool:
         return False
     db.delete(dl)
     db.commit()
+    _invalidate_catalog_cache()
     return True
 
 

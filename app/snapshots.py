@@ -56,6 +56,63 @@ def _canonical_bytes(payload: dict) -> bytes:
     return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
+ZSTD_LEVEL = int(os.environ.get("NKS_WDC_ZSTD_LEVEL", "6"))
+"""Compression level for snapshot blobs.
+
+Level 6 is the sweet spot: ~3× faster than level 10 on typical 100 KB
+JSON configs with only ~3 % worse compression ratio. Bump via env when
+storage cost dominates CPU.
+"""
+
+
+def _pack_from_raw(
+    raw: bytes,
+    checksum: str,
+    payload: dict,
+    *,
+    account_id: Optional[int],
+) -> "PackedPayload":
+    """Skip the canonical-bytes + checksum work when the caller has
+    already computed them (dedup fast path does this)."""
+    if len(raw) <= INLINE_THRESHOLD:
+        return PackedPayload(
+            column="payload_json",
+            json_value=payload,
+            blob_value=None,
+            uri_value=None,
+            compression=None,
+            size_bytes=len(raw),
+            checksum=checksum,
+        )
+    compressed = zstd.ZstdCompressor(level=ZSTD_LEVEL).compress(raw)
+    if len(compressed) <= BLOB_THRESHOLD:
+        return PackedPayload(
+            column="payload_blob",
+            json_value=None,
+            blob_value=compressed,
+            uri_value=None,
+            compression="zstd",
+            size_bytes=len(compressed),
+            checksum=checksum,
+        )
+    from . import blob_store
+    if blob_store.is_configured():
+        uri = blob_store.upload(compressed, account_id=account_id)
+        return PackedPayload(
+            column="blob_uri",
+            json_value=None,
+            blob_value=None,
+            uri_value=uri,
+            compression="zstd",
+            size_bytes=len(compressed),
+            checksum=checksum,
+        )
+    raise PayloadTooLarge(
+        f"Snapshot {len(compressed)} bytes exceeds BLOB_THRESHOLD "
+        f"{BLOB_THRESHOLD}; configure NKS_WDC_BLOB_S3_* to enable external storage."
+    )
+
+
 def pack_payload(payload: dict, *, account_id: Optional[int] = None) -> PackedPayload:
     raw = _canonical_bytes(payload)
     checksum = hashlib.sha256(raw).hexdigest()
@@ -69,7 +126,7 @@ def pack_payload(payload: dict, *, account_id: Optional[int] = None) -> PackedPa
             size_bytes=len(raw),
             checksum=checksum,
         )
-    compressed = zstd.ZstdCompressor(level=10).compress(raw)
+    compressed = zstd.ZstdCompressor(level=ZSTD_LEVEL).compress(raw)
     if len(compressed) <= BLOB_THRESHOLD:
         return PackedPayload(
             column="payload_blob",
@@ -255,11 +312,22 @@ def create_snapshot(
     The envelope ``(nonce || ciphertext)`` lives in ``payload_blob`` and
     ``encryption_kid`` pins which DEK unwraps it.
     """
-    packed = pack_payload(payload, account_id=account_id)
+    # Cheap path: hash the canonical JSON before we spend CPU on zstd.
+    # If the HEAD already matches + we're not taking the labeled branch
+    # and not encrypting, we can skip the whole pack/compress dance.
+    raw = _canonical_bytes(payload)
+    checksum = hashlib.sha256(raw).hexdigest()
 
     head = get_head(db, device_id)
-    if head is not None and head.checksum == packed.checksum and label is None:
+    if (
+        head is not None
+        and head.checksum == checksum
+        and label is None
+        and not (encrypt or passphrase)
+    ):
         return head
+
+    packed = _pack_from_raw(raw, checksum, payload, account_id=account_id)
 
     encryption_kid: Optional[str] = None
     if (encrypt or passphrase) and account_id is not None:

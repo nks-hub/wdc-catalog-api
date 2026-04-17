@@ -21,6 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import audit
+from ._cache import invalidate_stats
 from .auth import hash_password
 from .db import Account, DeviceConfig, IdempotencyRecord, RevokedToken, get_session
 from .permissions import require_role
@@ -209,6 +210,7 @@ def change_role(
     old_role = target.role
     target.role = new_role.value
     db.flush()
+    invalidate_stats()
     audit.emit(
         db, actor=caller, action="user.role_changed", request=request,
         resource_type="account", resource_id=target.id,
@@ -235,6 +237,7 @@ def suspend_user(
     # session can't limp along until the next natural expiry.
     _revoke_all_for(db, target.id, reason="suspend")
     db.flush()
+    invalidate_stats()
     audit.emit(
         db, actor=caller, action="user.suspended", request=request,
         resource_type="account", resource_id=target.id,
@@ -256,6 +259,7 @@ def resume_user(
     target = _target_or_404(db, user_id)
     target.suspended_at = None
     db.flush()
+    invalidate_stats()
     audit.emit(
         db, actor=caller, action="user.resumed", request=request,
         resource_type="account", resource_id=target.id,
@@ -381,6 +385,7 @@ def delete_user(
         detail={"target_email": target.email},
     )
     db.delete(target)
+    invalidate_stats()
 
 
 __all__ = ["router"]

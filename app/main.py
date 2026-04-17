@@ -25,6 +25,7 @@ NKS_WDC_CATALOG_ALLOW_CORS   — "1" to enable permissive CORS
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -265,24 +266,34 @@ _CATALOG_CACHE_SECONDS = int(os.environ.get("NKS_WDC_CATALOG_CACHE_SECONDS", "60
 def api_get_catalog(request: Request, db: Session = Depends(get_session)) -> Response:
     """Public JSON catalog with ETag + Cache-Control.
 
-    A hash-derived ETag lets clients (C# daemon, browsers, reverse proxies)
-    skip re-downloading on restart. `Cache-Control: public, max-age=60`
-    lets CDNs (Cloudflare) shield the origin from read-heavy traffic.
+    Hot path: an in-process TTL cache (``_cache.catalog_response_cache``)
+    stores the serialized body + ETag so identical requests skip the
+    SQLAlchemy hydrate + ETag hash. Admin mutations invalidate the cache
+    via ``invalidate_catalog()``.
     """
-    import hashlib
-    doc = build_catalog_document(db)
-    # ETag is derived from the apps payload only — excluding `generated_at`
-    # so identical catalog content yields identical hashes across calls.
-    apps_dump = doc.model_dump(by_alias=True, include={"apps", "schema_version"})
-    etag_seed = str(sorted(apps_dump.items())).encode("utf-8")
-    etag = '"' + hashlib.sha256(etag_seed).hexdigest()[:16] + '"'
+    from ._cache import catalog_response_cache
+    cached = catalog_response_cache.get("catalog")
+    if cached is None:
+        import hashlib
+        doc = build_catalog_document(db)
+        apps_dump = doc.model_dump(by_alias=True, include={"apps", "schema_version"})
+        # ``json.dumps(sort_keys=True)`` is O(n log n) over primitives;
+        # ``str(sorted(apps_dump.items()))`` would re-stringify every
+        # nested dict during comparisons — quadratic-ish on deep trees.
+        etag_seed = json.dumps(apps_dump, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        etag = '"' + hashlib.sha256(etag_seed).hexdigest()[:16] + '"'
+        body = doc.model_dump_json(by_alias=True)
+        cached = (etag, body)
+        catalog_response_cache.set("catalog", cached)
+    etag, body = cached
     headers = {
         "ETag": etag,
-        "Cache-Control": f"public, max-age={_CATALOG_CACHE_SECONDS}",
+        "Cache-Control": f"public, max-age={_CATALOG_CACHE_SECONDS}, stale-while-revalidate=300",
+        "Vary": "Accept-Encoding",
+        "CDN-Cache-Control": f"public, max-age={_CATALOG_CACHE_SECONDS * 10}",
     }
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers=headers)
-    body = doc.model_dump_json(by_alias=True)
     return Response(content=body, media_type="application/json", headers=headers)
 
 

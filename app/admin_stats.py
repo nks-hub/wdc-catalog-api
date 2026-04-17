@@ -60,7 +60,15 @@ def overview(
     _: Account = Depends(require_role(Role.support)),
     db: Session = Depends(get_session),
 ) -> OverviewResponse:
-    """Aggregate counters for the admin dashboard. Support role or higher."""
+    """Aggregate counters for the admin dashboard. Support role or higher.
+
+    Cached in-process for 30 s. The dashboard refreshes manually and
+    10+ COUNT(*) queries per hit was overkill.
+    """
+    from ._cache import stats_overview_cache
+    cached = stats_overview_cache.get("overview")
+    if cached is not None:
+        return cached
     catalog = CatalogStats(
         apps=db.scalar(select(func.count(App.id))) or 0,
         releases=db.scalar(select(func.count(Release.id))) or 0,
@@ -107,12 +115,14 @@ def overview(
         top_actions=[{"action": a, "count": c} for a, c in top_actions_rows],
     )
 
-    return OverviewResponse(
+    response = OverviewResponse(
         catalog=catalog,
         users=users,
         audit=audit_stats,
         generated_at=datetime.now(timezone.utc).isoformat(),
     )
+    stats_overview_cache.set("overview", response)
+    return response
 
 
 __all__ = ["router"]
