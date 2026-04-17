@@ -186,6 +186,13 @@ class Account(Base):
     token_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Account-lockout bookkeeping. Counter increments on every failed
+    # password check and resets on successful auth. ``locked_until`` holds
+    # an absolute UTC instant; the login handler refuses while it's in
+    # the future, decouples from the shared rate-limit key so a single
+    # noisy proxy can't force every user out.
+    failed_login_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class IdempotencyRecord(Base):

@@ -160,6 +160,28 @@ def decode_token(token: str) -> dict:
     )
 
 
+def _record_failed_login(account: "Account") -> None:
+    """Increment the per-account failure counter + lock on threshold hit.
+
+    Thresholds pick exponential backoff so honest typos are forgiven
+    while credential-stuffing runs hit a wall quickly:
+      5 fails → 1 min lock, 10 → 5 min, 15+ → 30 min.
+    """
+    account.failed_login_count = (account.failed_login_count or 0) + 1
+    n = account.failed_login_count
+    lock_minutes = 0
+    if n >= 15:
+        lock_minutes = 30
+    elif n >= 10:
+        lock_minutes = 5
+    elif n >= 5:
+        lock_minutes = 1
+    if lock_minutes:
+        account.locked_until = datetime.now(timezone.utc) + timedelta(
+            minutes=lock_minutes
+        )
+
+
 def _is_revoked(db: Session, jti: str) -> bool:
     """Revocation check with short TTL cache to keep the auth hot-path off
     the DB. Negative results (not revoked) are cached too — worst case a
@@ -268,10 +290,29 @@ def login(
         # be used to enumerate registered emails.
         verify_dummy_password(body.password)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
+    now = datetime.now(timezone.utc)
+    if account.locked_until is not None:
+        locked_until = account.locked_until
+        if locked_until.tzinfo is None:
+            locked_until = locked_until.replace(tzinfo=timezone.utc)
+        if locked_until > now:
+            raise HTTPException(
+                status.HTTP_423_LOCKED,
+                f"Account temporarily locked — try again after {locked_until.isoformat()}",
+            )
     if not verify_password(body.password, account.password_hash):
+        _record_failed_login(account)
+        # Commit so the counter survives the HTTPException that's about
+        # to trigger ``get_session`` rollback. Otherwise lockout never
+        # arms because each failure looks like a fresh first attempt.
+        db.commit()
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
     if account.suspended_at is not None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Account is suspended")
+    # Successful auth clears the backoff state so a user who mistyped
+    # their password a couple of times isn't punished forever.
+    account.failed_login_count = 0
+    account.locked_until = None
     account.last_login_at = datetime.now(timezone.utc)
     token = create_token(account.id, email, token_version=account.token_version)
     return TokenResponse(token=token, email=email)
