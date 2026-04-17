@@ -1,5 +1,47 @@
 # Changelog
 
+## v0.6.0 — 2026-04-17
+
+Authentication expansion + security headers + design iteration. 8 commits on top of v0.5.0.
+
+### Features
+
+- **Personal Access Tokens** — user-owned long-lived API keys for CI +
+  scripts that can't run the interactive login flow.
+  - Model: `PersonalAccessToken` (bcrypt hash + 10-char public prefix)
+  - JSON: `POST/GET /api/v1/auth/tokens`, `DELETE /api/v1/auth/tokens/{id}`
+  - Bearer-auth integration: `nks_pat_` prefix accepted alongside JWTs
+  - UI: `/admin/account` section for create/list/revoke
+  - Prefix-narrowed candidate query — no full-table bcrypt scan per request
+- **Dashboard audit sparkline** — inline SVG bar chart of events per hour
+  over the last 24h. Each bar has a tooltip with the hour label + count.
+- **Sticky data-table headers** — column labels stay pinned under the
+  topbar on long audit/user pages.
+
+### Security
+
+- **Strict transport-level headers** on every response:
+  - `Content-Security-Policy` — `default-src 'self'`, `frame-ancestors 'none'`, `form-action 'self'`
+  - `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload` (skipped in DEV)
+  - `X-Content-Type-Options: nosniff`
+  - `X-Frame-Options: DENY`
+  - `Referrer-Policy: strict-origin-when-cross-origin`
+  - `Permissions-Policy` disabling camera/mic/geolocation/USB/etc
+  - `/metrics` bypasses CSP so Prometheus scrapers stay happy
+
+### Design
+
+- Light mode forced unless the user explicitly toggles dark via the
+  topbar button. The old `prefers-color-scheme: dark` auto-activation
+  was creating a too-dark default on Macs.
+- Brighter base background (`#fbfcfd`), stronger borders (`#d1d5db`),
+  darker muted text (`--text-3: #334155` hits WCAG AA).
+- Bumped card shadows + elevated primary CTA with indigo halo.
+
+### Tests
+
+- 268 passing (+6 PAT lifecycle suite).
+
 ## v0.5.0 — 2026-04-17
 
 Admin UI polish + correctness. 14 commits on top of v0.4.0.
