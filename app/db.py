@@ -72,6 +72,22 @@ class Base(DeclarativeBase):
     pass
 
 
+def count_query(db: "Session", stmt) -> int:
+    """Portable COUNT helper for a filtered SELECT statement.
+
+    Avoids the ``select(func.count()).select_from(stmt.subquery())``
+    pattern which on SQLite materializes a temp table and on Postgres
+    can confuse the optimizer with JOINs. Strips ORDER BY / LIMIT /
+    OFFSET before counting since they don't affect the cardinality.
+    """
+    from sqlalchemy import func  # local import to keep module top tidy
+
+    count_stmt = (
+        stmt.with_only_columns(func.count()).order_by(None).limit(None).offset(None)
+    )
+    return db.scalar(count_stmt) or 0
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 

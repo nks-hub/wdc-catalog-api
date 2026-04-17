@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import zstandard as zstd
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import crypto as _crypto
@@ -429,7 +429,9 @@ def list_snapshots(
         stmt = stmt.where(DeviceSnapshot.kind == kind)
     if label_like:
         stmt = stmt.where(DeviceSnapshot.label.like(f"%{label_like}%"))
-    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    from .db import count_query
+
+    total = count_query(db, stmt)
     rows = db.scalars(
         stmt.order_by(DeviceSnapshot.created_at.desc())
         .offset(max(0, offset))
@@ -508,6 +510,12 @@ def purge_auto_older_than(
                         snap.blob_uri,
                         exc,
                     )
+                    try:
+                        from .observability import BLOB_ORPHAN_TOTAL
+
+                        BLOB_ORPHAN_TOTAL.inc()
+                    except Exception:
+                        pass
             db.delete(snap)
             deleted += 1
     db.flush()

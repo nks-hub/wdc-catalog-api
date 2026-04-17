@@ -85,6 +85,13 @@ RETENTION_DELETED = Counter(
     "Snapshots removed by the retention runner",
 )
 
+BLOB_ORPHAN_TOTAL = Counter(
+    "nks_wdc_blob_orphan_total",
+    "External blobs that failed to delete during retention — surfaces "
+    "MinIO/S3 availability issues that would otherwise silently leak "
+    "storage cost.",
+)
+
 
 # ── Logging config ─────────────────────────────────────────────────────
 
@@ -186,4 +193,5 @@ __all__ = [
     "HTTP_DURATION",
     "SNAPSHOTS_CREATED",
     "RETENTION_DELETED",
+    "BLOB_ORPHAN_TOTAL",
 ]

@@ -305,12 +305,12 @@ def list_devices(
     200). ``current_device_id`` tags the caller's own row with
     ``is_current=true`` so the UI can highlight the local device.
     """
-    from sqlalchemy import func
+    from .db import count_query
 
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
     stmt = select(DeviceConfig).where(DeviceConfig.user_id == account.id)
-    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    total = count_query(db, stmt)
     devices = db.scalars(
         stmt.order_by(DeviceConfig.last_seen_at.desc().nullslast())
         .offset(offset)

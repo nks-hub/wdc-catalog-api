@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .db import Account, AuditEvent, get_session
@@ -56,7 +56,9 @@ def list_events(
     if resource_id:
         stmt = stmt.where(AuditEvent.resource_id == str(resource_id))
 
-    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    from .db import count_query
+
+    total = count_query(db, stmt)
 
     rows = db.scalars(
         stmt.order_by(AuditEvent.created_at.desc()).offset(max(0, offset)).limit(limit)
