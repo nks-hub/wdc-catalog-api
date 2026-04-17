@@ -165,7 +165,9 @@ def diff_backups(
     for snap in (a, b):
         if snap is None or snap.device_id != device_id.lower() or snap.account_id != account.id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot not found")
-    return DiffResponse(from_id=from_id, to_id=to_id, patch=snapshots.diff(a, b))
+    return DiffResponse(
+        from_id=from_id, to_id=to_id, patch=snapshots.diff(a, b, db=db)
+    )
 
 
 @router.get("/{snapshot_id}", response_model=SnapshotDetail)
@@ -181,7 +183,7 @@ def get_backup(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot not found")
     return SnapshotDetail(
         **_row(snap).model_dump(),
-        payload=snapshots.unpack_payload(snap),
+        payload=snapshots.unpack_payload(snap, db=db),
     )
 
 
@@ -204,7 +206,7 @@ def download_backup(
         "label": snap.label,
         "kind": snap.kind,
         "checksum": snap.checksum,
-        "payload": snapshots.unpack_payload(snap),
+        "payload": snapshots.unpack_payload(snap, db=db),
     }
     body = json.dumps(envelope, indent=2).encode("utf-8")
     return Response(
@@ -264,7 +266,7 @@ def restore_backup(
             db,
             device_id=device_id.lower(),
             account_id=account.id,
-            payload=snapshots.unpack_payload(current),
+            payload=snapshots.unpack_payload(current, db=db),
             kind="pre_restore",
             label=f"pre-restore-to-#{target.id}",
         )

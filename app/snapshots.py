@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -28,7 +29,8 @@ import zstandard as zstd
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .db import DeviceHead, DeviceSnapshot
+from . import crypto as _crypto
+from .db import AccountEncryptionKey, DeviceHead, DeviceSnapshot
 
 
 INLINE_THRESHOLD = int(os.environ.get("NKS_WDC_SNAP_INLINE_MAX", 64 * 1024))
@@ -84,17 +86,71 @@ def pack_payload(payload: dict) -> PackedPayload:
     )
 
 
-def unpack_payload(snap: DeviceSnapshot) -> dict:
+def unpack_payload(snap: DeviceSnapshot, *, db: Optional[Session] = None) -> dict:
     if snap.payload_json is not None:
         return snap.payload_json
     if snap.payload_blob is not None:
         raw = snap.payload_blob
+        if snap.encryption_kid:
+            if db is None:
+                raise RuntimeError(
+                    "Cannot unpack encrypted snapshot without a DB session"
+                )
+            raw = _decrypt_with_kid(db, snap.encryption_kid, snap.account_id, raw)
         if snap.compression == "zstd":
             raw = zstd.ZstdDecompressor().decompress(raw)
         return json.loads(raw)
     if snap.blob_uri is not None:
         raise NotImplementedError("External blob storage not yet implemented")
     raise RuntimeError(f"Snapshot {snap.id} has no payload lane populated")
+
+
+# ── Encryption helpers ─────────────────────────────────────────────────
+
+def _active_key(db: Session, account_id: int) -> AccountEncryptionKey:
+    """Return (or create) the currently-active encryption key for the account."""
+    row = db.scalar(
+        select(AccountEncryptionKey)
+        .where(
+            AccountEncryptionKey.account_id == account_id,
+            AccountEncryptionKey.retired_at.is_(None),
+        )
+        .order_by(AccountEncryptionKey.created_at.desc())
+        .limit(1)
+    )
+    if row is not None:
+        return row
+    dek = _crypto.generate_dek()
+    salt = os.urandom(16)
+    wrapped = _crypto.wrap_dek(dek, account_id, salt) + b"||SALT||" + salt
+    kid = uuid.uuid4().hex
+    row = AccountEncryptionKey(
+        kid=kid,
+        account_id=account_id,
+        wrapped_dek=wrapped,
+        wrap_algo="aes-256-gcm",
+        kek_source=("dev-ephemeral" if os.environ.get("NKS_WDC_CATALOG_DEV") == "1"
+                     else "master"),
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _unwrap(row: AccountEncryptionKey) -> bytes:
+    wrapped, _, salt = row.wrapped_dek.partition(b"||SALT||")
+    return _crypto.unwrap_dek(wrapped, row.account_id, salt)
+
+
+def _decrypt_with_kid(
+    db: Session, kid: str, account_id: Optional[int], ciphertext: bytes
+) -> bytes:
+    row = db.get(AccountEncryptionKey, kid)
+    if row is None:
+        raise RuntimeError(f"Encryption key {kid} no longer exists")
+    dek = _unwrap(row)
+    aad = f"nks-wdc-snapshot-{account_id or 0}".encode("ascii")
+    return _crypto.decrypt_payload(ciphertext, dek, aad=aad)
 
 
 def create_snapshot(
@@ -106,18 +162,45 @@ def create_snapshot(
     kind: str = "auto",
     label: Optional[str] = None,
     created_by_ip: Optional[str] = None,
+    encrypt: bool = False,
 ) -> DeviceSnapshot:
     """Append a snapshot + advance HEAD.
 
     Identical-payload syncs reuse the existing HEAD (dedup) *unless* a
     label is provided — labeled snapshots always allocate a new row so
     operators can mark known-good points before upgrades.
+
+    When ``encrypt=True`` (and ``account_id`` is present) the payload is
+    zstd-compressed then AES-GCM encrypted with the account's active DEK.
+    The envelope ``(nonce || ciphertext)`` lives in ``payload_blob`` and
+    ``encryption_kid`` pins which DEK unwraps it.
     """
     packed = pack_payload(payload)
 
     head = get_head(db, device_id)
     if head is not None and head.checksum == packed.checksum and label is None:
         return head
+
+    encryption_kid: Optional[str] = None
+    if encrypt and account_id is not None:
+        key_row = _active_key(db, account_id)
+        encryption_kid = key_row.kid
+        # Serialize to bytes (compressed if the inline lane was chosen),
+        # then AES-GCM encrypt.
+        raw = _canonical_bytes(payload)
+        compressed = zstd.ZstdCompressor(level=10).compress(raw)
+        dek = _unwrap(key_row)
+        aad = f"nks-wdc-snapshot-{account_id}".encode("ascii")
+        envelope = _crypto.encrypt_payload(compressed, dek, aad=aad)
+        packed = PackedPayload(
+            column="payload_blob",
+            json_value=None,
+            blob_value=envelope,
+            uri_value=None,
+            compression="zstd",
+            size_bytes=len(envelope),
+            checksum=packed.checksum,
+        )
 
     snap = DeviceSnapshot(
         device_id=device_id,
@@ -130,6 +213,7 @@ def create_snapshot(
         blob_uri=packed.uri_value,
         checksum=packed.checksum,
         compression=packed.compression,
+        encryption_kid=encryption_kid,
         parent_snapshot_id=head.id if head else None,
         created_by_ip=created_by_ip,
     )
@@ -191,11 +275,16 @@ def list_snapshots(
     return list(rows), total
 
 
-def diff(a: DeviceSnapshot, b: DeviceSnapshot) -> list[dict]:
+def diff(
+    a: DeviceSnapshot,
+    b: DeviceSnapshot,
+    *,
+    db: Optional[Session] = None,
+) -> list[dict]:
     """RFC 6902 JSON Patch going *from* ``a`` *to* ``b``."""
     import jsonpatch
-    payload_a = unpack_payload(a)
-    payload_b = unpack_payload(b)
+    payload_a = unpack_payload(a, db=db)
+    payload_b = unpack_payload(b, db=db)
     return list(jsonpatch.make_patch(payload_a, payload_b).patch)
 
 
