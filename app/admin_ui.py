@@ -153,6 +153,7 @@ def admin_new_app(
 
 @router.post("/admin/new", dependencies=[Depends(require_csrf)])
 def admin_create_app(
+    request: Request,
     username: Annotated[str, Depends(current_user)],
     id: Annotated[str, Form()],
     display_name: Annotated[str, Form()] = "",
@@ -162,6 +163,8 @@ def admin_create_app(
     license: Annotated[str, Form()] = "",
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
+    from . import audit as _audit
+
     try:
         app_row = svc_create_app(
             db,
@@ -174,6 +177,19 @@ def admin_create_app(
         )
     except ValueError as exc:
         return _redirect("/admin/new", "error", str(exc))
+    acct = _admin_account(db, username)
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="app.created",
+        resource_type="app",
+        resource_id=app_row.id,
+        detail={
+            "display_name": app_row.display_name,
+            "category": app_row.category,
+        },
+    )
     return _redirect(f"/admin/apps/{app_row.id}", "success", f"Created {app_row.id}")
 
 
@@ -222,6 +238,7 @@ def admin_edit_app(
 
 @router.post("/admin/apps/{app_id}/edit", dependencies=[Depends(require_csrf)])
 def admin_save_app(
+    request: Request,
     app_id: str,
     username: Annotated[str, Depends(current_user)],
     display_name: Annotated[str, Form()] = "",
@@ -231,6 +248,20 @@ def admin_save_app(
     license: Annotated[str, Form()] = "",
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
+    from . import audit as _audit
+
+    before = get_app(db, app_id)
+    before_snapshot = (
+        {
+            "display_name": before.display_name,
+            "category": before.category,
+            "description": before.description,
+            "homepage": before.homepage,
+            "license": before.license,
+        }
+        if before is not None
+        else None
+    )
     app_row = update_app(
         db,
         app_id,
@@ -242,21 +273,61 @@ def admin_save_app(
     )
     if not app_row:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Unknown app '{app_id}'")
+
+    after_snapshot = {
+        "display_name": app_row.display_name,
+        "category": app_row.category,
+        "description": app_row.description,
+        "homepage": app_row.homepage,
+        "license": app_row.license,
+    }
+    changed = {
+        k: {"from": (before_snapshot or {}).get(k), "to": after_snapshot[k]}
+        for k in after_snapshot
+        if (before_snapshot or {}).get(k) != after_snapshot[k]
+    }
+    if changed:
+        acct = _admin_account(db, username)
+        _audit.emit(
+            db,
+            request=request,
+            actor=acct,
+            action="app.updated",
+            resource_type="app",
+            resource_id=app_row.id,
+            detail={"changed": changed},
+        )
     return _redirect(f"/admin/apps/{app_row.id}", "success", "Saved")
 
 
 @router.post("/admin/apps/{app_id}/delete", dependencies=[Depends(require_csrf)])
 def admin_delete_app(
+    request: Request,
     app_id: str,
     username: Annotated[str, Depends(current_user)],
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
+    from . import audit as _audit
+
+    before = get_app(db, app_id)
+    display_name = before.display_name if before is not None else None
     svc_delete_app(db, app_id)
+    acct = _admin_account(db, username)
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="app.deleted",
+        resource_type="app",
+        resource_id=app_id,
+        detail={"display_name": display_name} if display_name else None,
+    )
     return _redirect("/admin", "success", f"Deleted {app_id}")
 
 
 @router.post("/admin/apps/{app_id}/releases", dependencies=[Depends(require_csrf)])
 def admin_add_release(
+    request: Request,
     app_id: str,
     username: Annotated[str, Depends(current_user)],
     version: Annotated[str, Form()],
@@ -264,6 +335,8 @@ def admin_add_release(
     released_at: Annotated[str, Form()] = "",
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
+    from . import audit as _audit
+
     rel = add_release(
         db,
         app_id,
@@ -273,6 +346,16 @@ def admin_add_release(
     )
     if not rel:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Unknown app '{app_id}'")
+    acct = _admin_account(db, username)
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="release.created",
+        resource_type="release",
+        resource_id=str(rel.id),
+        detail={"app_id": app_id, "version": version, "channel": channel},
+    )
     return _redirect(f"/admin/apps/{app_id}", "success", f"Added {version}")
 
 
@@ -280,15 +363,29 @@ def admin_add_release(
     "/admin/releases/{release_id}/delete", dependencies=[Depends(require_csrf)]
 )
 def admin_delete_release(
+    request: Request,
     release_id: int,
     username: Annotated[str, Depends(current_user)],
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
+    from . import audit as _audit
     from .db import Release as ReleaseModel
 
     rel = db.get(ReleaseModel, release_id)
     app_id = rel.app_id if rel else None
+    version = rel.version if rel else None
+    channel = rel.channel if rel else None
     delete_release(db, release_id)
+    acct = _admin_account(db, username)
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="release.deleted",
+        resource_type="release",
+        resource_id=str(release_id),
+        detail={"app_id": app_id, "version": version, "channel": channel},
+    )
     return _redirect(
         f"/admin/apps/{app_id}" if app_id else "/admin", "success", "Release removed"
     )
@@ -298,6 +395,7 @@ def admin_delete_release(
     "/admin/releases/{release_id}/downloads", dependencies=[Depends(require_csrf)]
 )
 def admin_add_download(
+    request: Request,
     release_id: int,
     username: Annotated[str, Depends(current_user)],
     url: Annotated[str, Form()],
@@ -307,12 +405,13 @@ def admin_add_download(
     source: Annotated[str, Form()] = "manual",
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
+    from . import audit as _audit
     from .db import Release as ReleaseModel
 
     rel = db.get(ReleaseModel, release_id)
     if not rel:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown release")
-    add_download(
+    dl = add_download(
         db,
         release_id,
         url=url,
@@ -321,6 +420,23 @@ def admin_add_download(
         archive_type=archive_type,
         source=source,
     )
+    acct = _admin_account(db, username)
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="download.added",
+        resource_type="download",
+        resource_id=str(dl.id) if dl is not None else None,
+        detail={
+            "release_id": release_id,
+            "app_id": rel.app_id,
+            "version": rel.version,
+            "os": os,
+            "arch": arch,
+            "url": url,
+        },
+    )
     return _redirect(f"/admin/apps/{rel.app_id}", "success", "Download added")
 
 
@@ -328,18 +444,39 @@ def admin_add_download(
     "/admin/downloads/{download_id}/delete", dependencies=[Depends(require_csrf)]
 )
 def admin_delete_download(
+    request: Request,
     download_id: int,
     username: Annotated[str, Depends(current_user)],
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
+    from . import audit as _audit
     from .db import Download as DownloadModel, Release as ReleaseModel
 
     dl = db.get(DownloadModel, download_id)
     app_id = None
+    detail: dict | None = None
     if dl:
         rel = db.get(ReleaseModel, dl.release_id)
         app_id = rel.app_id if rel else None
+        detail = {
+            "release_id": dl.release_id,
+            "app_id": app_id,
+            "version": rel.version if rel else None,
+            "os": dl.os,
+            "arch": dl.arch,
+            "url": dl.url,
+        }
     delete_download(db, download_id)
+    acct = _admin_account(db, username)
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="download.deleted",
+        resource_type="download",
+        resource_id=str(download_id),
+        detail=detail,
+    )
     return _redirect(
         f"/admin/apps/{app_id}" if app_id else "/admin", "success", "Download removed"
     )
