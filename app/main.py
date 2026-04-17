@@ -163,11 +163,17 @@ from .admin_users import router as admin_users_router  # noqa: E402
 from .admin_audit import router as admin_audit_router  # noqa: E402
 from .admin_stats import router as admin_stats_router  # noqa: E402
 from .admin_policies import router as admin_policies_router  # noqa: E402
+from .admin_invites import (  # noqa: E402
+    admin_router as admin_invites_router,
+    public_router as public_invites_router,
+)
 
 app.include_router(admin_users_router)
 app.include_router(admin_audit_router)
 app.include_router(admin_stats_router)
 app.include_router(admin_policies_router)
+app.include_router(admin_invites_router)
+app.include_router(public_invites_router)
 
 app.mount("/static", StaticFiles(directory=_APP_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=_APP_DIR / "templates")

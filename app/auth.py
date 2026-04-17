@@ -34,15 +34,29 @@ SESSION_COOKIE = "nks_wdc_catalog_session"
 SESSION_MAX_AGE = 60 * 60 * 24 * 7  # 1 week
 
 
+_EPHEMERAL_DEV_KEY: str | None = None
+
+
 def _secret_key() -> str:
+    """Resolve the signer key, caching the DEV-mode ephemeral value.
+
+    Callers that issue *and* verify signatures (session cookies, invite
+    tokens) both read this — so returning a fresh random key each call
+    would corrupt any signed artifact that outlives a single request.
+    """
+    global _EPHEMERAL_DEV_KEY
     env = os.environ.get("NKS_WDC_SESSION_SECRET") or os.environ.get("NKS_WDC_CATALOG_SECRET")
     if env:
         return env
     if os.environ.get("NKS_WDC_CATALOG_DEV") == "1":
-        import secrets as _secrets
-        key = _secrets.token_urlsafe(32)
-        log.warning("NKS_WDC_CATALOG_DEV=1 → ephemeral session signer (cookies invalid after restart)")
-        return key
+        if _EPHEMERAL_DEV_KEY is None:
+            import secrets as _secrets
+            _EPHEMERAL_DEV_KEY = _secrets.token_urlsafe(32)
+            log.warning(
+                "NKS_WDC_CATALOG_DEV=1 → ephemeral session signer "
+                "(cookies invalid after restart)"
+            )
+        return _EPHEMERAL_DEV_KEY
     raise RuntimeError(
         "NKS_WDC_SESSION_SECRET (or legacy NKS_WDC_CATALOG_SECRET) must be set in production. "
         "Set NKS_WDC_CATALOG_DEV=1 for local development."
