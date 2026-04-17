@@ -91,9 +91,9 @@ def verify_password(plain: str, hashed: str) -> bool:
 # runs even when the account doesn't exist — eliminates the timing side
 # channel that would otherwise let an attacker enumerate valid usernames
 # by measuring response latency.
-_DUMMY_HASH = bcrypt.hashpw(b"nks-wdc-dummy-value-00", bcrypt.gensalt(rounds=12)).decode(
-    "ascii"
-)
+_DUMMY_HASH = bcrypt.hashpw(
+    b"nks-wdc-dummy-value-00", bcrypt.gensalt(rounds=12)
+).decode("ascii")
 
 
 def verify_dummy_password(plain: str) -> bool:

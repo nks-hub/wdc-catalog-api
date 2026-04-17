@@ -135,7 +135,9 @@ def persist(
         account_id=account_id,
         method=request.method.upper(),
         path=request.url.path,
-        body_hash=_canonical_body_hash(request_body) if request_body is not None else None,
+        body_hash=_canonical_body_hash(request_body)
+        if request_body is not None
+        else None,
         status_code=status_code,
         response_body=body,
         content_type=content_type,
