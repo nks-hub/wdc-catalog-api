@@ -12,7 +12,7 @@
     <tbody>
       {% for d in devices %}
       <tr>
-        <td><code>{{ d.device_id }}</code></td>
+        <td><a href="/admin/devices/{{ d.device_id }}"><code>{{ d.device_id }}</code></a></td>
         <td>{{ d.name or '—' }}</td>
         <td>{{ d.os or '—' }}{% if d.arch %} / {{ d.arch }}{% endif %}</td>
         <td class="nowrap">{{ d.last_seen_at or '—' }}</td>

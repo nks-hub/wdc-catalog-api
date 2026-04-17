@@ -103,6 +103,43 @@ def test_admin_settings_roundtrip(admin_client: TestClient) -> None:
     )
 
 
+def test_admin_audit_csv_export(admin_client: TestClient) -> None:
+    """CSV export must stream with correct content-type + header row."""
+    r = admin_client.get("/admin/audit.csv")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/csv")
+    assert "attachment" in r.headers.get("content-disposition", "")
+    # First line is the CSV header.
+    first = r.text.splitlines()[0] if r.text else ""
+    for col in ("id", "created_at", "actor_email", "action"):
+        assert col in first
+
+
+def test_admin_error_page_renders_html_not_problem_json(
+    admin_client: TestClient,
+) -> None:
+    """404 in the admin HTML area must surface as the templated error
+    page, not Problem+JSON. Accept header drives this."""
+    r = admin_client.get(
+        "/admin/devices/no-such-device-123",
+        headers={"Accept": "text/html"},
+    )
+    assert r.status_code == 404
+    assert "text/html" in r.headers["content-type"].lower()
+    assert "Not Found".lower() in r.text.lower()
+
+
+def test_api_404_stays_problem_json(admin_client: TestClient) -> None:
+    """The /api/v1/* namespace must always return Problem+JSON on 404,
+    even when Accept mentions HTML — machine clients depend on it."""
+    r = admin_client.get(
+        "/api/v1/catalog/nonexistent-app-42",
+        headers={"Accept": "text/html,application/xhtml+xml"},
+    )
+    assert r.status_code == 404
+    assert "application/problem+json" in r.headers["content-type"].lower()
+
+
 def test_admin_invite_mint_shows_token_once(admin_client: TestClient) -> None:
     """Minting an invite should render the signed token inline in the
     response — it's the only time it's shown."""

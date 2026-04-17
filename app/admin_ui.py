@@ -1404,6 +1404,189 @@ def admin_device_import(
     )
 
 
+# ── Audit CSV export ─────────────────────────────────────────────────
+
+
+@router.get("/admin/audit.csv")
+def admin_audit_csv(
+    username: Annotated[str, Depends(current_user)],
+    action: str = "",
+    resource_type: str = "",
+    resource_id: str = "",
+    actor_id: int | None = None,
+    limit: int = 10000,
+    db: Session = Depends(get_session),
+):
+    """Stream the filtered audit log as CSV.
+
+    Matches the filter surface of the HTML view so the same query params
+    copy-paste cleanly between URLs. Hard caps at 10k rows to keep
+    ``StreamingResponse`` from holding the DB connection open past a
+    reasonable export window — deeper exports should use the JSON API
+    with pagination.
+    """
+    import csv
+    import io
+
+    from fastapi.responses import StreamingResponse
+    from sqlalchemy import select as _sel
+
+    from .db import AuditEvent
+
+    stmt = _sel(AuditEvent)
+    if action:
+        stmt = stmt.where(AuditEvent.action == action)
+    if resource_type:
+        stmt = stmt.where(AuditEvent.resource_type == resource_type)
+    if resource_id:
+        stmt = stmt.where(AuditEvent.resource_id == resource_id)
+    if actor_id:
+        stmt = stmt.where(AuditEvent.actor_id == actor_id)
+
+    rows = db.scalars(
+        stmt.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).limit(
+            max(1, min(limit, 10000))
+        )
+    ).all()
+
+    def _iter():
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(
+            [
+                "id",
+                "created_at",
+                "actor_id",
+                "actor_email",
+                "action",
+                "resource_type",
+                "resource_id",
+                "ip",
+                "user_agent",
+                "detail",
+            ]
+        )
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate(0)
+        import json as _json
+
+        for r in rows:
+            writer.writerow(
+                [
+                    r.id,
+                    r.created_at.isoformat() if r.created_at else "",
+                    r.actor_id or "",
+                    r.actor_email or "",
+                    r.action or "",
+                    r.resource_type or "",
+                    r.resource_id or "",
+                    r.ip or "",
+                    r.user_agent or "",
+                    _json.dumps(r.detail, ensure_ascii=False) if r.detail else "",
+                ]
+            )
+            yield buf.getvalue()
+            buf.seek(0)
+            buf.truncate(0)
+
+    filename = "audit.csv"
+    return StreamingResponse(
+        _iter(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ── Device detail view ──────────────────────────────────────────────
+
+
+@router.get("/admin/devices/{device_id}", response_class=HTMLResponse)
+def admin_device_detail(
+    request: Request,
+    device_id: str,
+    username: Annotated[str, Depends(current_user)],
+    flash: Annotated[str | None, Cookie(alias="flash")] = None,
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    import json as _json
+    from datetime import datetime, timezone
+
+    from . import snapshots as _snap
+    from .db import DeviceConfig
+    from .device_ids import normalize_device_id
+
+    acct = _admin_account(db, username)
+    dev_id = normalize_device_id(device_id)
+    dev = db.get(DeviceConfig, dev_id)
+    if dev is None or dev.user_id != acct.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
+
+    now_utc = datetime.now(timezone.utc)
+    last_seen = dev.last_seen_at
+    if last_seen and last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=timezone.utc)
+    online = bool(last_seen and (now_utc - last_seen).total_seconds() < 300)
+
+    head = _snap.get_head(db, dev_id)
+    _, snap_total = _snap.list_snapshots(
+        db, device_id=dev_id, account_id=acct.id, offset=0, limit=1
+    )
+
+    payload_pretty = (
+        _json.dumps(dev.payload, indent=2, sort_keys=True, ensure_ascii=False)
+        if dev.payload
+        else None
+    )
+
+    ctx = base_context(
+        request,
+        username,
+        device={
+            "device_id": dev.device_id,
+            "name": dev.name,
+            "os": dev.os,
+            "arch": dev.arch,
+            "site_count": dev.site_count,
+            "last_seen_at": dev.last_seen_at.isoformat() if dev.last_seen_at else None,
+            "updated_at": dev.updated_at.isoformat() if dev.updated_at else None,
+            "online": online,
+        },
+        payload_pretty=payload_pretty,
+        head=(
+            {
+                "id": head.id,
+                "created_at": head.created_at.isoformat() if head.created_at else "",
+            }
+            if head
+            else None
+        ),
+        snapshot_count=snap_total,
+        flash=_pop_flash(flash),
+    )
+    response = templates.TemplateResponse(request, "device_detail.html", ctx)
+    _clear_flash(response)
+    return response
+
+
+@router.post("/admin/devices/{device_id}/delete", dependencies=[Depends(require_csrf)])
+def admin_device_delete(
+    device_id: str,
+    username: Annotated[str, Depends(current_user)],
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    from .db import DeviceConfig
+    from .device_ids import normalize_device_id
+
+    acct = _admin_account(db, username)
+    dev_id = normalize_device_id(device_id)
+    dev = db.get(DeviceConfig, dev_id)
+    if dev is None or dev.user_id != acct.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
+    db.delete(dev)
+    return _redirect("/admin/devices", "success", f"Device {dev_id} deleted")
+
+
 # ── Self-service account page ────────────────────────────────────────
 
 

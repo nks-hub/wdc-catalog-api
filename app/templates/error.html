@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ status_code }} {{ title }} — NKS WDC{% endblock %}
+{% block content %}
+<section class="section section-error">
+  <div class="error-hero">
+    <div class="error-code">{{ status_code }}</div>
+    <h1>{{ title }}</h1>
+    {% if detail %}<p class="muted">{{ detail }}</p>{% endif %}
+  </div>
+
+  <div class="action-grid">
+    <a class="btn btn-primary" href="/admin">Back to dashboard</a>
+    <a class="btn" href="javascript:history.back()">Go back</a>
+  </div>
+</section>
+{% endblock %}
