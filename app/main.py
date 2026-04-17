@@ -443,16 +443,44 @@ def api_get_config(
     )
 
 
+@app.head("/api/v1/sync/config/{device_id}", tags=["sync"])
+def api_head_config(
+    device_id: str,
+    account: Account = Depends(get_current_account),
+    db: Session = Depends(get_session),
+) -> Response:
+    """Resource-oriented existence probe — 200 if a snapshot exists for
+    the caller's device, 404 otherwise. Preferred over the legacy
+    ``/exists`` sub-resource endpoint."""
+    row = _require_owned_row(device_id, account, db, not_found_ok=True)
+    if row is None:
+        return Response(status_code=status.HTTP_404_NOT_FOUND)
+    headers = {}
+    if row.updated_at is not None:
+        headers["Last-Modified"] = row.updated_at.strftime(
+            "%a, %d %b %Y %H:%M:%S GMT"
+        )
+    return Response(status_code=status.HTTP_200_OK, headers=headers)
+
+
 @app.get(
     "/api/v1/sync/config/{device_id}/exists",
     response_model=ConfigSyncListResponse,
     tags=["sync"],
+    deprecated=True,
+    description="Deprecated — use HEAD /api/v1/sync/config/{device_id} instead.",
 )
 def api_exists_config(
     device_id: str,
+    response: Response,
     account: Account = Depends(get_current_account),
     db: Session = Depends(get_session),
 ) -> ConfigSyncListResponse:
+    # RFC 8594 sunset + deprecation signal — clients should migrate to HEAD.
+    response.headers["Deprecation"] = "true"
+    response.headers["Link"] = (
+        f'</api/v1/sync/config/{device_id}>; rel="successor-version"'
+    )
     normalized = _normalize_device_id(device_id)
     row = _require_owned_row(device_id, account, db, not_found_ok=True)
     if row is None:
