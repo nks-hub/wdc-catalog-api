@@ -199,6 +199,13 @@
           "arch": "x64",
           "archive_type": "zip",
           "source": "php.net"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-7.3.33/php-7.3.33-linux-x64.tar.xz",
+          "os": "linux",
+          "arch": "x64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
         }
       ]
     },
@@ -213,6 +220,13 @@
           "arch": "x64",
           "archive_type": "zip",
           "source": "php.net"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-7.2.34/php-7.2.34-linux-x64.tar.xz",
+          "os": "linux",
+          "arch": "x64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
         }
       ]
     },
@@ -227,6 +241,13 @@
           "arch": "x64",
           "archive_type": "zip",
           "source": "php.net"
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-7.1.33/php-7.1.33-linux-x64.tar.xz",
+          "os": "linux",
+          "arch": "x64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub-binaries"
         }
       ]
     },
