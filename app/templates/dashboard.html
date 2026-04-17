@@ -35,6 +35,23 @@
       <h3>Audit</h3>
       <div class="stat-row"><span>Total events</span><b>{{ stats.audit.events_total }}</b></div>
       <div class="stat-row"><span>Last 24h</span><b>{{ stats.audit.events_last_24h }}</b></div>
+      {% if sparkline %}
+      <svg class="sparkline" viewBox="0 0 240 40" xmlns="http://www.w3.org/2000/svg" aria-label="Events per hour, last 24h">
+        {% for b in sparkline %}
+          {% set x = loop.index0 * 10 %}
+          {% set h = (b.count / sparkline_max * 34) if sparkline_max else 0 %}
+          <rect x="{{ x }}" y="{{ 38 - h }}" width="8" height="{{ h if h > 0 else 1 }}"
+                fill="currentColor" opacity="{{ 0.35 + (b.count / sparkline_max * 0.55) if sparkline_max else 0.2 }}">
+            <title>{{ b.hour }}: {{ b.count }} event{{ 's' if b.count != 1 else '' }}</title>
+          </rect>
+        {% endfor %}
+      </svg>
+      <div class="spark-axis">
+        <span>{{ sparkline[0].hour }}</span>
+        <span class="muted">24h events/hour</span>
+        <span>{{ sparkline[-1].hour }}</span>
+      </div>
+      {% endif %}
       {% if stats.audit.top_actions %}
       <div class="stat-sub">
         <div class="muted">Top actions (24h):</div>

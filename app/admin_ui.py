@@ -395,6 +395,8 @@ def admin_dashboard(
 ) -> HTMLResponse:
     """Dashboard landing — pulls the same aggregate the /admin/stats JSON
     endpoint returns, rendered into a template."""
+    from datetime import datetime, timedelta, timezone
+
     from sqlalchemy import select as _sel
 
     from .admin_stats import build_overview
@@ -421,11 +423,35 @@ def admin_dashboard(
         }
         for r in recent_rows
     ]
+
+    # Hourly sparkline of audit events over the last 24h — one bucket
+    # per hour, zeros filled in so the SVG renders at constant width.
+    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    day_ago = now - timedelta(hours=23)
+    hourly_rows = db.scalars(
+        _sel(AuditEvent).where(AuditEvent.created_at >= day_ago.replace(tzinfo=None))
+    ).all()
+    buckets = {day_ago + timedelta(hours=i): 0 for i in range(24)}
+    for r in hourly_rows:
+        if r.created_at is None:
+            continue
+        dt = r.created_at
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        key = dt.replace(minute=0, second=0, microsecond=0)
+        if key in buckets:
+            buckets[key] += 1
+    sparkline = [
+        {"hour": k.strftime("%H:00"), "count": v} for k, v in sorted(buckets.items())
+    ]
+    sparkline_max = max((b["count"] for b in sparkline), default=0) or 1
     ctx = base_context(
         request,
         username,
         stats=stats.model_dump(),
         recent_events=recent_events,
+        sparkline=sparkline,
+        sparkline_max=sparkline_max,
         flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "dashboard.html", ctx)
