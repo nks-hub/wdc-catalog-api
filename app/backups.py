@@ -65,6 +65,22 @@ class RestoreRequest(BaseModel):
     snapshot_id: int
 
 
+class ImportSnapshotRequest(BaseModel):
+    """Body of ``POST /backups/import``. Accepts the envelope emitted
+    by ``GET /backups/{id}/download`` — ``schema`` + ``payload`` are
+    mandatory, every other field is advisory (for operator context)."""
+    schema_: str = Field(..., alias="schema", pattern=r"^nks-wdc-snapshot-v1$")
+    payload: dict
+    label: Optional[str] = Field(None, max_length=128)
+    original_id: Optional[int] = Field(None, alias="id")
+    original_device_id: Optional[str] = Field(None, alias="device_id")
+    created_at: Optional[str] = None
+    kind: Optional[str] = None
+    checksum: Optional[str] = None
+
+    model_config = {"populate_by_name": True}
+
+
 class DiffResponse(BaseModel):
     from_id: int
     to_id: int
@@ -244,6 +260,49 @@ def delete_backup(
         detail={"device_id": device_id, "kind": snap.kind, "label": snap.label},
     )
     db.delete(snap)
+
+
+@router.post("/import", response_model=SnapshotMeta, status_code=status.HTTP_201_CREATED)
+def import_backup(
+    device_id: str,
+    body: ImportSnapshotRequest,
+    request: Request,
+    account: Account = Depends(get_current_account),
+    db: Session = Depends(get_session),
+) -> SnapshotMeta:
+    """Import a snapshot envelope (e.g. produced by ``/download`` on
+    another instance) onto the target device. The imported snapshot is
+    recorded with ``kind='import'`` and a ``label`` that defaults to
+    ``"imported-<original_id>"`` so it's visible in retention filters."""
+    _owned_device(device_id, account, db)
+    label = body.label or (
+        f"imported-from-{body.original_device_id}-#{body.original_id}"
+        if body.original_id is not None
+        else "imported-snapshot"
+    )
+    try:
+        snap = snapshots.create_snapshot(
+            db,
+            device_id=device_id.lower(),
+            account_id=account.id,
+            payload=body.payload,
+            kind="import",
+            label=label,
+            created_by_ip=request.client.host if request.client else None,
+        )
+    except snapshots.PayloadTooLarge as exc:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, str(exc))
+    audit.emit(
+        db, actor=account, action="backup.imported", request=request,
+        resource_type="snapshot", resource_id=snap.id,
+        detail={
+            "device_id": device_id,
+            "source_device_id": body.original_device_id,
+            "source_id": body.original_id,
+            "label": label,
+        },
+    )
+    return _row(snap)
 
 
 @router.post("/restore", response_model=SnapshotMeta)

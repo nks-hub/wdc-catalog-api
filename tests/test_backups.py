@@ -172,6 +172,49 @@ class TestBackupRestore:
         assert "pre_restore" in kinds
 
 
+class TestBackupImport:
+    def test_export_then_import_round_trip(self, client):
+        token = _register(client)
+        auth = {"Authorization": f"Bearer {token}"}
+        src_dev = f"bkp-exp-{uuid.uuid4().hex[:6]}"
+        dst_dev = f"bkp-imp-{uuid.uuid4().hex[:6]}"
+        _seed_device(client, token, src_dev, {"marker": "exported"})
+        _seed_device(client, token, dst_dev, {"marker": "destination"})
+
+        src_head = client.get(f"/api/v1/devices/{src_dev}/backups", headers=auth).json()["head_id"]
+        envelope = client.get(
+            f"/api/v1/devices/{src_dev}/backups/{src_head}/download", headers=auth
+        ).json()
+
+        r = client.post(
+            f"/api/v1/devices/{dst_dev}/backups/import",
+            json=envelope,
+            headers=auth,
+        )
+        assert r.status_code == 201
+        body = r.json()
+        assert body["kind"] == "import"
+        assert body["label"].startswith("imported-from-")
+
+        # Fetch the imported row + verify payload round-trips
+        detail = client.get(
+            f"/api/v1/devices/{dst_dev}/backups/{body['id']}", headers=auth
+        ).json()
+        assert detail["payload"]["marker"] == "exported"
+
+    def test_import_rejects_unknown_schema(self, client):
+        token = _register(client)
+        auth = {"Authorization": f"Bearer {token}"}
+        dev = f"bkp-imp-bad-{uuid.uuid4().hex[:6]}"
+        _seed_device(client, token, dev, {"s": 1})
+        r = client.post(
+            f"/api/v1/devices/{dev}/backups/import",
+            json={"schema": "unknown-v9", "payload": {"x": 1}},
+            headers=auth,
+        )
+        assert r.status_code == 422
+
+
 class TestBackupDiff:
     def test_diff_between_two_snapshots(self, client):
         token = _register(client)
