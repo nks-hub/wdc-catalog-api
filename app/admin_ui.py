@@ -2022,6 +2022,29 @@ def admin_toggle_theme(
 # ── Self-service account page ────────────────────────────────────────
 
 
+def _pat_view_rows(db: Session, account_id: int) -> list[dict]:
+    """Shared render helper — tokens list with ``expired`` derived flag."""
+    from datetime import datetime, timezone
+
+    from . import pats as _pats
+
+    rows = _pats.list_for(db, account_id=account_id)
+    now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "prefix": r.token_prefix,
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+            "last_used_at": r.last_used_at.isoformat() if r.last_used_at else None,
+            "revoked_at": r.revoked_at.isoformat() if r.revoked_at else None,
+            "expires_at": r.expires_at.isoformat() if r.expires_at else None,
+            "expired": r.expires_at is not None and r.expires_at <= now_naive,
+        }
+        for r in rows
+    ]
+
+
 @router.get("/admin/account", response_class=HTMLResponse)
 def admin_account(
     request: Request,
@@ -2034,15 +2057,81 @@ def admin_account(
     from .db import User
 
     user = db.scalar(_sel(User).where(User.username == username))
+    acct = _admin_account(db, username)
     ctx = base_context(
         request,
         username,
         user_id=user.id if user else "—",
+        tokens=_pat_view_rows(db, acct.id),
+        minted_pat=None,
         flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "account.html", ctx)
     _clear_flash(response)
     return response
+
+
+@router.post("/admin/account/tokens", dependencies=[Depends(require_csrf)])
+def admin_create_account_token(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    name: Annotated[str, Form()],
+    ttl_days: Annotated[str, Form()] = "",
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import select as _sel
+
+    from . import pats as _pats
+    from .db import User
+
+    acct = _admin_account(db, username)
+    user = db.scalar(_sel(User).where(User.username == username))
+    expires_at = None
+    if ttl_days.strip():
+        try:
+            days = max(1, min(int(ttl_days), 365))
+            expires_at = datetime.now(timezone.utc) + timedelta(days=days)
+        except ValueError:
+            return _redirect("/admin/account", "error", "TTL must be a number")
+
+    row, plaintext = _pats.issue(
+        db, account_id=acct.id, name=name, expires_at=expires_at
+    )
+
+    # Render the account page inline so the one-time plaintext callout
+    # renders with the freshly-minted row still at the top of the list.
+    ctx = base_context(
+        request,
+        username,
+        user_id=user.id if user else "—",
+        tokens=_pat_view_rows(db, acct.id),
+        minted_pat={
+            "name": row.name,
+            "token": plaintext,
+            "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+        },
+        flash={"kind": "success", "message": f"Token '{row.name}' created"},
+    )
+    return templates.TemplateResponse(request, "account.html", ctx)
+
+
+@router.post(
+    "/admin/account/tokens/{token_id}/revoke", dependencies=[Depends(require_csrf)]
+)
+def admin_revoke_account_token(
+    token_id: int,
+    username: Annotated[str, Depends(current_user)],
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    from . import pats as _pats
+
+    acct = _admin_account(db, username)
+    ok = _pats.revoke(db, account_id=acct.id, token_id=token_id)
+    if not ok:
+        return _redirect("/admin/account", "error", "Token not found")
+    return _redirect("/admin/account", "success", "Token revoked")
 
 
 @router.post("/admin/account/password", dependencies=[Depends(require_csrf)])

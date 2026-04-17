@@ -24,6 +24,66 @@
     <button class="btn btn-primary">Update password</button>
   </form>
 
+  <h2>Personal access tokens</h2>
+  <p class="muted">
+    Long-lived API keys for CI pipelines + scripts that can't run the
+    interactive login flow. Use as <code>Authorization: Bearer nks_pat_…</code>
+    on any JWT-authenticated endpoint. Only the plaintext is shown once
+    at creation — copy it immediately.
+  </p>
+
+  {% if minted_pat %}
+  <div class="callout callout-success">
+    <div><strong>New token:</strong> {{ minted_pat.name }}</div>
+    <div><strong>Copy now (shown once):</strong></div>
+    <pre class="selectable">{{ minted_pat.token }}</pre>
+    {% if minted_pat.expires_at %}<div class="muted">Expires {{ minted_pat.expires_at }}</div>{% endif %}
+  </div>
+  {% endif %}
+
+  <form method="post" action="/admin/account/tokens" class="form-grid">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Token name
+      <input type="text" name="name" required maxlength="128" placeholder="ci-pipeline">
+    </label>
+    <label>TTL days (blank = never)
+      <input type="number" name="ttl_days" min="1" max="365">
+    </label>
+    <button class="btn btn-primary">Create token</button>
+  </form>
+
+  <table class="data">
+    <thead>
+      <tr><th>Name</th><th>Prefix</th><th>Created</th><th>Last used</th><th>Expires</th><th>Status</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for t in tokens %}
+      <tr>
+        <td>{{ t.name }}</td>
+        <td><code>{{ t.prefix }}…</code></td>
+        <td class="nowrap">{{ t.created_at[:19] }}</td>
+        <td class="nowrap">{{ (t.last_used_at or '—')[:19] if t.last_used_at else '—' }}</td>
+        <td class="nowrap">{{ (t.expires_at or '—')[:19] if t.expires_at else 'never' }}</td>
+        <td>
+          {% if t.revoked_at %}<span class="pill pill-suspended">revoked</span>
+          {% elif t.expired %}<span class="pill pill-warn">expired</span>
+          {% else %}<span class="pill pill-ok">active</span>{% endif %}
+        </td>
+        <td class="actions">
+          {% if not t.revoked_at %}
+          <form method="post" action="/admin/account/tokens/{{ t.id }}/revoke" class="inline" onsubmit="return confirm('Revoke {{ t.name }}? This cannot be undone.');">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="btn btn-sm btn-warn">revoke</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">No tokens yet — use the form above to mint one.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
   <h2>Session</h2>
   <p class="muted">
     Admin sessions auto-expire after 24h absolute or 2h idle. Click the button below to sign out of this browser.
