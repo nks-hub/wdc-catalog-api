@@ -14,8 +14,23 @@ from app.main import app
 
 
 def _reset_totp(username: str = "admin") -> None:
-    """Disable TOTP for the admin account (call INSIDE a live TestClient ctx)."""
-    from app.db import Account, session_factory
+    """Disable TOTP for the admin account AND clear the global-enforcement
+    flag (call INSIDE a live TestClient ctx).
+
+    Test-order hazard: ``test_2fa_enforcement.py`` may leave
+    ``GlobalPolicy.require_2fa_for_admins=True`` if a prior test fails
+    before teardown. With the flag still on + TOTP disabled, every
+    admin-router request bounces to ``/admin/account?flash=totp-required``
+    — including the ``kill-others`` POST that a downstream test asserts
+    actually ran. The redirect satisfies the ``in (302, 303)`` status
+    check but the SQL UPDATE never fires, leaving synthetic rows alive
+    and failing the ``revoked_at is not None`` assertion.
+
+    Resetting both pieces here gives every test in this file a clean
+    "plain admin / no 2FA policy" starting state regardless of who ran
+    before.
+    """
+    from app.db import Account, GlobalPolicy, session_factory
     from sqlalchemy import select as _sel
 
     with session_factory() as db:
@@ -25,7 +40,10 @@ def _reset_totp(username: str = "admin") -> None:
             acct.totp_secret = None
             acct.totp_recovery_hashes = None
             acct.totp_enabled_at = None
-            db.commit()
+        policy = db.get(GlobalPolicy, 1)
+        if policy is not None and policy.require_2fa_for_admins:
+            policy.require_2fa_for_admins = False
+        db.commit()
 
 
 def _login(client: TestClient, username: str = "admin", password: str = "admin") -> None:
