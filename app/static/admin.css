@@ -2010,6 +2010,29 @@ html.theme-dark .banner { color: #fcd34d; }
   html.theme-auto-dark .banner { color: #fcd34d; }
 }
 
+/* Scheduler-failure banner — red variant, left-aligned with inline
+   error text + investigate link pushed to the right. Keeps the same
+   "always-visible on every admin page" semantics as the amber warn
+   banner but signals "something broke" instead of "heads up". */
+.banner-error {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 36%, transparent);
+  color: var(--danger);
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-weight: 500;
+}
+.banner-error .muted {
+  color: color-mix(in srgb, var(--danger) 65%, var(--text-3));
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.banner-error a { color: var(--danger); text-decoration: underline; }
+
 /* --------------------------------------------------------------------------
    Live audit tail toggle
    -------------------------------------------------------------------------- */

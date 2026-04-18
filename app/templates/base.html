@@ -60,6 +60,14 @@
     <div class="banner">{{ banner }}</div>
   {% endif %}
 
+  {% if scheduler_failure %}
+    <div class="banner banner-error">
+      <strong>Scheduled <code>{{ scheduler_failure.job }}</code> job failed {{ scheduler_failure.age }} ago.</strong>
+      <span class="muted">{{ scheduler_failure.error }}</span>
+      <a href="/admin/ops/scheduler?status_filter=failed" style="margin-left: auto;">investigate →</a>
+    </div>
+  {% endif %}
+
   <main class="container">
     {% if flash %}
       <div class="flash flash-{{ flash.kind }}">{{ flash.message }}</div>

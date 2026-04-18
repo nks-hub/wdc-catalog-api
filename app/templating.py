@@ -105,6 +105,80 @@ def _current_banner() -> str | None:
         return None
 
 
+def _scheduler_failure_banner() -> dict | None:
+    """If ANY SchedulerRun within the last 48h has ``error IS NOT NULL``
+    AND is the most-recent row for its job, surface it as a dict the
+    base template renders as a red banner.
+
+    Shape: ``{"job": "retention", "age": "3h 14m", "error": "<truncated>"}``.
+
+    Picks the most-recent failure among all jobs so a broken retention
+    run doesn't get drowned out by a subsequent successful backup — the
+    operator sees the first unattended alert on every page render.
+    """
+    try:
+        from datetime import datetime, timedelta, timezone
+
+        from sqlalchemy import select as _sel
+
+        from .db import SchedulerRun, session_factory
+
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=48)
+
+        with session_factory() as db:
+            # One latest row per distinct job within the window; check if
+            # the latest is a failure.  Small table, no materialized view
+            # needed.
+            jobs = db.scalars(
+                _sel(SchedulerRun.job).where(
+                    SchedulerRun.started_at >= cutoff
+                ).distinct()
+            ).all()
+            newest_failure: SchedulerRun | None = None
+            for job_name in jobs:
+                latest = db.scalar(
+                    _sel(SchedulerRun)
+                    .where(SchedulerRun.job == job_name)
+                    .where(SchedulerRun.started_at >= cutoff)
+                    .order_by(SchedulerRun.started_at.desc())
+                    .limit(1)
+                )
+                if latest is not None and latest.error:
+                    if (
+                        newest_failure is None
+                        or (latest.started_at or cutoff)
+                        > (newest_failure.started_at or cutoff)
+                    ):
+                        newest_failure = latest
+
+            if newest_failure is None:
+                return None
+
+            age_s = (
+                datetime.now(timezone.utc).replace(tzinfo=None)
+                - (newest_failure.started_at or cutoff)
+            ).total_seconds()
+            d, rem = divmod(int(age_s), 86400)
+            h, rem = divmod(rem, 3600)
+            m, _s = divmod(rem, 60)
+            if d:
+                age_str = f"{d}d {h}h"
+            elif h:
+                age_str = f"{h}h {m}m"
+            elif m:
+                age_str = f"{m}m"
+            else:
+                age_str = f"{int(age_s)}s"
+            err = (newest_failure.error or "").strip()
+            return {
+                "job": newest_failure.job,
+                "age": age_str,
+                "error": err[:160],  # cap so pathological tracebacks fit
+            }
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def base_context(request: Request, username: str | None, **extra) -> dict:
     """Shared template context — version always present so base.html renders.
 
@@ -139,6 +213,7 @@ def base_context(request: Request, username: str | None, **extra) -> dict:
         "flash": None,
         "csrf_token": csrf,
         "banner": _current_banner(),
+        "scheduler_failure": _scheduler_failure_banner(),
         "theme": theme,
     }
     ctx.update(extra)
