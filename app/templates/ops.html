@@ -113,6 +113,41 @@
     </div>
   </div>
 
+  {% if security_signals %}
+  <div class="stat-grid stat-grid-3" style="margin-top: var(--space-4);">
+    <div class="stat-card stat-card-wide">
+      <h3>Security signals · last 24h</h3>
+      <div class="stat-row">
+        <span>Failed logins <span class="muted">(password + TOTP)</span></span>
+        <b>
+          {% if security_signals.login_failed_sev == "bad" %}<span class="pill pill-suspended">{{ security_signals.login_failed }}</span>
+          {% elif security_signals.login_failed_sev == "warn" %}<span class="pill pill-warn">{{ security_signals.login_failed }}</span>
+          {% else %}{{ security_signals.login_failed }}{% endif %}
+          <a class="btn btn-ghost btn-sm" href="/admin/audit?q=login.failed" style="margin-left: var(--space-2);">view →</a>
+        </b>
+      </div>
+      <div class="stat-row">
+        <span>RBAC denials</span>
+        <b>
+          {% if security_signals.perm_denied_sev == "bad" %}<span class="pill pill-suspended">{{ security_signals.perm_denied }}</span>
+          {% elif security_signals.perm_denied_sev == "warn" %}<span class="pill pill-warn">{{ security_signals.perm_denied }}</span>
+          {% else %}{{ security_signals.perm_denied }}{% endif %}
+          <a class="btn btn-ghost btn-sm" href="/admin/audit?action=permission.denied" style="margin-left: var(--space-2);">view →</a>
+        </b>
+      </div>
+      <div class="stat-row">
+        <span>Password-change failures</span>
+        <b>
+          {% if security_signals.pw_change_failed_sev == "bad" %}<span class="pill pill-suspended">{{ security_signals.pw_change_failed }}</span>
+          {% elif security_signals.pw_change_failed_sev == "warn" %}<span class="pill pill-warn">{{ security_signals.pw_change_failed }}</span>
+          {% else %}{{ security_signals.pw_change_failed }}{% endif %}
+          <a class="btn btn-ghost btn-sm" href="/admin/audit?action=password.change_failed" style="margin-left: var(--space-2);">view →</a>
+        </b>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="stat-grid stat-grid-3" style="margin-top: var(--space-4);">
     <div class="stat-card stat-card-wide">
       <h3>Backup</h3>

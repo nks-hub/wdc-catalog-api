@@ -65,6 +65,53 @@ def _human_bytes(n: int) -> str:
     return f"{n:.1f} PB"
 
 
+def _security_signals_last_24h(db) -> dict:
+    """Count notable security-adjacent audit events in the last 24h.
+
+    Surfaces on ``/admin/ops`` so operators see credential-stuffing,
+    RBAC abuse, and TOTP failures at a glance instead of eyeballing
+    the filtered audit log. Thresholds chosen to render a red pill
+    at rates that real single-tenant admin deployments rarely hit
+    without an attack or misconfiguration.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import func as _func
+    from sqlalchemy import select as _sel
+
+    from .db import AuditEvent
+
+    cutoff = (
+        datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
+    )
+
+    def _count(action: str) -> int:
+        return int(
+            db.scalar(
+                _sel(_func.count()).select_from(AuditEvent)
+                .where(AuditEvent.action == action)
+                .where(AuditEvent.created_at >= cutoff)
+            )
+            or 0
+        )
+
+    login_failed = _count("login.failed") + _count("totp.login_failed")
+    perm_denied = _count("permission.denied")
+    pw_change_failed = _count("password.change_failed")
+
+    def _sev(n: int, warn_at: int, bad_at: int) -> str:
+        return "bad" if n >= bad_at else "warn" if n >= warn_at else "ok"
+
+    return {
+        "login_failed": login_failed,
+        "login_failed_sev": _sev(login_failed, warn_at=5, bad_at=20),
+        "perm_denied": perm_denied,
+        "perm_denied_sev": _sev(perm_denied, warn_at=3, bad_at=10),
+        "pw_change_failed": pw_change_failed,
+        "pw_change_failed_sev": _sev(pw_change_failed, warn_at=3, bad_at=10),
+    }
+
+
 router = APIRouter(include_in_schema=False)
 
 
@@ -4097,6 +4144,7 @@ def admin_ops(
         webhook_sparkline_max=webhook_sparkline_max,
         retention_last_run=retention_last_run,
         backup_last_run=backup_last_run,
+        security_signals=_security_signals_last_24h(db),
         flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "ops.html", ctx)
