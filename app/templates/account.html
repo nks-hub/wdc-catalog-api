@@ -108,15 +108,17 @@
   </form>
   {% endif %}
 
-  <h2>Active sessions</h2>
+  <h2>Active sessions <span class="muted" style="font-size: 0.8125rem; font-weight: 500;">· {{ sessions|length }} total</span></h2>
   <p class="muted">Each browser that signs in gets its own session row. Kill a row to force that browser to log in again.</p>
   {% if sessions %}
+  {% set _visible = sessions[:10] %}
+  {% set _hidden  = sessions[10:] %}
   <table class="data compact">
     <thead>
       <tr><th>IP</th><th>Agent</th><th>Signed in</th><th>Last seen</th><th>Actions</th></tr>
     </thead>
     <tbody>
-      {% for s in sessions %}
+      {% for s in _visible %}
       <tr>
         <td class="nowrap"><code>{{ s.ip or '—' }}</code>{% if s.is_current %} <span class="pill pill-ok">this browser</span>{% endif %}</td>
         <td class="muted" style="max-width: 32ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ s.user_agent or '—' }}</td>
@@ -134,6 +136,27 @@
         </td>
       </tr>
       {% endfor %}
+      {% if _hidden %}
+      <tr><td colspan="5" style="text-align: center; padding: var(--space-3);">
+        <details style="display: inline-block;">
+          <summary style="cursor: pointer; color: var(--accent);">Show {{ _hidden|length }} more session{{ 's' if _hidden|length != 1 else '' }}</summary>
+        </details>
+      </td></tr>
+      {% for s in _hidden %}
+      <tr class="session-hidden">
+        <td class="nowrap"><code>{{ s.ip or '—' }}</code></td>
+        <td class="muted" style="max-width: 32ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ s.user_agent or '—' }}</td>
+        <td class="nowrap">{{ s.created_at[:19] }}</td>
+        <td class="nowrap">{{ s.last_seen_at[:19] }}</td>
+        <td class="actions">
+          <form method="post" action="/admin/account/sessions/{{ s.id }}/kill" class="inline" onsubmit="return confirm('Kill this session? The other browser will be signed out.');">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="btn btn-sm btn-warn">kill</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      {% endif %}
     </tbody>
   </table>
   {% if sessions | selectattr('is_current', 'equalto', false) | list | length %}
