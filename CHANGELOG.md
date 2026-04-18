@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.48.2 — 2026-04-18
+
+Auto-ALTER hotfix — unblocks prod schema drift.
+
+- `db.create_all()` auto-ALTER previously ran all ADD COLUMN ops
+  inside ONE transaction; when SQLite rejected
+  `ALTER TABLE accounts ADD COLUMN totp_enabled BOOLEAN NOT NULL`
+  (no literal DEFAULT), the whole loop skipped and prod DB stayed
+  half-migrated — every auth path 500'd with
+  `no such column: accounts.totp_enabled`.
+- Fix: per-column try/except so one failure doesn't block the rest,
+  AND auto-derive a SQL literal DEFAULT from `col.default` (bool,
+  int, str) for NOT-NULL adds. Matches SQLite's strict ADD COLUMN
+  contract; Postgres accepts the extra DEFAULT no-op.
+- No schema changes to the ORM itself — existing totp_* fields
+  now apply cleanly on first boot.
+
 ## v0.48.1 — 2026-04-18
 
 Thread-safe event bus publish.

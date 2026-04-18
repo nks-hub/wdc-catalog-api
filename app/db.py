@@ -737,26 +737,81 @@ def create_all() -> None:
     try:
         insp = inspect(_engine)
         existing_tables = set(insp.get_table_names())
-        with _engine.begin() as conn:
-            for table_name, table in Base.metadata.tables.items():
-                if table_name not in existing_tables:
+        for table_name, table in Base.metadata.tables.items():
+            if table_name not in existing_tables:
+                continue
+            actual_cols = {c["name"] for c in insp.get_columns(table_name)}
+            for col in table.columns:
+                if col.name in actual_cols:
                     continue
-                actual_cols = {c["name"] for c in insp.get_columns(table_name)}
-                for col in table.columns:
-                    if col.name in actual_cols:
-                        continue
-                    ddl = str(
-                        CreateColumn(col).compile(dialect=_engine.dialect)
-                    ).strip()
-                    log.warning(
-                        "auto-ALTER: adding %s.%s (%s)",
+                ddl = str(
+                    CreateColumn(col).compile(dialect=_engine.dialect)
+                ).strip()
+                # SQLite rejects `ADD COLUMN … NOT NULL` without a
+                # literal DEFAULT — `CreateColumn` only emits the
+                # server_default, not the client-side Python default.
+                # Derive a literal from ``col.default`` for the common
+                # shapes (bool/int/str/None) so the new column has a
+                # concrete value for every existing row. Without this,
+                # one NOT-NULL column blocks the whole upgrade (see the
+                # totp_enabled incident 2026-04-18, prod DB drift caught
+                # by the sync+settings E2E report).
+                if (
+                    not col.nullable
+                    and " DEFAULT " not in ddl.upper()
+                ):
+                    lit = _literal_default(col)
+                    if lit is not None:
+                        ddl = f"{ddl} DEFAULT {lit}"
+                log.warning(
+                    "auto-ALTER: adding %s.%s (%s)",
+                    table_name,
+                    col.name,
+                    col.type,
+                )
+                # Per-column try so one unalterable column doesn't
+                # block the rest (previous behaviour was "one exception
+                # skips the whole loop", which left prod half-migrated
+                # for weeks).
+                try:
+                    with _engine.begin() as conn:
+                        conn.execute(
+                            text(f"ALTER TABLE {table_name} ADD COLUMN {ddl}")
+                        )
+                except Exception as col_exc:  # noqa: BLE001
+                    log.error(
+                        "auto-ALTER failed for %s.%s: %s",
                         table_name,
                         col.name,
-                        col.type,
+                        col_exc,
                     )
-                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {ddl}"))
     except Exception as exc:  # noqa: BLE001
-        log.warning("column auto-upgrade skipped: %s", exc)
+        log.warning("column auto-upgrade outer loop skipped: %s", exc)
+
+
+def _literal_default(col):  # noqa: ANN001 — SA Column
+    """Render a SQL literal for the Python default of ``col``.
+
+    Returns None if no safe literal can be derived. Only covers the
+    shapes we actually use in the model (bool, int, str, None) so we
+    don't ship DDL that embeds arbitrary Python.
+    """
+    d = getattr(col, "default", None)
+    if d is None:
+        return None
+    val = getattr(d, "arg", None)
+    if callable(val):
+        return None  # can't safely render a factory
+    if val is True:
+        return "1"
+    if val is False:
+        return "0"
+    if isinstance(val, int):
+        return str(val)
+    if isinstance(val, str):
+        escaped = val.replace("'", "''")
+        return f"'{escaped}'"
+    return None
 
 
 def get_session() -> Iterator[Session]:
