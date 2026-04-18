@@ -44,6 +44,7 @@ def issue(
     name: str,
     expires_at: Optional[datetime] = None,
     read_only: bool = False,
+    ip_allowlist: Optional[list[str]] = None,
 ) -> tuple[PersonalAccessToken, str]:
     """Mint a new token for ``account_id``.
 
@@ -61,6 +62,7 @@ def issue(
         token_prefix=plaintext[:PREFIX_PERSISTED_LEN],
         expires_at=expires_at.replace(tzinfo=None) if expires_at else None,
         read_only=bool(read_only),
+        ip_allowlist=ip_allowlist if ip_allowlist else None,
     )
     db.add(row)
     db.flush()

@@ -241,6 +241,26 @@ def get_current_account(
                 status.HTTP_403_FORBIDDEN,
                 "Read-only PAT cannot perform write operations",
             )
+        allowlist = pat.ip_allowlist
+        if allowlist:
+            import ipaddress
+            client_host = request.client.host if request.client else None
+            if not client_host:
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
+            try:
+                client_addr = ipaddress.ip_address(client_host)
+            except ValueError:
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
+            in_range = False
+            for cidr in allowlist:
+                try:
+                    if client_addr in ipaddress.ip_network(cidr, strict=False):
+                        in_range = True
+                        break
+                except ValueError:
+                    continue
+            if not in_range:
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
         return account
 
     try:
