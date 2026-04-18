@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.17.0 — 2026-04-18
+
+`/admin/ops` — single-glance diagnostics page.
+
+- Read-only operator surface aggregating live state from already-
+  existing tables: process (version, uptime, DB backend + size),
+  accounts + sessions (total accounts, admin-UI users, active
+  sessions), audit (total events + last-24h), retention scheduler
+  state + cron, webhook configuration status, and quick links into
+  `/metrics`, `/healthz`, `/readyz`.
+- Module-level `_PROCESS_START = time.time()` captures boot time so
+  uptime is exact; formatted as `Xd Yh Zm`. DB size via `os.stat`
+  on the sqlite file (Postgres shows `—` to avoid superuser perms).
+- Nav link "Ops" between "Settings" and "JSON".
+- 5 new tests (render, version stamp, sessions count, auth gate,
+  nav link) — 375 passing, up from 370.
+
 ## v0.16.0 — 2026-04-18
 
 Outbound webhook notifications — push-notify for critical audit events.
