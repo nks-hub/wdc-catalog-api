@@ -93,5 +93,42 @@
     </tbody>
   </table>
   {% else %}<p class="muted">No known sessions (this view lists only revoked tokens — active JWTs are stateless).</p>{% endif %}
+
+  <section class="user-activity">
+    <header class="section-head">
+      <h2>Activity ({{ user_events_total }})</h2>
+      <a class="btn btn-ghost" href="/admin/audit?actor_id={{ user.id }}">View full log →</a>
+    </header>
+    {% if user_events %}
+      <table class="data compact">
+        <thead>
+          <tr><th>When</th><th>Action</th><th>Resource</th><th>IP</th><th>Detail</th></tr>
+        </thead>
+        <tbody>
+          {% for e in user_events %}
+          <tr>
+            <td class="nowrap">{{ e.created_at[:19] }}</td>
+            <td><code>{{ e.action }}</code></td>
+            <td>
+              {% if e.resource_type %}<span class="pill">{{ e.resource_type }}</span>{% endif %}
+              {% if e.resource_id %}<code>{{ e.resource_id }}</code>{% endif %}
+            </td>
+            <td class="muted">{{ e.ip or '—' }}</td>
+            <td>
+              {% if e.detail %}<details><summary>view</summary><pre class="detail json-tint">{{ e.detail | json_highlight }}</pre></details>
+              {% else %}<span class="muted">—</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty-state">
+        <div class="empty-icon">📜</div>
+        <h3>No activity yet</h3>
+        <p>Events will land here as this user acts or is acted upon.</p>
+      </div>
+    {% endif %}
+  </section>
 </section>
 {% endblock %}

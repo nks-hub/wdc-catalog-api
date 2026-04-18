@@ -284,3 +284,36 @@ def test_audit_log_captures_rbac_denial(deep_client: TestClient) -> None:
     # Either the row is visible or the query executed cleanly on empty;
     # both prove no template regression.
     assert "Audit log" in r.text
+
+
+def test_user_detail_shows_activity_timeline(deep_client: TestClient) -> None:
+    from sqlalchemy import select as _sel
+
+    from app.auth import hash_password
+    from app.db import Account, AuditEvent, session_factory
+
+    with session_factory() as db:
+        acct = Account(
+            email="timeline-target@example.com",
+            password_hash=hash_password("unused"),
+            role="user",
+        )
+        db.add(acct)
+        db.flush()
+        db.add(
+            AuditEvent(
+                actor_id=acct.id,
+                actor_email=acct.email,
+                action="test.timeline_event",
+                resource_type="account",
+                resource_id=str(acct.id),
+            )
+        )
+        db.commit()
+        uid = acct.id
+
+    r = deep_client.get(f"/admin/users/{uid}")
+    assert r.status_code == 200
+    assert "Activity" in r.text
+    assert "test.timeline_event" in r.text
+    assert "View full log" in r.text

@@ -710,9 +710,9 @@ def admin_user_detail(
     flash: Annotated[str | None, Cookie(alias="flash")] = None,
     db: Session = Depends(get_session),
 ) -> HTMLResponse:
-    from sqlalchemy import func as _func, select as _sel
+    from sqlalchemy import func as _func, or_ as _or_, select as _sel
 
-    from .db import Account, DeviceConfig, RevokedToken
+    from .db import Account, AuditEvent, DeviceConfig, RevokedToken
     from .roles import Role
 
     acct = db.get(Account, user_id)
@@ -742,6 +742,35 @@ def admin_user_detail(
         for r in revoked
     ]
 
+    _events_where = _or_(
+        AuditEvent.actor_id == acct.id,
+        (AuditEvent.resource_type == "account")
+        & (AuditEvent.resource_id == str(acct.id)),
+    )
+    user_events_total = (
+        db.scalar(_sel(_func.count(AuditEvent.id)).where(_events_where)) or 0
+    )
+    _events_rows = db.scalars(
+        _sel(AuditEvent)
+        .where(_events_where)
+        .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+        .limit(20)
+    ).all()
+    user_events = [
+        {
+            "id": e.id,
+            "created_at": e.created_at.isoformat() if e.created_at else "",
+            "actor_id": e.actor_id,
+            "actor_email": e.actor_email,
+            "action": e.action,
+            "resource_type": e.resource_type,
+            "resource_id": e.resource_id,
+            "ip": e.ip,
+            "detail": e.detail,
+        }
+        for e in _events_rows
+    ]
+
     ctx = base_context(
         request,
         username,
@@ -762,6 +791,8 @@ def admin_user_detail(
             "device_count": device_count,
         },
         sessions=sessions,
+        user_events=user_events,
+        user_events_total=user_events_total,
         new_password=None,
         roles=[r.value for r in Role],
         flash=_pop_flash(flash),
