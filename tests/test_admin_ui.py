@@ -266,6 +266,13 @@ def test_dashboard_renders_recent_activity(admin_client: TestClient) -> None:
     assert "Dashboard" in r.text
 
 
+def test_admin_audit_has_live_toggle(admin_client: TestClient) -> None:
+    r = admin_client.get("/admin/audit")
+    assert r.status_code == 200
+    assert 'class="live-toggle"' in r.text
+    assert 'id="audit-tbody"' in r.text
+
+
 def test_admin_invite_mint_shows_token_once(admin_client: TestClient) -> None:
     """Minting an invite should render the signed token inline in the
     response — it's the only time it's shown."""

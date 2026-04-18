@@ -5,6 +5,10 @@
   <header class="section-head">
     <h1>Audit log ({{ total }})</h1>
     <a class="btn" href="/admin/audit.csv{% if qs %}?{{ qs[:-1] }}{% endif %}" download>Export CSV</a>
+    <button type="button" class="live-toggle" data-live="off" aria-pressed="false">
+      <span class="live-dot" aria-hidden="true"></span>
+      <span class="live-label">Live</span>
+    </button>
   </header>
 
   <div class="filter-chips">
@@ -69,7 +73,7 @@
     <thead>
       <tr><th>When</th><th>Actor</th><th>Action</th><th>Resource</th><th>IP</th><th>Detail</th></tr>
     </thead>
-    <tbody>
+    <tbody id="audit-tbody">
       {% for e in events %}
       <tr>
         <td class="nowrap">{{ e.created_at }}</td>

@@ -2009,3 +2009,47 @@ html.theme-dark .banner { color: #fcd34d; }
 @media (prefers-color-scheme: dark) {
   html.theme-auto-dark .banner { color: #fcd34d; }
 }
+
+/* --------------------------------------------------------------------------
+   Live audit tail toggle
+   -------------------------------------------------------------------------- */
+.live-toggle {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding: 6px var(--space-3); border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text-2); font-size: 0.821rem; font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--t-fast), background var(--t-fast), color var(--t-fast);
+}
+.live-toggle:hover { border-color: var(--accent); color: var(--accent); }
+.live-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-3);
+  transition: background var(--t-fast), box-shadow var(--t-fast);
+}
+.live-toggle.is-active {
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.live-toggle.is-active .live-dot {
+  background: var(--danger);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 20%, transparent);
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .audit-row-new td {
+    animation: audit-row-fade 600ms ease-out;
+  }
+}
+@keyframes audit-row-fade {
+  0%   { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+  100% { background: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-toggle.is-active .live-dot { animation: none; }
+}
