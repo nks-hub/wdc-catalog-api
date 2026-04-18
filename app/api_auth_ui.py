@@ -139,7 +139,7 @@ def login_submit(
         )
         return response
 
-    token = issue_session(user.username)
+    token = issue_session(user.username, request=request, db=db)
     response = RedirectResponse("/admin", status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(
         key=SESSION_COOKIE,
@@ -258,7 +258,7 @@ def login_2fa_submit(
         detail={"used_recovery": True} if used_recovery else None,
     )
 
-    token = issue_session(user.username)
+    token = issue_session(user.username, request=request, db=db)
     response = RedirectResponse("/admin", status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(
         key=SESSION_COOKIE,

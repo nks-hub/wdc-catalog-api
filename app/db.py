@@ -382,6 +382,32 @@ class AuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, index=True)
 
 
+class AdminSession(Base):
+    """Per-browser session row for the admin UI.
+
+    Keyed on a sha256 fingerprint of the signed session cookie so the
+    row can be looked up without storing the plaintext secret. Setting
+    ``revoked_at`` immediately bounces any future request that carries
+    the matching cookie.
+    """
+
+    __tablename__ = "admin_sessions"
+    __table_args__ = (
+        UniqueConstraint("fingerprint", name="uq_admin_sessions_fp"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)  # sha256 hex
+    ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+
+
 class SavedAuditQuery(Base):
     """Named filter preset on the admin audit log.
 

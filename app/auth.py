@@ -15,17 +15,22 @@ used so `run.cmd` boots without friction. NEVER set that flag in prod.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import secrets
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import bcrypt
-from fastapi import Cookie, HTTPException, status
+from fastapi import Cookie, Depends, HTTPException, Request, status
 from itsdangerous import BadSignature, TimestampSigner
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from .db import User, session_factory
+from .db import User, get_session, session_factory
+
+if TYPE_CHECKING:
+    pass
 
 log = logging.getLogger(__name__)
 
@@ -125,8 +130,51 @@ def verify_dummy_password(plain: str) -> bool:
     return False
 
 
-def issue_session(username: str) -> str:
-    return _signer.sign(username.encode("utf-8")).decode("ascii")
+def _fingerprint(signed_cookie: str) -> str:
+    """Return sha256 hex of the signed cookie bytes — used as DB lookup key."""
+    return hashlib.sha256(signed_cookie.encode("ascii")).hexdigest()
+
+
+def issue_session(
+    username: str,
+    *,
+    request: "Request | None" = None,
+    db: "Session | None" = None,
+) -> str:
+    """Sign a session cookie and optionally persist a tracking row.
+
+    Old callers that pass only ``username`` continue to work unchanged.
+    Login handlers should also pass ``request`` and ``db`` so the row is
+    written for revocation support.
+    """
+    signed = _signer.sign(username.encode("utf-8")).decode("ascii")
+    if db is not None:
+        try:
+            from sqlalchemy import select as _sel
+
+            from .db import AdminSession, User as _User
+
+            user = db.scalar(_sel(_User).where(_User.username == username))
+            if user is not None:
+                fp = _fingerprint(signed)
+                existing = db.scalar(
+                    _sel(AdminSession).where(AdminSession.fingerprint == fp)
+                )
+                if existing is None:
+                    ip = request.client.host if request and request.client else None
+                    ua = request.headers.get("user-agent") if request else None
+                    db.add(
+                        AdminSession(
+                            user_id=user.id,
+                            fingerprint=fp,
+                            ip=ip,
+                            user_agent=(ua or "")[:256] or None,
+                        )
+                    )
+                    db.flush()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("session row write failed: %s", exc)
+    return signed
 
 
 def read_session(cookie_value: str | None) -> str | None:
@@ -178,7 +226,9 @@ def ensure_admin_user() -> None:
 
 
 def current_user(
+    request: Request,
     session_cookie: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
+    db: Session = Depends(get_session),
 ) -> str:
     username = read_session(session_cookie)
     if username is None:
@@ -187,6 +237,47 @@ def current_user(
             detail="Not authenticated",
             headers={"Location": "/login"},
         )
+
+    # Fingerprint-based session row check — best-effort so DB errors never
+    # block the admin from logging in.
+    try:
+        from datetime import datetime, timezone
+
+        from sqlalchemy import select as _sel
+
+        from .db import AdminSession, User as _User
+
+        fp = _fingerprint(session_cookie)  # type: ignore[arg-type]
+        row = db.scalar(_sel(AdminSession).where(AdminSession.fingerprint == fp))
+
+        if row is not None:
+            if row.revoked_at is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_302_FOUND,
+                    detail="Session revoked",
+                    headers={"Location": "/login"},
+                )
+            # Update last_seen_at on every hit (row is small table).
+            row.last_seen_at = datetime.now(timezone.utc)
+        else:
+            # Legacy session — no row yet. Write one now so future kill works.
+            user = db.scalar(_sel(_User).where(_User.username == username))
+            if user is not None:
+                ip = request.client.host if request.client else None
+                ua = request.headers.get("user-agent")
+                db.add(
+                    AdminSession(
+                        user_id=user.id,
+                        fingerprint=fp,
+                        ip=ip,
+                        user_agent=(ua or "")[:256] or None,
+                    )
+                )
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        log.warning("session row lookup/write failed: %s", exc)
+
     return username
 
 
