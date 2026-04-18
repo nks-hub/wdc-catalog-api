@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.48.1 — 2026-04-18
+
+Thread-safe event bus publish.
+
+- `event_bus.publish()` now routes queue mutations through
+  `loop.call_soon_threadsafe` when invoked from a non-loop thread,
+  fixing potential `asyncio.Queue` state corruption when audit hooks
+  fire from FastAPI's sync-route threadpool.
+
 ## v0.48.0 — 2026-04-18
 
 PAT rotation with atomic revoke + replacement mint.

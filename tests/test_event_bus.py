@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 
 import pytest
 
@@ -95,3 +96,66 @@ async def test_unsubscribe_on_context_exit() -> None:
 
     # Publishing after unsubscribe must not raise.
     b.publish({"action": "after-unsub"})
+
+
+async def test_publish_from_worker_thread_delivers_to_loop_consumer() -> None:
+    """publish() must be safe when called from a non-event-loop thread.
+
+    FastAPI runs sync route handlers in Starlette's threadpool, so the
+    audit hook routinely calls publish() from a worker thread while the
+    SSE consumer lives on the main loop.  asyncio.Queue is NOT thread-
+    safe, so publish() must route through call_soon_threadsafe.
+    """
+    b = _fresh()
+    async with b.subscribe() as events:
+        done = threading.Event()
+
+        def worker() -> None:
+            try:
+                for i in range(10):
+                    b.publish({"seq": i, "from": "worker"})
+            finally:
+                done.set()
+
+        t = threading.Thread(target=worker)
+        t.start()
+
+        received: list[dict] = []
+        for _ in range(10):
+            evt = await asyncio.wait_for(events.__anext__(), timeout=2.0)
+            received.append(evt)
+
+        t.join(timeout=2.0)
+        assert done.is_set(), "worker thread failed to complete"
+
+    assert [e["seq"] for e in received] == list(range(10))
+    assert all(e["from"] == "worker" for e in received)
+
+
+async def test_concurrent_publish_and_subscribe_no_corruption() -> None:
+    """subscribe() racing with publish() from a worker must not corrupt state."""
+    b = _fresh()
+    stop = threading.Event()
+
+    def publisher() -> None:
+        i = 0
+        while not stop.is_set():
+            b.publish({"seq": i})
+            i += 1
+
+    t = threading.Thread(target=publisher)
+    t.start()
+    try:
+        # Open + close several subscribers while the worker floods publish().
+        for _ in range(5):
+            async with b.subscribe() as events:
+                try:
+                    await asyncio.wait_for(events.__anext__(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    pass
+    finally:
+        stop.set()
+        t.join(timeout=2.0)
+
+    # After all subscribers exit the registry must be clean.
+    assert len(b._queues) == 0
