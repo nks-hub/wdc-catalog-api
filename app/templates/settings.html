@@ -15,6 +15,11 @@
         Self-registration enabled
         <span class="hint">When off, <code>POST /api/v1/auth/register</code> returns 403.</span>
       </label>
+      <label class="checkbox span-all">
+        <input type="checkbox" name="require_2fa_for_admins" value="1" {% if policy.require_2fa_for_admins %}checked{% endif %}>
+        Require 2FA for admin UI
+        <span class="hint">When on, admins without TOTP configured are forced to pair an authenticator before accessing any admin page except /admin/account and /logout.</span>
+      </label>
       <label>Default role for new accounts
         <select name="default_role">
           {% for r in roles %}<option value="{{ r }}" {% if r == policy.default_role %}selected{% endif %}>{{ r }}</option>{% endfor %}

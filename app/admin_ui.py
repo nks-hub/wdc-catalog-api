@@ -1899,6 +1899,7 @@ def admin_settings(
             "registration_enabled": row.registration_enabled,
             "default_role": row.default_role,
             "banner_message": row.banner_message,
+            "require_2fa_for_admins": row.require_2fa_for_admins,
             "updated_at": row.updated_at.isoformat() if row.updated_at else None,
             "updated_by_email": row.updated_by_email,
         },
@@ -1920,6 +1921,7 @@ def admin_save_settings(
     registration_enabled: Annotated[str, Form()] = "",
     default_role: Annotated[str, Form()] = "user",
     banner_message: Annotated[str, Form()] = "",
+    require_2fa_for_admins: Annotated[str, Form()] = "",
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
     from . import audit as _audit
@@ -1946,6 +1948,7 @@ def admin_save_settings(
         "registration_enabled": row.registration_enabled,
         "default_role": row.default_role,
         "banner_message": row.banner_message,
+        "require_2fa_for_admins": row.require_2fa_for_admins,
     }
 
     row.snapshot_keep_last_n = max(1, min(int(snapshot_keep_last_n), 500))
@@ -1956,6 +1959,7 @@ def admin_save_settings(
     row.registration_enabled = bool(registration_enabled)
     row.default_role = default_role
     row.banner_message = banner_message.strip() or None
+    row.require_2fa_for_admins = bool(require_2fa_for_admins)
     row.updated_by_email = f"{username}@admin.local"
 
     after = {
@@ -1965,6 +1969,7 @@ def admin_save_settings(
         "registration_enabled": row.registration_enabled,
         "default_role": row.default_role,
         "banner_message": row.banner_message,
+        "require_2fa_for_admins": row.require_2fa_for_admins,
     }
     changed = {k: {"from": before[k], "to": after[k]} for k in after if before[k] != after[k]}
     if changed:

@@ -139,3 +139,66 @@ def test_logout_always_works_under_gate(admin_client: TestClient) -> None:
     # Logout redirects to /login — any 3xx is success.
     assert r.status_code in (302, 303)
     assert "/login" in r.headers.get("location", "")
+
+
+def test_save_settings_toggles_2fa_requirement(admin_client: TestClient) -> None:
+    """Settings form flips require_2fa_for_admins + audits the diff."""
+    from app.db import GlobalPolicy, session_factory
+
+    csrf = admin_client.cookies.get("nks_wdc_csrf") or ""
+    # Flip on
+    r = admin_client.post(
+        "/admin/settings",
+        data={
+            "_csrf": csrf,
+            "snapshot_keep_last_n": "30",
+            "snapshot_retain_days": "90",
+            "max_bytes_per_user": "",
+            "registration_enabled": "1",
+            "default_role": "user",
+            "banner_message": "",
+            "require_2fa_for_admins": "1",
+        },
+    )
+    assert r.status_code in (200, 303)
+    with session_factory() as db:
+        assert db.get(GlobalPolicy, 1).require_2fa_for_admins is True
+
+    # The checkbox renders as checked on reload.
+    # Enable TOTP first so the gate doesn't block the settings page.
+    _enable_totp()
+    page = admin_client.get("/admin/settings")
+    assert 'name="require_2fa_for_admins" value="1" checked' in page.text
+    _reset_totp()
+
+    # Audit row carries the diff.
+    from app.db import AuditEvent
+    from sqlalchemy import select as _sel
+    with session_factory() as db:
+        evt = db.scalar(
+            _sel(AuditEvent)
+            .where(AuditEvent.action == "settings.updated")
+            .order_by(AuditEvent.id.desc())
+            .limit(1)
+        )
+    changed = (evt.detail or {}).get("changed", {})
+    assert "require_2fa_for_admins" in changed
+    assert changed["require_2fa_for_admins"]["to"] is True
+
+    # Flip off (omit the field). Enable TOTP so the POST itself isn't gated.
+    _enable_totp()
+    r = admin_client.post(
+        "/admin/settings",
+        data={
+            "_csrf": csrf,
+            "snapshot_keep_last_n": "30",
+            "snapshot_retain_days": "90",
+            "max_bytes_per_user": "",
+            "registration_enabled": "1",
+            "default_role": "user",
+            "banner_message": "",
+        },
+    )
+    assert r.status_code in (200, 303)
+    with session_factory() as db:
+        assert db.get(GlobalPolicy, 1).require_2fa_for_admins is False
