@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.27.0 — 2026-04-18
+
+Scheduled nightly backup + on-disk retention — completes the backup
+trilogy (v0.20 download → v0.26 manual-to-disk → v0.27 scheduled).
+
+- **`GlobalPolicy.backup_enabled`** (default False) + **`backup_retention_count`**
+  (default 7). Auto-ALTER handles legacy DBs.
+- **APScheduler cron** — daily 02:30 UTC (override via env
+  `NKS_WDC_BACKUP_CRON`), fires 30 min before the 03:00 retention
+  sweep so the ZIP captures pre-sweep state.
+- **`backup.run_scheduled_backup()`** — mirrors
+  `retention.run_retention` structure. Writes the ZIP via the
+  v0.26 `generate_backup_bytes` helper, prunes the oldest files
+  beyond `backup_retention_count`, ALWAYS records a
+  `SchedulerRun(job="backup")` row (success + skip + error) so
+  operators see "job fired but skipped because disabled" on the
+  scheduler-runs history page.
+- **`/admin/ops` Backup card** — gains last-run pill + size + pruned
+  count when at least one scheduled run has fired.
+- **Settings UI** — Backup fieldset gets the enable checkbox +
+  retention count input alongside the v0.26 directory field.
+
+5 new tests (writes file when enabled, skipped when disabled,
+skipped when no dir, prune keeps last-N, settings save) — 417
+passing, up from 412.
+
 ## v0.26.0 — 2026-04-18
 
 Backup-to-disk — server-side manual snapshot write.
