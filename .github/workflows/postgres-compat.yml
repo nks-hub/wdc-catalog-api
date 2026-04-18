@@ -76,14 +76,15 @@ jobs:
         run: |
           python -m uvicorn app.main:app --host 127.0.0.1 --port 8765 &
           APP_PID=$!
-          # Wait for healthz to report DB up
+          # Wait for readyz to report DB up (readyz probes the DB,
+          # healthz is liveness-only and has no .db field).
           for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8765/healthz >/dev/null 2>&1; then break; fi
+            if curl -fsS http://127.0.0.1:8765/readyz >/dev/null 2>&1; then break; fi
             sleep 1
           done
           set -e
-          curl -fsS http://127.0.0.1:8765/healthz | tee /tmp/health.json
-          jq -e '.ok == true and .db == "up"' /tmp/health.json
+          curl -fsS http://127.0.0.1:8765/readyz | tee /tmp/ready.json
+          jq -e '.ok == true and .checks.db == "up"' /tmp/ready.json
           curl -fsS http://127.0.0.1:8765/api/v1/catalog | jq -e '.apps | type == "object"'
           # Register + push a config-sync so the snapshot bridge exercises
           # the encrypted-JSON + zstd-blob paths on Postgres JSONB / BYTEA.
