@@ -18,7 +18,7 @@ from fastapi import (
     Request,
     status,
 )
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from .auth import current_user
@@ -117,6 +117,38 @@ def _pop_flash(cookie: str | None) -> dict | None:
 
 def _clear_flash(response) -> None:
     response.delete_cookie("flash")
+
+
+def _parse_iso_date(raw: str):
+    """Parse YYYY-MM-DD → aware UTC datetime at 00:00. Returns None on empty/invalid."""
+    from datetime import datetime, timezone
+
+    if not raw or not raw.strip():
+        return None
+    try:
+        return datetime.strptime(raw.strip(), "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _invites_history_stmt(stmt, email: str, since: str, until: str):
+    """Apply email/date filters to a ConsumedInvite SELECT statement."""
+    from datetime import datetime, time, timezone
+
+    from sqlalchemy import select as _sel
+
+    from .db import ConsumedInvite
+
+    if email:
+        stmt = stmt.where(ConsumedInvite.email.ilike(f"%{email.strip()}%"))
+    since_dt = _parse_iso_date(since)
+    if since_dt:
+        stmt = stmt.where(ConsumedInvite.consumed_at >= since_dt)
+    until_dt = _parse_iso_date(until)
+    if until_dt:
+        until_dt = datetime.combine(until_dt.date(), time.max).replace(tzinfo=timezone.utc)
+        stmt = stmt.where(ConsumedInvite.consumed_at <= until_dt)
+    return stmt
 
 
 # ── Routes ────────────────────────────────────────────────────────────
@@ -1994,6 +2026,9 @@ def admin_save_settings(
 def admin_invites_history(
     request: Request,
     username: Annotated[str, Depends(current_user)],
+    email: str = "",
+    since: str = "",
+    until: str = "",
     flash: Annotated[str | None, Cookie(alias="flash")] = None,
     db: Session = Depends(get_session),
 ) -> HTMLResponse:
@@ -2001,9 +2036,9 @@ def admin_invites_history(
 
     from .db import ConsumedInvite, count_query
 
-    stmt = _sel(ConsumedInvite)
+    stmt = _invites_history_stmt(_sel(ConsumedInvite), email, since, until)
     total = count_query(db, stmt)
-    rows = db.scalars(stmt.order_by(ConsumedInvite.consumed_at.desc()).limit(200)).all()
+    rows = db.scalars(stmt.order_by(ConsumedInvite.consumed_at.desc()).limit(500)).all()
     consumed = [
         {
             "nonce": r.nonce,
@@ -2013,16 +2048,66 @@ def admin_invites_history(
         }
         for r in rows
     ]
+    qs_parts = []
+    if email:
+        qs_parts.append(f"email={email}")
+    if since:
+        qs_parts.append(f"since={since}")
+    if until:
+        qs_parts.append(f"until={until}")
+    qs = "&".join(qs_parts)
+
     ctx = base_context(
         request,
         username,
         consumed=consumed,
         total=total,
+        email=email,
+        since=since,
+        until=until,
+        qs=qs,
         flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "invites_history.html", ctx)
     _clear_flash(response)
     return response
+
+
+@router.get("/admin/invites/history.csv")
+def admin_invites_history_csv(
+    username: Annotated[str, Depends(current_user)],
+    email: str = "",
+    since: str = "",
+    until: str = "",
+    db: Session = Depends(get_session),
+) -> Response:
+    import csv
+    import io
+
+    from sqlalchemy import select as _sel
+
+    from .db import ConsumedInvite
+
+    stmt = _invites_history_stmt(_sel(ConsumedInvite), email, since, until)
+    rows = db.scalars(stmt.order_by(ConsumedInvite.consumed_at.desc()).limit(10000)).all()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["email", "consumed_at", "account_id", "nonce"])
+    for r in rows:
+        w.writerow([
+            r.email or "",
+            r.consumed_at.isoformat() if r.consumed_at else "",
+            r.account_id if r.account_id is not None else "",
+            r.nonce or "",
+        ])
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="invite-history.csv"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 # ── Backup import (paste-JSON → create snapshot) ─────────────────────
