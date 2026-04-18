@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.13.0 — 2026-04-18
+
+Audit-log retention — configurable per instance.
+
+- `GlobalPolicy.audit_retention_days` (default 365). Auto-ALTER on
+  startup handles legacy DBs.
+- Nightly retention runner now sweeps `audit_events` older than the
+  configured window via the existing `_batched_delete` helper; the
+  summary dict gains `audit_events_purged` for the manual-run flash
+  + the `retention.manual_run` audit event detail picks it up
+  automatically. `0 = never purge` as an escape hatch for external
+  SIEM setups; capped at 3650 days (10 years).
+- Settings surface: new "Audit retention" fieldset between "Snapshot
+  defaults" and "Quotas" with a single "Keep audit events for (days)"
+  input. Changes flow through the existing `settings.updated` audit
+  diff.
+
+4 new tests (retention sweep + default behaviour + 0-means-never +
+settings save) — 355 passing, up from 351.
+
 ## v0.12.0 — 2026-04-18
 
 Invite-history filter + CSV export.
