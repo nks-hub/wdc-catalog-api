@@ -853,19 +853,20 @@ main.container {
 }
 
 
-/* Hero KPI card — the dashboard now leads with one full-width card
-   so the 24h activity pulse doesn't share visual weight with "total
-   apps" etc. Figure sits left, sparkline fills the remaining width. */
+/* Hero KPI card — compact 24h activity strip. Earlier version was
+   230 px tall for one digit + sparkline (UX audit 2026-04-18 P0):
+   "70 % empty space, banner-blindness-adjacent". Now ~120 px,
+   baseline-aligned KPI ~ sparkline. */
 .stat-hero {
   display: grid;
-  grid-template-columns: minmax(200px, 260px) 1fr;
+  grid-template-columns: minmax(170px, 220px) 1fr;
   grid-template-rows: auto auto;
-  align-items: end;
-  gap: var(--space-4) var(--space-6);
+  align-items: center;
+  gap: 2px var(--space-6);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: var(--space-5) var(--space-6);
+  padding: var(--space-4) var(--space-5);
   box-shadow: var(--shadow-sm);
   margin-bottom: var(--space-4);
   transition: box-shadow var(--t-base), border-color var(--t-base);
@@ -877,7 +878,7 @@ main.container {
 .stat-hero-figure {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 2px;
   align-self: center;
   grid-row: 1 / span 2;
 }
@@ -902,12 +903,13 @@ main.container {
   color: var(--text-3);
 }
 .sparkline-hero {
-  height: 96px;
+  height: 64px;
   width: 100%;
   color: var(--accent);
   grid-column: 2;
   grid-row: 1;
   overflow: visible;
+  align-self: end;
 }
 .spark-axis-hero {
   grid-column: 2;
