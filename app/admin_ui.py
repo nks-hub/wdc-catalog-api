@@ -786,6 +786,33 @@ def admin_dashboard(
         ),
     }
 
+    # --- KPI deltas vs previous 24h window (48h..24h ago) ---
+    # Both counts queried fresh here — the cached ``stats.audit.events_last_24h``
+    # uses a 30s TTL so mixing it with a fresh prev-24h count would produce
+    # occasional off-by-cache deltas right after a spike.
+    from sqlalchemy import func as _func
+    two_days_ago = now - timedelta(hours=47)
+    current_audit_count = db.scalar(
+        _sel(_func.count()).select_from(AuditEvent).where(
+            AuditEvent.created_at >= day_ago.replace(tzinfo=None),
+        )
+    ) or 0
+    prev_audit_count = db.scalar(
+        _sel(_func.count()).select_from(AuditEvent).where(
+            AuditEvent.created_at >= two_days_ago.replace(tzinfo=None),
+            AuditEvent.created_at < day_ago.replace(tzinfo=None),
+        )
+    ) or 0
+    audit_delta = int(current_audit_count - prev_audit_count)
+
+    prev_webhook_count = db.scalar(
+        _sel(_func.count()).select_from(WebhookDelivery).where(
+            WebhookDelivery.created_at >= two_days_ago.replace(tzinfo=None),
+            WebhookDelivery.created_at < day_ago.replace(tzinfo=None),
+        )
+    ) or 0
+    webhook_delta = int(wh_total - prev_webhook_count)
+
     ctx = base_context(
         request,
         username,
@@ -794,6 +821,8 @@ def admin_dashboard(
         sparkline=sparkline,
         sparkline_max=sparkline_max,
         webhook_health=webhook_health,
+        audit_delta=audit_delta,
+        webhook_delta=webhook_delta,
         flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "dashboard.html", ctx)

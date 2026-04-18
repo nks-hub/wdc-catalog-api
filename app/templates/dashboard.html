@@ -11,6 +11,16 @@
     <div class="stat-hero-figure">
       <span class="stat-hero-label">Audit events · last 24h</span>
       <b class="stat-hero-kpi">{{ stats.audit.events_last_24h }}</b>
+      {% if audit_delta is defined %}
+        {% if audit_delta > 0 %}
+          <span class="kpi-delta kpi-delta-up" title="Prior 24h count subtracted from current 24h">▲ +{{ audit_delta }}</span>
+        {% elif audit_delta < 0 %}
+          <span class="kpi-delta kpi-delta-down" title="Prior 24h count subtracted from current 24h">▼ {{ audit_delta }}</span>
+        {% else %}
+          <span class="kpi-delta kpi-delta-flat">—</span>
+        {% endif %}
+        <span class="stat-hero-sub">vs prior 24h</span>
+      {% endif %}
       <span class="stat-hero-sub">of {{ stats.audit.events_total }} total</span>
     </div>
     {% if sparkline %}
@@ -90,7 +100,17 @@
     <div class="stat-card">
       <h3>Webhooks · 24h</h3>
       {% if webhook_health.total %}
-        <div class="stat-row"><span>Sent</span><b>{{ webhook_health.ok }}</b></div>
+        <div class="stat-row">
+          <span>Sent</span>
+          <b>
+            {{ webhook_health.ok }}
+            {% if webhook_delta is defined %}
+              {% if webhook_delta > 0 %}<span class="kpi-delta kpi-delta-up">▲ +{{ webhook_delta }}</span>
+              {% elif webhook_delta < 0 %}<span class="kpi-delta kpi-delta-down">▼ {{ webhook_delta }}</span>
+              {% else %}<span class="kpi-delta kpi-delta-flat">—</span>{% endif %}
+            {% endif %}
+          </b>
+        </div>
         <div class="stat-row"><span>Failed</span>
           <b>
             {% if webhook_health.status == "bad" %}<span class="pill pill-suspended">{{ webhook_health.failed }}</span>

@@ -2084,3 +2084,31 @@ html.theme-dark .banner { color: #fcd34d; }
 @media (max-width: 880px) {
   .topbar-search { display: none; }
 }
+
+/* --------------------------------------------------------------------------
+   KPI delta chips (v0.37.0)
+   Small arrow + number rendered next to dashboard KPIs so operators see
+   "today busier than yesterday" at a glance without scrolling into ops.
+   -------------------------------------------------------------------------- */
+.kpi-delta {
+  display: inline-block;
+  padding: 2px 6px;
+  margin-left: var(--space-2);
+  border-radius: var(--radius);
+  font-size: 0.7em;
+  font-weight: 600;
+  vertical-align: middle;
+  line-height: 1.2;
+}
+.kpi-delta-up {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  color: var(--success);
+}
+.kpi-delta-down {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  color: var(--danger);
+}
+.kpi-delta-flat {
+  background: var(--surface-2);
+  color: var(--text-3);
+}

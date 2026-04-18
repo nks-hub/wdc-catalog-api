@@ -110,11 +110,17 @@ def test_dashboard_no_deliveries_shows_empty_state(admin_client: TestClient) -> 
 
 
 def test_dashboard_shows_sent_and_failed_counts(admin_client: TestClient) -> None:
+    import re
     _seed_deliveries(ok=7, failed=2)
     r = admin_client.get("/admin")
     assert r.status_code == 200
-    # Verify sent/failed counts appear adjacent to their labels in the markup.
-    assert ">Sent</span><b>7</b>" in r.text
+    # Sent count appears inside the webhook card under a `Sent` label.
+    # The surrounding markup grew a KPI delta chip in v0.37.0 so the
+    # old tight `>Sent</span><b>7</b>` assertion breaks — tolerate
+    # whitespace + a possible delta span between the label and the
+    # count by matching on the label followed by the count within
+    # a short character window.
+    assert re.search(r">Sent</span>\s*<b>\s*7\b", r.text) is not None
     assert "22.2%" in r.text
 
 
