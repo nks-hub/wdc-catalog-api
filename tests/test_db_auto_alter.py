@@ -22,11 +22,14 @@ def _col(type_, default=None, nullable=False):
 
 
 def test_literal_default_for_true_bool() -> None:
-    assert _literal_default(_col(Boolean, default=True)) == "1"
+    # Boolean columns emit TRUE/FALSE so Postgres BOOLEAN accepts the
+    # default; SQLite + MySQL also accept TRUE/FALSE so it's safe across
+    # dialects. Prior `"1"` worked only on SQLite/MySQL.
+    assert _literal_default(_col(Boolean, default=True)) == "TRUE"
 
 
 def test_literal_default_for_false_bool() -> None:
-    assert _literal_default(_col(Boolean, default=False)) == "0"
+    assert _literal_default(_col(Boolean, default=False)) == "FALSE"
 
 
 def test_literal_default_for_int() -> None:

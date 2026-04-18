@@ -825,6 +825,19 @@ def _literal_default(col):  # noqa: ANN001 — SA Column
         return "CURRENT_TIMESTAMP"
     if callable(val):
         return None
+    # Postgres requires literal TRUE/FALSE on BOOLEAN columns — "0"/"1"
+    # triggers psycopg `DatatypeMismatch: boolean but default expression
+    # is of type integer`. SQLite + MySQL accept either, so TRUE/FALSE
+    # is safe cross-dialect for Boolean type. (Verified 2026-04-18 in
+    # postgres-compat CI: totp_enabled / require_2fa_for_admins /
+    # backup_enabled all hit this class.)
+    from sqlalchemy import Boolean
+
+    if isinstance(col.type, Boolean):
+        if val is True:
+            return "TRUE"
+        if val is False:
+            return "FALSE"
     if val is True:
         return "1"
     if val is False:
