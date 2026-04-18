@@ -364,9 +364,24 @@ def start_scheduler() -> None:
     sched.add_job(
         _scheduled_retention, trigger, id="retention-daily", replace_existing=True
     )
+
+    # Backup — 30 min before retention so the ZIP reflects pre-sweep state.
+    backup_cron = os.environ.get("NKS_WDC_BACKUP_CRON", "30 2 * * *")
+    try:
+        backup_trigger = CronTrigger.from_crontab(backup_cron, timezone="UTC")
+    except Exception as exc:
+        log.warning(
+            "Invalid NKS_WDC_BACKUP_CRON=%s: %s — defaulting daily 02:30", backup_cron, exc
+        )
+        backup_trigger = CronTrigger.from_crontab("30 2 * * *", timezone="UTC")
+    sched.add_job(
+        _scheduled_backup, backup_trigger, id="backup-daily", replace_existing=True
+    )
+
     sched.start()
     _scheduler = sched
     log.info("retention scheduler started (cron=%s)", cron)
+    log.info("backup scheduler started (cron=%s)", backup_cron)
 
 
 def _scheduled_retention() -> dict:
@@ -386,6 +401,26 @@ def _scheduled_retention() -> dict:
     token = request_id_var.set(f"job-{uuid.uuid4().hex[:8]}")
     try:
         return run_retention()
+    finally:
+        request_id_var.reset(token)
+
+
+def _scheduled_backup() -> dict:
+    """APScheduler entry-point for the nightly backup."""
+    import uuid
+
+    try:
+        from .observability import request_id_var
+    except Exception:
+        from . import backup as _bk
+        return _bk.run_scheduled_backup()
+    token = request_id_var.set(f"job-{uuid.uuid4().hex[:8]}")
+    try:
+        from . import backup as _bk
+        return _bk.run_scheduled_backup()
+    except Exception:
+        log.exception("scheduled backup failed")
+        raise
     finally:
         request_id_var.reset(token)
 

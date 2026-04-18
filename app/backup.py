@@ -3,16 +3,142 @@ paths share one implementation."""
 
 from __future__ import annotations
 
+import glob as _glob
 import gzip
 import hashlib
 import io
 import json
+import logging
+import os
+import time as _time
 import zipfile
 from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select as _sel
 from sqlalchemy.orm import Session
+
+log = logging.getLogger(__name__)
+
+
+def _prune_disk_backups(directory: str, keep_count: int) -> int:
+    """Delete oldest files matching nks-wdc-backup-*.zip beyond the cap.
+
+    Returns the number of files removed. ``keep_count <= 0`` is a
+    never-prune escape hatch.
+    """
+    if keep_count <= 0:
+        return 0
+    try:
+        pattern = os.path.join(directory, "nks-wdc-backup-*.zip")
+        files = sorted(
+            (f for f in _glob.glob(pattern) if os.path.isfile(f)),
+            key=os.path.getmtime,
+        )
+    except OSError:
+        return 0
+    if len(files) <= keep_count:
+        return 0
+    to_delete = files[: len(files) - keep_count]
+    removed = 0
+    for path in to_delete:
+        try:
+            os.remove(path)
+            removed += 1
+        except OSError as exc:
+            log.warning("backup prune: failed to remove %s: %s", path, exc)
+    return removed
+
+
+def run_scheduled_backup(db=None) -> dict:
+    """Write a backup ZIP to the configured directory and prune retention.
+
+    Mirrors ``retention.run_retention`` — when *db* is provided the caller
+    owns the commit; otherwise we open our own session. Always records a
+    ``SchedulerRun(job="backup")`` row (success + skip + failure) so the
+    scheduler-runs history page surfaces it.
+    """
+    from .db import GlobalPolicy, SchedulerRun, session_factory
+
+    started_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    t0 = _time.monotonic()
+
+    def _record(session, summary, error):
+        try:
+            row = SchedulerRun(
+                job="backup",
+                started_at=started_at,
+                finished_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                duration_ms=int((_time.monotonic() - t0) * 1000),
+                summary=summary,
+                error=error,
+            )
+            session.add(row)
+            session.flush()
+        except Exception as exc:
+            log.warning("scheduled backup: failed to record SchedulerRun: %s", exc)
+
+    def _run(session) -> dict:
+        policy = session.get(GlobalPolicy, 1)
+        if policy is None or not policy.backup_enabled:
+            return {"skipped": True, "reason": "backup_disabled"}
+        directory = (policy.backup_directory or "").strip()
+        if not directory:
+            return {"skipped": True, "reason": "no_directory"}
+
+        os.makedirs(directory, exist_ok=True)
+        zip_bytes, filename, manifest = generate_backup_bytes(
+            session, actor_email="scheduler@nks-wdc"
+        )
+        out_path = os.path.join(directory, filename)
+        with open(out_path, "wb") as fh:
+            fh.write(zip_bytes)
+
+        pruned = _prune_disk_backups(directory, policy.backup_retention_count or 0)
+        return {
+            "path": out_path,
+            "bytes": len(zip_bytes),
+            "counts": manifest["counts"],
+            "pruned": pruned,
+        }
+
+    if db is not None:
+        try:
+            summary = _run(db)
+            _record(db, summary, None)
+            db.flush()
+            return summary
+        except Exception as exc:
+            _record(db, None, str(exc))
+            raise
+    else:
+        session = session_factory()
+        try:
+            try:
+                summary = _run(session)
+                _record(session, summary, None)
+                session.commit()
+                return summary
+            except Exception as exc:
+                session.rollback()
+                try:
+                    err_s = session_factory()
+                    err_row = SchedulerRun(
+                        job="backup",
+                        started_at=started_at,
+                        finished_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                        duration_ms=int((_time.monotonic() - t0) * 1000),
+                        summary=None,
+                        error=str(exc),
+                    )
+                    err_s.add(err_row)
+                    err_s.commit()
+                    err_s.close()
+                except Exception:
+                    pass
+                raise
+        finally:
+            session.close()
 
 
 def generate_backup_bytes(

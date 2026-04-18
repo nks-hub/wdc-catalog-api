@@ -131,6 +131,17 @@
       <div class="stat-sub muted">
         Contains apps, releases, downloads, accounts (no secrets), users, invites_consumed, scheduler_runs, settings, audit.jsonl.gz, manifest.json (with per-file SHA-256).
       </div>
+      {% if backup_last_run %}
+      <div class="stat-row"><span>Last scheduled run</span>
+        <b>{% if backup_last_run.ok %}<span class="pill pill-ok">ok</span>{% else %}<span class="pill pill-suspended">failed</span>{% endif %} {{ backup_last_run.age }}</b>
+      </div>
+      {% if backup_last_run.summary and backup_last_run.summary.bytes %}
+      <div class="stat-row"><span>Last size</span><b>{{ (backup_last_run.summary.bytes / 1024 / 1024)|round(1) }} MB</b></div>
+      {% endif %}
+      {% if backup_last_run.summary and backup_last_run.summary.pruned %}
+      <div class="stat-row"><span>Pruned</span><b>{{ backup_last_run.summary.pruned }} old backup(s)</b></div>
+      {% endif %}
+      {% endif %}
     </div>
   </div>
 </section>

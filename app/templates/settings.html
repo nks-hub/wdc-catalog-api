@@ -74,6 +74,15 @@
         <input type="text" name="backup_directory" value="{{ policy.backup_directory or '' }}" placeholder="/state/backups">
         <span class="hint">Server-side path. Blank = disable. The "Save to disk" button on <code>/admin/ops</code> writes a ZIP here.</span>
       </label>
+      <label class="checkbox span-all">
+        <input type="checkbox" name="backup_enabled" value="1" {% if policy.backup_enabled %}checked{% endif %}>
+        Enable nightly scheduled backup
+        <span class="hint">Cron 02:30 UTC by default (override via <code>NKS_WDC_BACKUP_CRON</code>). Requires backup directory set above.</span>
+      </label>
+      <label>Keep last N backups
+        <input type="number" name="backup_retention_count" value="{{ policy.backup_retention_count }}" min="0" max="365">
+        <span class="hint">Nightly prune removes the oldest beyond this count. 0 = never prune.</span>
+      </label>
     </fieldset>
 
     <fieldset class="form-fieldset">

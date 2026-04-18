@@ -2099,6 +2099,8 @@ def admin_settings(
             "webhook_url": row.webhook_url,
             "webhook_event_prefixes": row.webhook_event_prefixes,
             "backup_directory": row.backup_directory,
+            "backup_enabled": row.backup_enabled,
+            "backup_retention_count": row.backup_retention_count,
             "updated_at": row.updated_at.isoformat() if row.updated_at else None,
             "updated_by_email": row.updated_by_email,
         },
@@ -2127,6 +2129,8 @@ def admin_save_settings(
     webhook_url: Annotated[str, Form()] = "",
     webhook_event_prefixes: Annotated[str, Form()] = "",
     backup_directory: Annotated[str, Form()] = "",
+    backup_enabled: Annotated[str, Form()] = "",
+    backup_retention_count: Annotated[int, Form()] = 7,
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
     from . import audit as _audit
@@ -2160,6 +2164,8 @@ def admin_save_settings(
         "webhook_url": row.webhook_url,
         "webhook_event_prefixes": row.webhook_event_prefixes,
         "backup_directory": row.backup_directory,
+        "backup_enabled": row.backup_enabled,
+        "backup_retention_count": row.backup_retention_count,
     }
 
     row.snapshot_keep_last_n = max(1, min(int(snapshot_keep_last_n), 500))
@@ -2180,6 +2186,8 @@ def admin_save_settings(
         or "permission.denied,login.failed,session.killed,user.suspended,user.deleted,totp.login_failed"
     )
     row.backup_directory = backup_directory.strip() or None
+    row.backup_enabled = bool(backup_enabled)
+    row.backup_retention_count = max(0, min(int(backup_retention_count), 365))
     row.updated_by_email = f"{username}@admin.local"
 
     after = {
@@ -2196,6 +2204,8 @@ def admin_save_settings(
         "webhook_url": row.webhook_url,
         "webhook_event_prefixes": row.webhook_event_prefixes,
         "backup_directory": row.backup_directory,
+        "backup_enabled": row.backup_enabled,
+        "backup_retention_count": row.backup_retention_count,
     }
     changed = {k: {"from": before[k], "to": after[k]} for k in after if before[k] != after[k]}
     if changed:
@@ -3771,6 +3781,23 @@ def admin_ops(
             "audit_purged": (rr.summary or {}).get("audit_events_purged", 0),
         }
 
+    br = db.scalar(
+        _sel(SchedulerRun)
+        .where(SchedulerRun.job == "backup")
+        .order_by(SchedulerRun.started_at.desc())
+        .limit(1)
+    )
+    backup_last_run = None
+    if br is not None:
+        age_s = None
+        if br.started_at is not None:
+            age_s = (datetime.now(timezone.utc).replace(tzinfo=None) - br.started_at).total_seconds()
+        backup_last_run = {
+            "age": _format_uptime(age_s) + " ago" if age_s is not None else "—",
+            "ok": br.error is None,
+            "summary": br.summary,
+        }
+
     ctx = base_context(
         request,
         username,
@@ -3796,6 +3823,7 @@ def admin_ops(
         webhook_sparkline=webhook_sparkline,
         webhook_sparkline_max=webhook_sparkline_max,
         retention_last_run=retention_last_run,
+        backup_last_run=backup_last_run,
         flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "ops.html", ctx)

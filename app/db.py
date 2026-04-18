@@ -357,6 +357,8 @@ class GlobalPolicy(Base):
         nullable=False,
     )
     backup_directory: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    backup_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    backup_retention_count: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utc_now, onupdate=_utc_now
     )
