@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.23.0 — 2026-04-18
+
+`webhook_deliveries` retention — closes the explicit debt called out
+in v0.22.0's CHANGELOG.
+
+- `GlobalPolicy.webhook_delivery_retention_days` (default 30).
+  Auto-ALTER handles legacy DBs.
+- Nightly retention runner now sweeps `webhook_deliveries` older
+  than the configured window via the existing `_batched_delete`
+  helper. Summary dict gains `webhook_deliveries_purged`; flash
+  text + `retention.manual_run` audit detail pick it up
+  automatically.
+- Settings UI: "Retention windows" fieldset gains a third
+  "Keep webhook deliveries for (days)" input beside the existing
+  audit + scheduler retention knobs. Changes flow through the
+  existing `settings.updated` audit diff.
+- `0 = never purge` escape hatch mirrors v0.13.0 + v0.21.0.
+
+3 new tests (sweep, zero-means-never, settings save + diff) — 402
+passing, up from 399.
+
 ## v0.22.0 — 2026-04-18
 
 Webhook delivery log — confirm dispatches, debug receiver errors.
