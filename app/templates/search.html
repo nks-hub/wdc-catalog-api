@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Search — NKS WDC{% endblock %}
+{% block content %}
+<section class="section">
+  <h1>Search</h1>
+  <form method="get" action="/admin/search" class="inline-form">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="Search users, apps, audit events…" autofocus style="min-width: 360px;">
+    <button class="btn btn-primary">Search</button>
+  </form>
+
+  {% if not q %}
+    <p class="muted">Enter a query — matches run substring-case-insensitive across user emails, app ids + names, audit actions + resource ids + actor emails. Top 10 hits per category.</p>
+  {% elif total == 0 %}
+    <div class="empty-state">
+      <div class="empty-icon">🔍</div>
+      <h3>No matches for "{{ q }}"</h3>
+      <p>Try a shorter substring or a different category keyword.</p>
+    </div>
+  {% else %}
+    <p class="muted">Showing up to top-10 per category. {{ total }} result{{ '' if total == 1 else 's' }}.</p>
+
+    {% if users %}
+    <h2>Users ({{ users|length }})</h2>
+    <table class="data compact">
+      <thead><tr><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>{{ u.email }}</td>
+          <td><span class="pill pill-role-{{ u.role }}">{{ u.role }}</span></td>
+          <td>{% if u.suspended %}<span class="pill pill-suspended">suspended</span>{% else %}<span class="pill pill-ok">active</span>{% endif %}</td>
+          <td class="actions"><a class="btn btn-sm" href="/admin/users/{{ u.id }}">open →</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    {% if apps %}
+    <h2>Apps ({{ apps|length }})</h2>
+    <table class="data compact">
+      <thead><tr><th>Id</th><th>Display name</th><th>Category</th><th></th></tr></thead>
+      <tbody>
+        {% for a in apps %}
+        <tr>
+          <td><code>{{ a.id }}</code></td>
+          <td>{{ a.display_name or '—' }}</td>
+          <td class="muted">{{ a.category }}</td>
+          <td class="actions"><a class="btn btn-sm" href="/admin/apps/{{ a.id }}">open →</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    {% if events %}
+    <h2>Audit events ({{ events|length }})</h2>
+    <table class="data compact">
+      <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Resource</th></tr></thead>
+      <tbody>
+        {% for e in events %}
+        <tr>
+          <td class="nowrap">{{ e.created_at[:19] }}</td>
+          <td>{{ e.actor_email or '—' }}</td>
+          <td><code>{{ e.action }}</code></td>
+          <td>
+            {% if e.resource_type %}<span class="pill">{{ e.resource_type }}</span>{% endif %}
+            {% if e.resource_id %}<code>{{ e.resource_id }}</code>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p><a class="btn btn-ghost" href="/admin/audit?action={{ q }}">See all audit events matching this query →</a></p>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

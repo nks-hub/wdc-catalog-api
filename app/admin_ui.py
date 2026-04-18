@@ -1076,6 +1076,79 @@ def admin_delete_user(
     return _redirect("/admin/users", "success", "Account deleted")
 
 
+@router.get("/admin/search", response_class=HTMLResponse)
+def admin_global_search(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    q: str = "",
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    from sqlalchemy import select as _sel, or_
+
+    from .db import Account, App, AuditEvent
+
+    q_clean = (q or "").strip()
+    users: list[dict] = []
+    apps: list[dict] = []
+    events: list[dict] = []
+
+    if q_clean:
+        like = f"%{q_clean}%"
+
+        user_rows = db.scalars(
+            _sel(Account)
+            .where(Account.email.ilike(like))
+            .order_by(Account.id.asc())
+            .limit(10)
+        ).all()
+        users = [
+            {"id": u.id, "email": u.email, "role": u.role,
+             "suspended": u.suspended_at is not None}
+            for u in user_rows
+        ]
+
+        app_rows = db.scalars(
+            _sel(App)
+            .where(or_(App.id.ilike(like), App.display_name.ilike(like)))
+            .order_by(App.id.asc())
+            .limit(10)
+        ).all()
+        apps = [{"id": a.id, "display_name": a.display_name, "category": a.category}
+                for a in app_rows]
+
+        evt_rows = db.scalars(
+            _sel(AuditEvent)
+            .where(or_(
+                AuditEvent.action.ilike(like),
+                AuditEvent.resource_id.ilike(like),
+                AuditEvent.actor_email.ilike(like),
+            ))
+            .order_by(AuditEvent.id.desc())
+            .limit(10)
+        ).all()
+        events = [
+            {
+                "id": e.id,
+                "created_at": e.created_at.isoformat() if e.created_at else "",
+                "action": e.action,
+                "actor_email": e.actor_email,
+                "resource_type": e.resource_type,
+                "resource_id": e.resource_id,
+            }
+            for e in evt_rows
+        ]
+
+    ctx = base_context(
+        request, username,
+        q=q_clean,
+        users=users,
+        apps=apps,
+        events=events,
+        total=len(users) + len(apps) + len(events),
+    )
+    return templates.TemplateResponse(request, "search.html", ctx)
+
+
 @router.get("/admin/audit", response_class=HTMLResponse)
 def admin_audit(
     request: Request,

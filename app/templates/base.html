@@ -35,6 +35,9 @@
       </nav>
     </details>
     {% if username %}
+      <form method="get" action="/admin/search" class="topbar-search">
+        <input type="text" name="q" placeholder="Search…" value="{{ request.query_params.get('q', '') if request and request.url.path == '/admin/search' else '' }}">
+      </form>
       <div class="user">
         <form method="post" action="/admin/theme" class="inline" title="Toggle light/dark theme">
           <input type="hidden" name="_csrf" value="{{ csrf_token }}">

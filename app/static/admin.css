@@ -2053,3 +2053,34 @@ html.theme-dark .banner { color: #fcd34d; }
 @media (prefers-reduced-motion: reduce) {
   .live-toggle.is-active .live-dot { animation: none; }
 }
+
+/* --------------------------------------------------------------------------
+   Topbar search
+   -------------------------------------------------------------------------- */
+.topbar-search {
+  display: inline-flex;
+  align-items: center;
+}
+.topbar-search input[type="text"] {
+  width: 180px;
+  padding: 4px 10px;
+  font-size: 0.821rem;
+  background: var(--topbar-hover-bg);
+  border: 1px solid var(--topbar-border);
+  border-radius: var(--radius);
+  color: var(--topbar-text);
+  transition: background var(--t-fast), border-color var(--t-fast), width var(--t-base);
+}
+.topbar-search input[type="text"]::placeholder {
+  color: var(--topbar-text-muted);
+}
+.topbar-search input[type="text"]:focus {
+  outline: none;
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--accent);
+  width: 260px;
+}
+@media (max-width: 880px) {
+  .topbar-search { display: none; }
+}
