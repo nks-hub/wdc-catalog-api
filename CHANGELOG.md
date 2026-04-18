@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.43.0 — 2026-04-18
+
+`login.locked_out` audit event.
+
+- `POST /api/v1/auth/login` emits a new **`login.locked_out`** audit
+  action when the target account has `locked_until > now` (from the
+  existing failed-login backoff). Distinct from `login.failed` —
+  means someone is pounding on a known-locked door, worth a
+  separate Prometheus series for alerting.
+- Added to the `SECURITY_ACTION_ALLOWLIST`, so the v0.41.0
+  `nks_wdc_security_events_total{action="login.locked_out"}` counter
+  increments automatically and the v0.41.0 failed-login Alertmanager
+  rule naturally folds it in via the regex filter.
+- Audit-trail commit happens before the 423 response so the event
+  survives the HTTPException rollback of the caller's session.
+- `/admin/audit` filter-chip row gains a "Lockouts" shortcut next to
+  "Logins" for quick forensic filtering.
+- `_inc_auth_failure("locked")` runs alongside so the pre-existing
+  `nks_wdc_auth_failures_total{reason="locked"}` continues to track
+  the same event at the middleware layer.
+
+3 new tests (locked account emits event, unlocked account doesn't,
+allowlist sanity) — 495 passing, up from 492.
+
 ## v0.42.0 — 2026-04-18
 
 Grafana dashboard — security signals row.
