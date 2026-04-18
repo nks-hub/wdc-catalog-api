@@ -1,5 +1,48 @@
 # Changelog
 
+## v0.9.0 — 2026-04-18
+
+**Live audit tail via Server-Sent Events.**
+
+Audit log was pull-only — reload the page, re-submit the filter. Not
+ideal mid-incident. v0.9.0 adds a real-time stream backed by an
+in-process async pub/sub bus, gated by RBAC + CSP-clean client.
+
+### Shipped
+
+- **Event bus** (`app/event_bus.py`) — process-local async pub/sub,
+  `asyncio.Queue` per subscriber (size 128, drop-oldest on overflow
+  so a slow client can't pin memory), subscriber cap
+  `MAX_SUBSCRIBERS=32`, `threading.Lock` around the subscriber set
+  for MT-safety under FastAPI's thread pool. Sync `publish()`, async
+  `subscribe()` context manager. 5 unit tests.
+- **Audit publish hook** — `audit.emit()` publishes each flushed row
+  to the bus inside `try/except` so bus failure never breaks the
+  audit write path. 2 regression tests (successful publish +
+  graceful-degrade when the bus raises).
+- **SSE endpoint** `GET /admin/audit/stream` — session-auth gated,
+  `text/event-stream` with `Cache-Control: no-cache` +
+  `X-Accel-Buffering: no` for nginx/Caddy passthrough. Opens with
+  a `connected` event, emits `audit` events per row, comment
+  heartbeat every 15 s so idle proxies don't drop. Returns 503 on
+  subscriber-cap saturation. 3 tests (unauth denial, event delivery,
+  connected frame) — TestClient required anyio portal gymnastics to
+  drive an infinite SSE generator deadlock-free.
+- **Live toggle UI** — pill on `/admin/audit` with a pulsing red dot
+  when active (`@keyframes live-pulse` respecting
+  `prefers-reduced-motion`). Click opens `EventSource`, prepends
+  new rows as `<tr class="audit-row-new">` with a 600 ms accent
+  fade-in. Filter-aware: URL params (`action`, `resource_type`,
+  `resource_id`, `actor_id`) drop non-matching events client-side.
+  CSP-clean (no inline scripts, no `innerHTML` with user data;
+  every cell built via `document.createElement` + `.textContent`).
+  1 smoke test.
+
+### Totals
+
+5 commits (event bus → publish hook → SSE endpoint → Live toggle →
+v0.9.0 release). 333 tests passing, up from 322.
+
 ## v0.8.3 — 2026-04-18
 
 Audit coverage follow-through — snapshots, auto-generate, JSON auth.
