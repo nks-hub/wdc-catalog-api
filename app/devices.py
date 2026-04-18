@@ -170,8 +170,14 @@ def _inc_auth_failure(reason: str) -> None:
         pass
 
 
-def _record_failed_login(account: "Account") -> None:
+def _record_failed_login(account: "Account") -> int:
     """Increment the per-account failure counter + lock on threshold hit.
+
+    Returns the ``lock_minutes`` just applied (0 when no lockout armed).
+    Callers can emit a ``login.lockout_armed`` audit event when the
+    return is non-zero — the transition moment is the security signal,
+    not every subsequent attempt against the now-locked account
+    (those get the separate ``login.locked_out`` action from v0.43.0).
 
     Thresholds pick exponential backoff so honest typos are forgiven
     while credential-stuffing runs hit a wall quickly:
@@ -190,6 +196,7 @@ def _record_failed_login(account: "Account") -> None:
         account.locked_until = datetime.now(timezone.utc) + timedelta(
             minutes=lock_minutes
         )
+    return lock_minutes
 
 
 def _is_revoked(db: Session, jti: str) -> bool:
@@ -393,10 +400,32 @@ def login(
                 f"Account temporarily locked — try again after {locked_until.isoformat()}",
             )
     if not verify_password(body.password, account.password_hash):
-        _record_failed_login(account)
+        lock_minutes = _record_failed_login(account)
         # Commit so the counter survives the HTTPException that's about
         # to trigger ``get_session`` rollback. Otherwise lockout never
         # arms because each failure looks like a fresh first attempt.
+        if lock_minutes:
+            # The threshold just tripped — emit the transition signal.
+            # Distinct from login.locked_out (attempts after lock) and
+            # login.failed (every bad password).
+            from . import audit as _audit
+
+            try:
+                _audit.emit(
+                    db,
+                    request=request,
+                    actor=account,
+                    action="login.lockout_armed",
+                    resource_type="account",
+                    resource_id=str(account.id),
+                    detail={
+                        "email": account.email,
+                        "lock_minutes": lock_minutes,
+                        "failed_login_count": account.failed_login_count,
+                    },
+                )
+            except Exception:  # noqa: BLE001
+                pass
         db.commit()
         _inc_auth_failure("bad_password")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")

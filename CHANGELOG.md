@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.44.0 — 2026-04-18
+
+`login.lockout_armed` audit event.
+
+- `_record_failed_login()` now returns the `lock_minutes` it just
+  applied. The login handler catches the non-zero return and emits
+  a **`login.lockout_armed`** audit row with `lock_minutes` and
+  `failed_login_count` in the detail payload. This captures the
+  transition moment (threshold fires, lockout arms) — distinct from
+  `login.failed` (every bad password) and `login.locked_out` (attempts
+  against an already-locked account from v0.43.0).
+- Added to `SECURITY_ACTION_ALLOWLIST`; the v0.41.0 Prometheus counter
+  and v0.42.0 Grafana security panels pick it up automatically.
+- Enables ops alerting on "account X just got locked out" moments
+  rather than drowning in bounce-traffic against locked doors.
+
 ## v0.43.0 — 2026-04-18
 
 `login.locked_out` audit event.

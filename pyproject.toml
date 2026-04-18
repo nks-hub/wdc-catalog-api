@@ -1,6 +1,6 @@
 [project]
 name = "nks-wdc-catalog-api"
-version = "0.43.0"
+version = "0.44.0"
 description = "NKS WebDev Console — cloud catalog + config sync FastAPI service"
 authors = [{ name = "NKS" }]
 license = { text = "Apache-2.0" }
