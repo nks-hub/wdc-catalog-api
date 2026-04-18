@@ -131,6 +131,11 @@
       <div class="stat-sub muted">
         Contains apps, releases, downloads, accounts (no secrets), users, invites_consumed, scheduler_runs, settings, audit.jsonl.gz, manifest.json (with per-file SHA-256).
       </div>
+      {% if backup_directory_configured %}
+      <div class="stat-sub muted">
+        <a class="btn btn-ghost btn-sm" href="/admin/ops/backups">Manage files →</a>
+      </div>
+      {% endif %}
       {% if backup_last_run %}
       <div class="stat-row"><span>Last scheduled run</span>
         <b>{% if backup_last_run.ok %}<span class="pill pill-ok">ok</span>{% else %}<span class="pill pill-suspended">failed</span>{% endif %} {{ backup_last_run.age }}</b>

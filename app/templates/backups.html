@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Backup management — NKS WDC{% endblock %}
+{% block content %}
+<section class="section">
+  <header class="section-head">
+    <h1>Backup files ({{ files | length }})</h1>
+    <a class="btn" href="/admin/ops">← Ops</a>
+  </header>
+
+  {% if flash %}
+  <div class="flash flash-{{ flash.kind }}">{{ flash.message }}</div>
+  {% endif %}
+
+  {% if not directory %}
+    <div class="empty-state">
+      <div class="empty-icon">📦</div>
+      <h3>No backup directory configured</h3>
+      <p>Set <code>backup_directory</code> in <a href="/admin/settings">Settings</a> to enable browsing.</p>
+    </div>
+  {% elif not dir_exists %}
+    <div class="empty-state">
+      <div class="empty-icon">⚠️</div>
+      <h3>Directory not found</h3>
+      <p>Configured path <code>{{ directory }}</code> does not exist or isn't readable by the service user.</p>
+    </div>
+  {% elif not files %}
+    <p class="muted">
+      Directory: <code>{{ directory }}</code>. No backup files found.
+      Trigger one via <a href="/admin/backup/export.zip" download>Download ZIP</a>
+      or enable the scheduled job in Settings.
+    </p>
+  {% else %}
+    <p class="muted">
+      Directory: <code>{{ directory }}</code> · {{ files | length }} file(s) · {{ total_mb }} MB total ·
+      retention: keep last {{ retention_count if retention_count else '∞' }}
+    </p>
+
+    <form method="post" action="/admin/ops/backups/prune-now" class="inline"
+          onsubmit="return confirm('Prune now? Oldest files beyond retention={{ retention_count }} will be removed.');"
+          style="margin-bottom: var(--space-3);">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button class="btn btn-warn">Prune now</button>
+    </form>
+
+    <table class="data compact">
+      <thead>
+        <tr><th>Filename</th><th>Size</th><th>Modified</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for f in files %}
+        <tr>
+          <td><code>{{ f.name }}</code></td>
+          <td class="nowrap">{{ f.size_mb }} MB</td>
+          <td class="nowrap">{{ f.mtime[:19] }}</td>
+          <td class="actions">
+            <form method="post" action="/admin/ops/backups/delete" class="inline"
+                  onsubmit="return confirm('Delete {{ f.name }} permanently?');">
+              <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+              <input type="hidden" name="filename" value="{{ f.name }}">
+              <button class="btn btn-sm btn-warn">delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</section>
+{% endblock %}

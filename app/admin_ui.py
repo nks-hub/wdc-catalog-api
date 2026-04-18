@@ -2947,6 +2947,149 @@ def admin_backup_run_to_disk(
     )
 
 
+# ── Backup management page ────────────────────────────────────────────
+
+
+@router.get("/admin/ops/backups", response_class=HTMLResponse)
+def admin_backups_list(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    flash: Annotated[str | None, Cookie(alias="flash")] = None,
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    import os
+    from datetime import datetime, timezone
+
+    from .db import GlobalPolicy
+
+    policy = db.get(GlobalPolicy, 1)
+    directory = (policy.backup_directory or "").strip() if policy else ""
+    retention_count = policy.backup_retention_count if policy else 7
+
+    files: list[dict] = []
+    total_bytes = 0
+    dir_exists = bool(directory) and os.path.isdir(directory)
+
+    if dir_exists:
+        try:
+            with os.scandir(directory) as it:
+                for entry in it:
+                    if not entry.is_file():
+                        continue
+                    name = entry.name
+                    if not (name.startswith("nks-wdc-backup-") and name.endswith(".zip")):
+                        continue
+                    try:
+                        stat = entry.stat()
+                    except OSError:
+                        continue
+                    files.append({
+                        "name": name,
+                        "size_bytes": stat.st_size,
+                        "size_mb": round(stat.st_size / 1024 / 1024, 2),
+                        "mtime": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+                    })
+                    total_bytes += stat.st_size
+        except OSError:
+            dir_exists = False
+    files.sort(key=lambda f: f["mtime"], reverse=True)
+
+    total_mb = round(total_bytes / 1024 / 1024, 2) if total_bytes else 0
+
+    ctx = base_context(
+        request, username,
+        directory=directory,
+        dir_exists=dir_exists,
+        files=files,
+        total_mb=total_mb,
+        retention_count=retention_count,
+        flash=_pop_flash(flash),
+    )
+    response = templates.TemplateResponse(request, "backups.html", ctx)
+    _clear_flash(response)
+    return response
+
+
+@router.post("/admin/ops/backups/prune-now", dependencies=[Depends(require_csrf)])
+def admin_backups_prune_now(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    import os
+
+    from . import audit as _audit
+    from . import backup as _backup
+    from .db import GlobalPolicy
+
+    policy = db.get(GlobalPolicy, 1)
+    directory = (policy.backup_directory or "").strip() if policy else ""
+    if not directory or not os.path.isdir(directory):
+        return _redirect("/admin/ops/backups", "error", "No backup directory configured")
+
+    keep = policy.backup_retention_count or 0
+    removed = _backup._prune_disk_backups(directory, keep)
+    acct = _admin_account(db, username)
+    _audit.emit(
+        db, request=request, actor=acct, action="backup.pruned",
+        resource_type="backup",
+        detail={"directory": directory, "kept": keep, "removed": removed},
+    )
+    return _redirect(
+        "/admin/ops/backups", "success",
+        f"Prune complete — removed {removed} file(s), kept newest {keep}",
+    )
+
+
+@router.post("/admin/ops/backups/delete", dependencies=[Depends(require_csrf)])
+def admin_backups_delete_one(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    filename: Annotated[str, Form()],
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    import os
+
+    from . import audit as _audit
+    from .db import GlobalPolicy
+
+    policy = db.get(GlobalPolicy, 1)
+    directory = (policy.backup_directory or "").strip() if policy else ""
+    if not directory or not os.path.isdir(directory):
+        return _redirect("/admin/ops/backups", "error", "No backup directory configured")
+
+    # Tight path-traversal guard: accept only plain basenames matching the
+    # backup filename convention. Anything with slashes or not matching the
+    # prefix is rejected before we concat the path.
+    basename = os.path.basename(filename or "")
+    if (not basename
+            or basename != filename
+            or not basename.startswith("nks-wdc-backup-")
+            or not basename.endswith(".zip")):
+        return _redirect("/admin/ops/backups", "error", "Invalid filename")
+
+    target = os.path.join(directory, basename)
+    if not os.path.isfile(target):
+        return _redirect("/admin/ops/backups", "error", "File not found")
+
+    try:
+        size = os.path.getsize(target)
+    except OSError:
+        size = None
+    try:
+        os.remove(target)
+    except OSError as exc:
+        return _redirect("/admin/ops/backups", "error", f"Delete failed: {exc}")
+
+    acct = _admin_account(db, username)
+    _audit.emit(
+        db, request=request, actor=acct, action="backup.deleted",
+        resource_type="backup",
+        detail={"filename": basename, "directory": directory, "bytes": size},
+    )
+    return _redirect("/admin/ops/backups", "success", f"Deleted {basename}")
+
+
 # ── Audit SSE stream ─────────────────────────────────────────────────
 
 
