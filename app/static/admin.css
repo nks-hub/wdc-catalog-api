@@ -575,12 +575,6 @@ main.container {
   .stat-grid-4 { grid-template-columns: 1fr; }
 }
 
-/* Compact tables on dashboard-style pages don't need a sticky header
-   — they're <10 rows and live alongside other cards, so the sticky
-   sliced into section titles above (verified 2026-04-18). */
-.data.compact thead th {
-  position: static;
-}
 
 /* Hero KPI card — the dashboard now leads with one full-width card
    so the 24h activity pulse doesn't share visual weight with "total
@@ -1298,10 +1292,17 @@ main.container {
   border-bottom: 2px solid var(--border-strong);
 }
 .data thead th {
-  position: sticky;
-  top: 56px;
-  z-index: 2;
+  /* Sticky header: opt-in via .data.sticky. Making it default produced a
+     56 px phantom gap above the thead on every page — browsers honour
+     `top: 56px` even when the natural position is below it (the element
+     is rendered 56 px further down). Verified 2026-04-18 on 1440×900
+     desktop: th rect.top = 224 while thead parent rect.top = 168.5. */
   background: var(--surface);
+}
+.data.sticky thead th {
+  position: sticky;
+  top: var(--topbar-h, 54px);
+  z-index: 2;
 }
 .data th {
   padding: var(--space-3) var(--space-4);
