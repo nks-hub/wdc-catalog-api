@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.20.0 — 2026-04-18
+
+Full-state backup ZIP export — DR-friendly point-in-time dumps.
+
+- **`GET /admin/backup/export.zip`** — one click downloads a ZIP
+  containing JSON dumps of every human-editable table plus a
+  gzipped NDJSON audit stream (`audit.jsonl.gz`). Bundled files:
+  `apps.json`, `releases.json`, `downloads.json`, `accounts.json`,
+  `users.json`, `invites_consumed.json`, `scheduler_runs.json`,
+  `settings.json`, `audit.jsonl.gz`, `manifest.json`.
+- **Manifest with per-file SHA-256** — each entry in `manifest.json`
+  carries `{name, size, sha256}` so integrity can be verified
+  without trusting the archive envelope.
+- **Secret-field omission** — accounts.json explicitly omits
+  `password_hash`, `totp_secret`, `totp_recovery_hashes`.
+  `admin_sessions` entirely absent (session fingerprints are
+  sensitive + ephemeral). A leaked backup is not a credential
+  weapon.
+- **`backup.exported` audit event** — records who exported, when,
+  byte count, and per-table row counts so operators have a trail
+  of who pulled a dump.
+- **Ops card** — new "Backup" full-width stat card on `/admin/ops`
+  with the download link + inline description.
+
+Restore path is intentionally out-of-band (stop container,
+`sqlite3 .read` / `psql -f`, restart) — one-click restore needs a
+separate transaction/safety story.
+
+6 new tests (magic bytes, file presence, manifest checksums, secret
+omission, audit event, auth gate) — 390 passing, up from 384.
+
 ## v0.19.0 — 2026-04-18
 
 Scheduler runs history page — browse the audit trail v0.18.0 started
