@@ -1795,7 +1795,8 @@ def admin_retention_run_now(
         f"revoked_tokens_purged={summary.get('revoked_tokens_purged', 0)}, "
         f"audit_events_purged={summary.get('audit_events_purged', 0)}, "
         f"scheduler_runs_purged={summary.get('scheduler_runs_purged', 0)}, "
-        f"webhook_deliveries_purged={summary.get('webhook_deliveries_purged', 0)}"
+        f"webhook_deliveries_purged={summary.get('webhook_deliveries_purged', 0)}, "
+        f"admin_sessions_auto_revoked={summary.get('admin_sessions_auto_revoked', 0)}"
     )
     acct = _admin_account(db, username)
     _audit.emit(
@@ -2094,6 +2095,7 @@ def admin_settings(
             "banner_message": row.banner_message,
             "require_2fa_for_admins": row.require_2fa_for_admins,
             "admin_ip_allowlist": row.admin_ip_allowlist or [],
+            "admin_session_idle_days": row.admin_session_idle_days,
             "audit_retention_days": row.audit_retention_days,
             "scheduler_run_retention_days": row.scheduler_run_retention_days,
             "webhook_delivery_retention_days": row.webhook_delivery_retention_days,
@@ -2133,6 +2135,7 @@ def admin_save_settings(
     backup_enabled: Annotated[str, Form()] = "",
     backup_retention_count: Annotated[int, Form()] = 7,
     admin_ip_allowlist_raw: Annotated[str, Form()] = "",
+    admin_session_idle_days: Annotated[int, Form()] = 0,
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
     from . import audit as _audit
@@ -2169,6 +2172,7 @@ def admin_save_settings(
         "backup_enabled": row.backup_enabled,
         "backup_retention_count": row.backup_retention_count,
         "admin_ip_allowlist": row.admin_ip_allowlist,
+        "admin_session_idle_days": row.admin_session_idle_days,
     }
 
     row.snapshot_keep_last_n = max(1, min(int(snapshot_keep_last_n), 500))
@@ -2197,6 +2201,7 @@ def admin_save_settings(
     _raw_cidrs = _re.split(r"[\n,]+", admin_ip_allowlist_raw)
     cidrs = [c.strip() for c in _raw_cidrs if c.strip()]
     row.admin_ip_allowlist = cidrs or None
+    row.admin_session_idle_days = max(0, min(int(admin_session_idle_days), 3650))
 
     row.updated_by_email = f"{username}@admin.local"
 
@@ -2217,6 +2222,7 @@ def admin_save_settings(
         "backup_enabled": row.backup_enabled,
         "backup_retention_count": row.backup_retention_count,
         "admin_ip_allowlist": row.admin_ip_allowlist,
+        "admin_session_idle_days": row.admin_session_idle_days,
     }
     changed = {k: {"from": before[k], "to": after[k]} for k in after if before[k] != after[k]}
     if changed:

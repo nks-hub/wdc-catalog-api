@@ -182,6 +182,27 @@ def _do_retention(session: Session) -> dict:
             WebhookDelivery.created_at < cutoff,
         )
 
+    _raw = policy_row.admin_session_idle_days if policy_row else None
+    if _raw is None:
+        _raw = 0
+    admin_session_idle_days = _raw
+    admin_sessions_auto_revoked = 0
+    if admin_session_idle_days > 0:
+        from sqlalchemy import update as _update
+        from .db import AdminSession
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+            days=admin_session_idle_days
+        )
+        result = session.execute(
+            _update(AdminSession)
+            .where(
+                AdminSession.last_seen_at < cutoff,
+                AdminSession.revoked_at.is_(None),
+            )
+            .values(revoked_at=datetime.now(timezone.utc).replace(tzinfo=None))
+        )
+        admin_sessions_auto_revoked = int(result.rowcount or 0)
+
     return {
         "accounts": len(account_ids),
         "deleted": deleted_total,
@@ -190,6 +211,7 @@ def _do_retention(session: Session) -> dict:
         "audit_events_purged": audit_purged,
         "scheduler_runs_purged": scheduler_purged,
         "webhook_deliveries_purged": webhook_purged,
+        "admin_sessions_auto_revoked": admin_sessions_auto_revoked,
     }
 
 
@@ -294,6 +316,7 @@ def run_retention(db: Optional[Session] = None) -> dict:
                     "audit_events_purged": 0,
                     "scheduler_runs_purged": 0,
                     "webhook_deliveries_purged": 0,
+                    "admin_sessions_auto_revoked": 0,
                     "skipped": True,
                 }
             try:

@@ -25,6 +25,10 @@
 {% endfor %}{% endif %}</textarea>
         <span class="hint">Blank = no restriction. Admins outside every CIDR get redirected to /login as if unauthenticated. Malformed entries are silently skipped; an all-invalid list locks everyone out — fail-closed.</span>
       </label>
+      <label>Auto-revoke idle admin sessions after (days)
+        <input type="number" name="admin_session_idle_days" value="{{ policy.admin_session_idle_days }}" min="0" max="3650">
+        <span class="hint">Nightly retention runner revokes sessions idle longer than this. 0 = disabled. Users are bounced to /login on their next request.</span>
+      </label>
       <label>Default role for new accounts
         <select name="default_role">
           {% for r in roles %}<option value="{{ r }}" {% if r == policy.default_role %}selected{% endif %}>{{ r }}</option>{% endfor %}
