@@ -183,7 +183,9 @@ def test_delete_rejects_path_traversal(admin_client: TestClient, tmp_path) -> No
         assert r.status_code == 303
 
         # The file outside the configured directory must still exist
-        assert outside_file.exists(), "Path traversal guard failed — outside file was deleted"
+        assert outside_file.exists(), (
+            "Path traversal guard failed — outside file was deleted"
+        )
 
         # Flash cookie should contain the rejection message
         flash_cookie = r.cookies.get("flash") or ""
@@ -195,7 +197,9 @@ def test_delete_rejects_path_traversal(admin_client: TestClient, tmp_path) -> No
             outside_file.unlink()
 
 
-def test_ops_page_links_to_backups_when_configured(admin_client: TestClient, tmp_path) -> None:
+def test_ops_page_links_to_backups_when_configured(
+    admin_client: TestClient, tmp_path
+) -> None:
     _set_policy(backup_directory=str(tmp_path))
 
     r = admin_client.get("/admin/ops")

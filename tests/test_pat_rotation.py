@@ -176,4 +176,5 @@ def test_pat_rotated_on_security_allowlist():
     """Sanity — rotations should light up the Prometheus security
     counter like other PAT lifecycle events."""
     from app.observability import SECURITY_ACTION_ALLOWLIST
+
     assert "pat.rotated" in SECURITY_ACTION_ALLOWLIST

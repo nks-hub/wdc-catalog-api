@@ -25,7 +25,9 @@ def _reset_totp(username: str = "admin") -> None:
     from sqlalchemy import select as _sel
 
     with session_factory() as db:
-        acct = db.scalar(_sel(Account).where(Account.email == f"{username}@admin.local"))
+        acct = db.scalar(
+            _sel(Account).where(Account.email == f"{username}@admin.local")
+        )
         if acct is not None:
             acct.totp_enabled = False
             acct.totp_secret = None
@@ -37,7 +39,9 @@ def _reset_totp(username: str = "admin") -> None:
         db.commit()
 
 
-def _login(client: TestClient, username: str = "admin", password: str = "admin") -> None:
+def _login(
+    client: TestClient, username: str = "admin", password: str = "admin"
+) -> None:
     client.get("/login")
     csrf = client.cookies.get("nks_wdc_csrf") or ""
     r = client.post(
@@ -55,9 +59,9 @@ def _count_audit(action: str) -> int:
     with session_factory() as db:
         return int(
             db.scalar(
-                _sel(_func.count()).select_from(AuditEvent).where(
-                    AuditEvent.action == action
-                )
+                _sel(_func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.action == action)
             )
             or 0
         )
@@ -179,9 +183,9 @@ def test_wrong_phrase_rejects_silently() -> None:
         with session_factory() as db:
             before_live = int(
                 db.scalar(
-                    _sel(_func.count()).select_from(AdminSession).where(
-                        AdminSession.revoked_at.is_(None)
-                    )
+                    _sel(_func.count())
+                    .select_from(AdminSession)
+                    .where(AdminSession.revoked_at.is_(None))
                 )
                 or 0
             )
@@ -203,9 +207,9 @@ def test_wrong_phrase_rejects_silently() -> None:
         with session_factory() as db:
             after_live = int(
                 db.scalar(
-                    _sel(_func.count()).select_from(AdminSession).where(
-                        AdminSession.revoked_at.is_(None)
-                    )
+                    _sel(_func.count())
+                    .select_from(AdminSession)
+                    .where(AdminSession.revoked_at.is_(None))
                 )
                 or 0
             )
@@ -251,7 +255,9 @@ def test_correct_phrase_revokes_and_bumps() -> None:
 
             live_before = int(
                 db.scalar(
-                    _sel(_func.count()).select_from(AdminSession).where(
+                    _sel(_func.count())
+                    .select_from(AdminSession)
+                    .where(
                         AdminSession.revoked_at.is_(None),
                         AdminSession.fingerprint != caller_fp,
                     )
@@ -260,9 +266,9 @@ def test_correct_phrase_revokes_and_bumps() -> None:
             )
             non_suspended_before = int(
                 db.scalar(
-                    _sel(_func.count()).select_from(Account).where(
-                        Account.suspended_at.is_(None)
-                    )
+                    _sel(_func.count())
+                    .select_from(Account)
+                    .where(Account.suspended_at.is_(None))
                 )
                 or 0
             )

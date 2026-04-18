@@ -102,11 +102,14 @@ def test_revoke_tokens_404_does_not_audit(admin_client: TestClient) -> None:
     from sqlalchemy import select as _sel, func
 
     with session_factory() as db:
-        before_count = db.scalar(
-            _sel(func.count()).select_from(AuditEvent).where(
-                AuditEvent.action == "user.tokens_revoked"
+        before_count = (
+            db.scalar(
+                _sel(func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.action == "user.tokens_revoked")
             )
-        ) or 0
+            or 0
+        )
 
     csrf = admin_client.cookies.get("nks_wdc_csrf") or ""
     r = admin_client.post(
@@ -117,9 +120,12 @@ def test_revoke_tokens_404_does_not_audit(admin_client: TestClient) -> None:
     assert r.status_code == 404
 
     with session_factory() as db:
-        after_count = db.scalar(
-            _sel(func.count()).select_from(AuditEvent).where(
-                AuditEvent.action == "user.tokens_revoked"
+        after_count = (
+            db.scalar(
+                _sel(func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.action == "user.tokens_revoked")
             )
-        ) or 0
+            or 0
+        )
     assert after_count == before_count

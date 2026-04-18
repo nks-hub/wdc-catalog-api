@@ -62,6 +62,7 @@ def test_verify_tolerates_drift_one_step():
     # Current code must match at the previous and next window too.
     now = time.time()
     from app.totp import _decode
+
     key = _decode(s)
     counter = now_counter(now)
     code_prev = _hotp(key, counter - 1)
@@ -74,6 +75,7 @@ def test_verify_tolerates_drift_one_step():
 def test_verify_rejects_drift_two_steps():
     s = new_secret()
     from app.totp import _decode
+
     key = _decode(s)
     counter = now_counter()
     code_way_off = _hotp(key, counter - 3)
@@ -84,6 +86,7 @@ def test_verify_rejects_drift_two_steps():
 def test_verify_tolerates_spaces_and_dashes():
     s = new_secret()
     from app.totp import _decode
+
     c = _hotp(_decode(s), now_counter())
     formatted = c[:3] + " " + c[3:]
     dashed = c[:3] + "-" + c[3:]

@@ -83,8 +83,13 @@ def _make_run(job: str, ok: bool = True, duration_ms: int = 100) -> SchedulerRun
         started_at=_now(),
         finished_at=_now(),
         duration_ms=duration_ms,
-        summary={"deleted": 1, "accounts": 0, "idempotency_purged": 0,
-                 "revoked_tokens_purged": 0, "audit_events_purged": 0},
+        summary={
+            "deleted": 1,
+            "accounts": 0,
+            "idempotency_purged": 0,
+            "revoked_tokens_purged": 0,
+            "audit_events_purged": 0,
+        },
         error=None if ok else "Traceback: something went wrong",
     )
 

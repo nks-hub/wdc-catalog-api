@@ -165,9 +165,11 @@ def test_webhook_fires_on_matching_event(mock_webhook):
     _emit("permission.denied")
 
     from app.webhooks import drain as _drain
+
     _drain(timeout=3)
 
     from app.webhooks import _reset_pool_for_tests
+
     _reset_pool_for_tests()
 
     assert len(_CapturingHandler.received) == 1
@@ -179,9 +181,11 @@ def test_webhook_skipped_on_non_matching_action(mock_webhook):
     _emit("snapshot.created")
 
     from app.webhooks import drain as _drain
+
     _drain(timeout=3)
 
     from app.webhooks import _reset_pool_for_tests
+
     _reset_pool_for_tests()
 
     assert _CapturingHandler.received == []
@@ -194,9 +198,11 @@ def test_webhook_disabled_when_url_blank(mock_webhook):
     _emit("permission.denied")
 
     from app.webhooks import drain as _drain
+
     _drain(timeout=3)
 
     from app.webhooks import _reset_pool_for_tests
+
     _reset_pool_for_tests()
 
     assert _CapturingHandler.received == []
@@ -237,9 +243,11 @@ def test_prefix_match_wildcard(mock_webhook):
     _emit("login.ok")
 
     from app.webhooks import drain as _drain
+
     _drain(timeout=3)
 
     from app.webhooks import _reset_pool_for_tests
+
     _reset_pool_for_tests()
 
     actions = [r["event"]["action"] for r in _CapturingHandler.received]

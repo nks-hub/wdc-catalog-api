@@ -56,6 +56,7 @@ def _reset_2fa(client: TestClient) -> None:
 
     with session_factory() as db:
         from sqlalchemy import select as _sel
+
         acct = db.scalar(_sel(Account).where(Account.email == "admin@admin.local"))
         if acct is not None:
             acct.totp_enabled = False
@@ -91,7 +92,9 @@ def test_confirm_wrong_code_keeps_pending(admin_client: TestClient) -> None:
     assert "otpauth://totp/" in r.text
 
 
-def test_confirm_right_code_enables_and_renders_recovery(admin_client: TestClient) -> None:
+def test_confirm_right_code_enables_and_renders_recovery(
+    admin_client: TestClient,
+) -> None:
     from app.db import Account, session_factory
     from sqlalchemy import select as _sel
 
@@ -110,11 +113,12 @@ def test_confirm_right_code_enables_and_renders_recovery(admin_client: TestClien
     import hashlib
     import struct
     import time
+
     key = base64.b32decode(secret + "=" * (-len(secret) % 8))
     counter = int(time.time()) // 30
     mac = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
     off = mac[-1] & 0x0F
-    word = struct.unpack(">I", mac[off:off + 4])[0] & 0x7FFFFFFF
+    word = struct.unpack(">I", mac[off : off + 4])[0] & 0x7FFFFFFF
     code = f"{word % 10**6:06d}"
 
     r = admin_client.post(
@@ -169,11 +173,12 @@ def test_disable_requires_valid_code(admin_client: TestClient) -> None:
     import hashlib
     import struct
     import time
+
     key = base64.b32decode(known_secret + "=" * (-len(known_secret) % 8))
     counter = int(time.time()) // 30
     mac = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
     off = mac[-1] & 0x0F
-    word = struct.unpack(">I", mac[off:off + 4])[0] & 0x7FFFFFFF
+    word = struct.unpack(">I", mac[off : off + 4])[0] & 0x7FFFFFFF
     code = f"{word % 10**6:06d}"
 
     r = admin_client.post(

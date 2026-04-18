@@ -78,9 +78,7 @@ def test_sso_callback_state_mismatch_redirects_to_login_error(monkeypatch):
     with TestClient(app, client=("127.0.0.1", 50000)) as c:
         # Pass state parameter without matching signed cookie → exchange_code
         # raises SSOError, handler redirects to /login?error=sso_failed.
-        r = c.get(
-            "/auth/sso/callback?code=c&state=s", follow_redirects=False
-        )
+        r = c.get("/auth/sso/callback?code=c&state=s", follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"] == "/login?error=sso_failed"
 
@@ -89,9 +87,7 @@ def test_sso_callback_idp_error_redirects_to_login_error(monkeypatch):
     monkeypatch.setenv("NKS_WDC_SSO_CLIENT_ID", "x")
     monkeypatch.setenv("NKS_WDC_SSO_CLIENT_SECRET", "y")
     with TestClient(app, client=("127.0.0.1", 50000)) as c:
-        r = c.get(
-            "/auth/sso/callback?error=access_denied", follow_redirects=False
-        )
+        r = c.get("/auth/sso/callback?error=access_denied", follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"] == "/login?error=sso_failed"
 
@@ -136,7 +132,7 @@ def test_login_page_shows_sso_button_when_enabled(monkeypatch):
         r = c.get("/login")
     assert r.status_code == 200
     assert "Sign in with NKS SSO" in r.text
-    assert '/auth/sso/login' in r.text
+    assert "/auth/sso/login" in r.text
 
 
 # ── allowlist sanity ──────────────────────────────────────────────────
@@ -144,6 +140,7 @@ def test_login_page_shows_sso_button_when_enabled(monkeypatch):
 
 def test_login_sso_on_security_allowlist():
     from app.observability import SECURITY_ACTION_ALLOWLIST
+
     assert "login.sso" in SECURITY_ACTION_ALLOWLIST
 
 
@@ -154,6 +151,10 @@ def test_login_page_uses_logo_png():
     with TestClient(app, client=("127.0.0.1", 50000)) as c:
         r = c.get("/login")
     assert r.status_code == 200
-    assert '/static/logo-icon.png' in r.text
+    assert "/static/logo-icon.png" in r.text
     # Old inline SVG markers should be gone
-    assert 'viewBox="0 0 48 48"' not in r.text or 'login-logomark' not in r.text.split('viewBox="0 0 48 48"')[0].split('<svg')[-1]
+    assert (
+        'viewBox="0 0 48 48"' not in r.text
+        or "login-logomark"
+        not in r.text.split('viewBox="0 0 48 48"')[0].split("<svg")[-1]
+    )

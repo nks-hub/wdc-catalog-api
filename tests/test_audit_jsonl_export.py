@@ -75,7 +75,9 @@ def _seed_jsonl_events() -> None:
         db.commit()
 
 
-def test_jsonl_export_returns_gzip_with_correct_disposition(admin_client: TestClient) -> None:
+def test_jsonl_export_returns_gzip_with_correct_disposition(
+    admin_client: TestClient,
+) -> None:
     r = admin_client.get("/admin/audit/export.jsonl.gz")
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/gzip"
@@ -103,8 +105,16 @@ def test_jsonl_export_honors_filter(admin_client: TestClient) -> None:
     from app.db import AuditEvent, session_factory
 
     with session_factory() as db:
-        db.add(AuditEvent(action="test.jsonl-filter-a", resource_type="account", resource_id="10"))
-        db.add(AuditEvent(action="test.jsonl-filter-b", resource_type="account", resource_id="11"))
+        db.add(
+            AuditEvent(
+                action="test.jsonl-filter-a", resource_type="account", resource_id="10"
+            )
+        )
+        db.add(
+            AuditEvent(
+                action="test.jsonl-filter-b", resource_type="account", resource_id="11"
+            )
+        )
         db.commit()
 
     r = admin_client.get("/admin/audit/export.jsonl.gz?action=test.jsonl-filter-a")

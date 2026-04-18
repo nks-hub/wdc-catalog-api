@@ -169,7 +169,11 @@ def test_connected_event_sent_immediately() -> None:
             with anyio.fail_after(5.0):
                 async with anyio.create_task_group() as tg:
                     tg.start_soon(_watch)
-                    tg.start_soon(lambda: _sse_session(cookie_header, stop_ev=stop, lines_out=collected))
+                    tg.start_soon(
+                        lambda: _sse_session(
+                            cookie_header, stop_ev=stop, lines_out=collected
+                        )
+                    )
                     await stop.wait()
                     tg.cancel_scope.cancel()
 
@@ -205,7 +209,9 @@ def test_authenticated_client_receives_event() -> None:
             async def _watch() -> None:
                 while True:
                     await anyio.sleep(0.05)
-                    if not connected_ev.is_set() and any("event: connected" in ln for ln in collected):
+                    if not connected_ev.is_set() and any(
+                        "event: connected" in ln for ln in collected
+                    ):
                         connected_ev.set()
                     if any("event: audit" in ln for ln in collected):
                         stop.set()
@@ -215,7 +221,9 @@ def test_authenticated_client_receives_event() -> None:
                 await connected_ev.wait()
                 await anyio.sleep(0.1)
                 with session_factory() as db:
-                    acct = db.scalar(_sel(Account).where(Account.email == "admin@admin.local"))
+                    acct = db.scalar(
+                        _sel(Account).where(Account.email == "admin@admin.local")
+                    )
                     audit.emit(
                         db,
                         actor=acct,
@@ -229,7 +237,11 @@ def test_authenticated_client_receives_event() -> None:
                 async with anyio.create_task_group() as tg:
                     tg.start_soon(_watch)
                     tg.start_soon(_emit)
-                    tg.start_soon(lambda: _sse_session(cookie_header, stop_ev=stop, lines_out=collected))
+                    tg.start_soon(
+                        lambda: _sse_session(
+                            cookie_header, stop_ev=stop, lines_out=collected
+                        )
+                    )
                     await stop.wait()
                     tg.cancel_scope.cancel()
 

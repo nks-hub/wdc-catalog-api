@@ -154,7 +154,9 @@ def _do_retention(session: Session) -> dict:
             AuditEvent.created_at < cutoff,
         )
 
-    scheduler_retain_days = policy_row.scheduler_run_retention_days if policy_row else 90
+    scheduler_retain_days = (
+        policy_row.scheduler_run_retention_days if policy_row else 90
+    )
     if scheduler_retain_days is None:
         scheduler_retain_days = 90
     scheduler_purged = 0
@@ -168,7 +170,9 @@ def _do_retention(session: Session) -> dict:
             SchedulerRun.started_at < cutoff,
         )
 
-    webhook_retain_days = policy_row.webhook_delivery_retention_days if policy_row else 30
+    webhook_retain_days = (
+        policy_row.webhook_delivery_retention_days if policy_row else 30
+    )
     if webhook_retain_days is None:
         webhook_retain_days = 30
     webhook_purged = 0
@@ -190,6 +194,7 @@ def _do_retention(session: Session) -> dict:
     if admin_session_idle_days > 0:
         from sqlalchemy import update as _update
         from .db import AdminSession
+
         cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
             days=admin_session_idle_days
         )
@@ -394,7 +399,9 @@ def start_scheduler() -> None:
         backup_trigger = CronTrigger.from_crontab(backup_cron, timezone="UTC")
     except Exception as exc:
         log.warning(
-            "Invalid NKS_WDC_BACKUP_CRON=%s: %s — defaulting daily 02:30", backup_cron, exc
+            "Invalid NKS_WDC_BACKUP_CRON=%s: %s — defaulting daily 02:30",
+            backup_cron,
+            exc,
         )
         backup_trigger = CronTrigger.from_crontab("30 2 * * *", timezone="UTC")
     sched.add_job(
@@ -436,10 +443,12 @@ def _scheduled_backup() -> dict:
         from .observability import request_id_var
     except Exception:
         from . import backup as _bk
+
         return _bk.run_scheduled_backup()
     token = request_id_var.set(f"job-{uuid.uuid4().hex[:8]}")
     try:
         from . import backup as _bk
+
         return _bk.run_scheduled_backup()
     except Exception:
         log.exception("scheduled backup failed")

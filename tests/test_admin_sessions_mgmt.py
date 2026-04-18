@@ -33,7 +33,9 @@ def _reset_totp(username: str = "admin") -> None:
     from sqlalchemy import select as _sel
 
     with session_factory() as db:
-        acct = db.scalar(_sel(Account).where(Account.email == f"{username}@admin.local"))
+        acct = db.scalar(
+            _sel(Account).where(Account.email == f"{username}@admin.local")
+        )
         if acct is not None:
             acct.totp_enabled = False
             acct.totp_secret = None
@@ -45,7 +47,9 @@ def _reset_totp(username: str = "admin") -> None:
         db.commit()
 
 
-def _login(client: TestClient, username: str = "admin", password: str = "admin") -> None:
+def _login(
+    client: TestClient, username: str = "admin", password: str = "admin"
+) -> None:
     """Drive the login form; asserts 303 redirect to /admin."""
     client.get("/login")
     csrf = client.cookies.get("nks_wdc_csrf") or ""
@@ -172,7 +176,9 @@ def test_legacy_sessions_without_row_still_work() -> None:
 
         # Ensure no row exists for this fingerprint.
         with session_factory() as db:
-            existing = db.scalar(_sel(AdminSession).where(AdminSession.fingerprint == fp))
+            existing = db.scalar(
+                _sel(AdminSession).where(AdminSession.fingerprint == fp)
+            )
             if existing is not None:
                 db.delete(existing)
                 db.commit()
@@ -366,10 +372,14 @@ def test_kill_others_preserves_current() -> None:
                 _sel(AdminSession).where(AdminSession.fingerprint == real_fp)
             )
             assert real_row is not None
-            assert real_row.revoked_at is None, "Caller's own session must not be revoked"
+            assert real_row.revoked_at is None, (
+                "Caller's own session must not be revoked"
+            )
 
             # Both synthetic rows must now be revoked.
             for sid in synthetic_ids:
                 s = db.get(AdminSession, sid)
                 assert s is not None
-                assert s.revoked_at is not None, f"Synthetic session {sid} should be revoked"
+                assert s.revoked_at is not None, (
+                    f"Synthetic session {sid} should be revoked"
+                )

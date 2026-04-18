@@ -90,7 +90,9 @@ def admin_client() -> TestClient:
 def test_run_scheduled_backup_writes_file_when_enabled(tmp_path) -> None:
     from app import backup
 
-    _set_policy(backup_enabled=True, backup_directory=str(tmp_path), backup_retention_count=7)
+    _set_policy(
+        backup_enabled=True, backup_directory=str(tmp_path), backup_retention_count=7
+    )
 
     result = backup.run_scheduled_backup()
 

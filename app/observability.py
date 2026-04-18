@@ -117,26 +117,28 @@ SECURITY_EVENTS = Counter(
 # security-metric increment. Kept explicit (not "everything") so the
 # counter's cardinality stays bounded and the meaning stays
 # security-signal-shaped, not "every admin click".
-SECURITY_ACTION_ALLOWLIST = frozenset({
-    "login.failed",
-    "login.locked_out",
-    "login.lockout_armed",
-    "login.sso",
-    "totp.login_failed",
-    "permission.denied",
-    "password.change_failed",
-    "user.suspended",
-    "user.unlocked",
-    "user.deleted",
-    "user.tokens_revoked",
-    "session.killed",
-    "session.killed_others",
-    "admin.global_session_kill",
-    "totp.disabled",
-    "backup.exported",
-    "webhook.retried",
-    "pat.rotated",
-})
+SECURITY_ACTION_ALLOWLIST = frozenset(
+    {
+        "login.failed",
+        "login.locked_out",
+        "login.lockout_armed",
+        "login.sso",
+        "totp.login_failed",
+        "permission.denied",
+        "password.change_failed",
+        "user.suspended",
+        "user.unlocked",
+        "user.deleted",
+        "user.tokens_revoked",
+        "session.killed",
+        "session.killed_others",
+        "admin.global_session_kill",
+        "totp.disabled",
+        "backup.exported",
+        "webhook.retried",
+        "pat.rotated",
+    }
+)
 
 
 def inc_security_event(action: str) -> None:

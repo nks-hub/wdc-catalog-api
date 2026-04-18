@@ -81,14 +81,13 @@ def _security_signals_last_24h(db) -> dict:
 
     from .db import AuditEvent
 
-    cutoff = (
-        datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
-    )
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
 
     def _count(action: str) -> int:
         return int(
             db.scalar(
-                _sel(_func.count()).select_from(AuditEvent)
+                _sel(_func.count())
+                .select_from(AuditEvent)
                 .where(AuditEvent.action == action)
                 .where(AuditEvent.created_at >= cutoff)
             )
@@ -142,6 +141,7 @@ def _redirect(
         # wrap the signed bytes so the cookie value is guaranteed ASCII
         # and no charset surprises leak into Starlette's header encoder.
         import base64 as _b64
+
         signed = _flash_signer().sign(f"{flash_kind}|{flash_message}".encode("utf-8"))
         response.set_cookie(
             "flash",
@@ -206,7 +206,6 @@ def _invites_history_stmt(stmt, email: str, since: str, until: str):
     """Apply email/date filters to a ConsumedInvite SELECT statement."""
     from datetime import datetime, time, timezone
 
-
     from .db import ConsumedInvite
 
     if email:
@@ -216,7 +215,9 @@ def _invites_history_stmt(stmt, email: str, since: str, until: str):
         stmt = stmt.where(ConsumedInvite.consumed_at >= since_dt)
     until_dt = _parse_iso_date(until)
     if until_dt:
-        until_dt = datetime.combine(until_dt.date(), time.max).replace(tzinfo=timezone.utc)
+        until_dt = datetime.combine(until_dt.date(), time.max).replace(
+            tzinfo=timezone.utc
+        )
         stmt = stmt.where(ConsumedInvite.consumed_at <= until_dt)
     return stmt
 
@@ -660,7 +661,13 @@ def _admin_account(db: Session, username: str):
 
 
 def _audit_filter_stmt(
-    stmt, *, action="", resource_type="", resource_id="", actor_id=None, q="",
+    stmt,
+    *,
+    action="",
+    resource_type="",
+    resource_id="",
+    actor_id=None,
+    q="",
 ):
     """Apply audit-log filter params to *stmt* and return the modified statement.
 
@@ -703,13 +710,13 @@ def _audit_filter_stmt(
 # active — without these we'd deadlock a freshly-enrolled admin who
 # hasn't paired an authenticator yet.
 _TOTP_GATE_ALLOWLIST_PREFIXES = (
-    "/admin/account/totp/",   # setup + confirm + disable POST paths
-    "/admin/theme",           # theme toggle is pure cosmetics
-    "/static/",               # JS + CSS
-    "/logout",                # always let the user escape
+    "/admin/account/totp/",  # setup + confirm + disable POST paths
+    "/admin/theme",  # theme toggle is pure cosmetics
+    "/static/",  # JS + CSS
+    "/logout",  # always let the user escape
 )
 _TOTP_GATE_ALLOWLIST_EXACT = {
-    "/admin/account",         # the setup form lives on this page
+    "/admin/account",  # the setup form lives on this page
 }
 
 
@@ -826,9 +833,11 @@ def admin_dashboard(
         "total": wh_total,
         "failure_pct": wh_failure_pct,
         "status": (
-            "ok" if wh_total == 0 or wh_failed == 0 else
-            "warn" if wh_failure_pct < 5 else
-            "bad"
+            "ok"
+            if wh_total == 0 or wh_failed == 0
+            else "warn"
+            if wh_failure_pct < 5
+            else "bad"
         ),
     }
 
@@ -837,26 +846,42 @@ def admin_dashboard(
     # uses a 30s TTL so mixing it with a fresh prev-24h count would produce
     # occasional off-by-cache deltas right after a spike.
     from sqlalchemy import func as _func
+
     two_days_ago = now - timedelta(hours=47)
-    current_audit_count = db.scalar(
-        _sel(_func.count()).select_from(AuditEvent).where(
-            AuditEvent.created_at >= day_ago.replace(tzinfo=None),
+    current_audit_count = (
+        db.scalar(
+            _sel(_func.count())
+            .select_from(AuditEvent)
+            .where(
+                AuditEvent.created_at >= day_ago.replace(tzinfo=None),
+            )
         )
-    ) or 0
-    prev_audit_count = db.scalar(
-        _sel(_func.count()).select_from(AuditEvent).where(
-            AuditEvent.created_at >= two_days_ago.replace(tzinfo=None),
-            AuditEvent.created_at < day_ago.replace(tzinfo=None),
+        or 0
+    )
+    prev_audit_count = (
+        db.scalar(
+            _sel(_func.count())
+            .select_from(AuditEvent)
+            .where(
+                AuditEvent.created_at >= two_days_ago.replace(tzinfo=None),
+                AuditEvent.created_at < day_ago.replace(tzinfo=None),
+            )
         )
-    ) or 0
+        or 0
+    )
     audit_delta = int(current_audit_count - prev_audit_count)
 
-    prev_webhook_count = db.scalar(
-        _sel(_func.count()).select_from(WebhookDelivery).where(
-            WebhookDelivery.created_at >= two_days_ago.replace(tzinfo=None),
-            WebhookDelivery.created_at < day_ago.replace(tzinfo=None),
+    prev_webhook_count = (
+        db.scalar(
+            _sel(_func.count())
+            .select_from(WebhookDelivery)
+            .where(
+                WebhookDelivery.created_at >= two_days_ago.replace(tzinfo=None),
+                WebhookDelivery.created_at < day_ago.replace(tzinfo=None),
+            )
         )
-    ) or 0
+        or 0
+    )
     webhook_delta = int(wh_total - prev_webhook_count)
 
     ctx = base_context(
@@ -1357,8 +1382,12 @@ def admin_global_search(
             .limit(10)
         ).all()
         users = [
-            {"id": u.id, "email": u.email, "role": u.role,
-             "suspended": u.suspended_at is not None}
+            {
+                "id": u.id,
+                "email": u.email,
+                "role": u.role,
+                "suspended": u.suspended_at is not None,
+            }
             for u in user_rows
         ]
 
@@ -1368,16 +1397,20 @@ def admin_global_search(
             .order_by(App.id.asc())
             .limit(10)
         ).all()
-        apps = [{"id": a.id, "display_name": a.display_name, "category": a.category}
-                for a in app_rows]
+        apps = [
+            {"id": a.id, "display_name": a.display_name, "category": a.category}
+            for a in app_rows
+        ]
 
         evt_rows = db.scalars(
             _sel(AuditEvent)
-            .where(or_(
-                AuditEvent.action.ilike(like),
-                AuditEvent.resource_id.ilike(like),
-                AuditEvent.actor_email.ilike(like),
-            ))
+            .where(
+                or_(
+                    AuditEvent.action.ilike(like),
+                    AuditEvent.resource_id.ilike(like),
+                    AuditEvent.actor_email.ilike(like),
+                )
+            )
             .order_by(AuditEvent.id.desc())
             .limit(10)
         ).all()
@@ -1394,7 +1427,8 @@ def admin_global_search(
         ]
 
     ctx = base_context(
-        request, username,
+        request,
+        username,
         q=q_clean,
         users=users,
         apps=apps,
@@ -1467,6 +1501,7 @@ def admin_audit(
         qs_parts.append(f"actor_id={actor_id}")
     if q:
         from urllib.parse import quote as _quote
+
         qs_parts.append(f"q={_quote(q)}")
     qs = ("&".join(qs_parts) + "&") if qs_parts else ""
 
@@ -1476,9 +1511,7 @@ def admin_audit(
 
     acct = _admin_account(db, username)
     saved_rows = db.scalars(
-        _sel(_SavedQ)
-        .where(_SavedQ.account_id == acct.id)
-        .order_by(_SavedQ.name.asc())
+        _sel(_SavedQ).where(_SavedQ.account_id == acct.id).order_by(_SavedQ.name.asc())
     ).all()
 
     def _saved_qs(row: _SavedQ) -> str:
@@ -1779,8 +1812,12 @@ def admin_retention_page(
     last_run = None
     if last_run_row is not None:
         last_run = {
-            "started_at": last_run_row.started_at.isoformat() if last_run_row.started_at else None,
-            "finished_at": last_run_row.finished_at.isoformat() if last_run_row.finished_at else None,
+            "started_at": last_run_row.started_at.isoformat()
+            if last_run_row.started_at
+            else None,
+            "finished_at": last_run_row.finished_at.isoformat()
+            if last_run_row.finished_at
+            else None,
             "duration_ms": last_run_row.duration_ms,
             "summary": last_run_row.summary,
             "error": last_run_row.error,
@@ -2377,8 +2414,12 @@ def admin_save_settings(
     row.banner_message = banner_message.strip() or None
     row.require_2fa_for_admins = bool(require_2fa_for_admins)
     row.audit_retention_days = max(0, min(int(audit_retention_days), 3650))
-    row.scheduler_run_retention_days = max(0, min(int(scheduler_run_retention_days), 3650))
-    row.webhook_delivery_retention_days = max(0, min(int(webhook_delivery_retention_days), 3650))
+    row.scheduler_run_retention_days = max(
+        0, min(int(scheduler_run_retention_days), 3650)
+    )
+    row.webhook_delivery_retention_days = max(
+        0, min(int(webhook_delivery_retention_days), 3650)
+    )
     row.webhook_url = webhook_url.strip() or None
     row.webhook_event_prefixes = (
         webhook_event_prefixes.strip()
@@ -2390,6 +2431,7 @@ def admin_save_settings(
 
     # Parse admin IP allowlist — newline/comma separated CIDRs.
     import re as _re
+
     _raw_cidrs = _re.split(r"[\n,]+", admin_ip_allowlist_raw)
     cidrs = [c.strip() for c in _raw_cidrs if c.strip()]
     row.admin_ip_allowlist = cidrs or None
@@ -2416,7 +2458,9 @@ def admin_save_settings(
         "admin_ip_allowlist": row.admin_ip_allowlist,
         "admin_session_idle_days": row.admin_session_idle_days,
     }
-    changed = {k: {"from": before[k], "to": after[k]} for k in after if before[k] != after[k]}
+    changed = {
+        k: {"from": before[k], "to": after[k]} for k in after if before[k] != after[k]
+    }
     if changed:
         acct = _admin_account(db, username)
         _audit.emit(
@@ -2442,11 +2486,18 @@ def admin_settings_webhook_test(
     url, _ = _webhooks._resolve_config(db)
     if not url:
         return _redirect("/admin/settings", "error", "No webhook URL configured")
-    _webhooks._pool.submit(_webhooks._post, url, {
-        "source": "nks-wdc-catalog-api",
-        "test": True,
-        "event": {"action": "webhook.test", "actor_email": f"{username}@admin.local"},
-    })
+    _webhooks._pool.submit(
+        _webhooks._post,
+        url,
+        {
+            "source": "nks-wdc-catalog-api",
+            "test": True,
+            "event": {
+                "action": "webhook.test",
+                "actor_email": f"{username}@admin.local",
+            },
+        },
+    )
     return _redirect("/admin/settings", "success", "Test webhook enqueued")
 
 
@@ -2520,17 +2571,21 @@ def admin_invites_history_csv(
     from .db import ConsumedInvite
 
     stmt = _invites_history_stmt(_sel(ConsumedInvite), email, since, until)
-    rows = db.scalars(stmt.order_by(ConsumedInvite.consumed_at.desc()).limit(10000)).all()
+    rows = db.scalars(
+        stmt.order_by(ConsumedInvite.consumed_at.desc()).limit(10000)
+    ).all()
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["email", "consumed_at", "account_id", "nonce"])
     for r in rows:
-        w.writerow([
-            r.email or "",
-            r.consumed_at.isoformat() if r.consumed_at else "",
-            r.account_id if r.account_id is not None else "",
-            r.nonce or "",
-        ])
+        w.writerow(
+            [
+                r.email or "",
+                r.consumed_at.isoformat() if r.consumed_at else "",
+                r.account_id if r.account_id is not None else "",
+                r.nonce or "",
+            ]
+        )
     return Response(
         content=buf.getvalue(),
         media_type="text/csv",
@@ -2632,6 +2687,7 @@ def admin_device_import(
         _snap.set_head(db, dev_id, snap.id, updated_by="admin-ui-import")
 
     from . import audit as _audit
+
     _audit.emit(
         db,
         request=request,
@@ -3004,15 +3060,17 @@ def admin_audit_export_jsonl(
 
     from .db import AuditEvent
 
-    stmt = _audit_filter_stmt(
-        _sel(AuditEvent),
-        action=action,
-        resource_type=resource_type,
-        resource_id=resource_id,
-        actor_id=actor_id,
-        q=q,
-    ).order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).limit(
-        max(1, min(limit, 200000))
+    stmt = (
+        _audit_filter_stmt(
+            _sel(AuditEvent),
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            actor_id=actor_id,
+            q=q,
+        )
+        .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+        .limit(max(1, min(limit, 200000)))
     )
 
     rows = db.scalars(stmt).all()
@@ -3022,22 +3080,27 @@ def admin_audit_export_jsonl(
         gz = gzip.GzipFile(fileobj=buf, mode="wb", compresslevel=6)
         batch_size = 1000
         for i, r in enumerate(rows, 1):
-            line = json.dumps(
-                {
-                    "id": r.id,
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                    "actor_id": r.actor_id,
-                    "actor_email": r.actor_email,
-                    "action": r.action,
-                    "resource_type": r.resource_type,
-                    "resource_id": r.resource_id,
-                    "ip": r.ip,
-                    "user_agent": r.user_agent,
-                    "detail": r.detail,
-                },
-                default=str,
-                ensure_ascii=False,
-            ) + "\n"
+            line = (
+                json.dumps(
+                    {
+                        "id": r.id,
+                        "created_at": r.created_at.isoformat()
+                        if r.created_at
+                        else None,
+                        "actor_id": r.actor_id,
+                        "actor_email": r.actor_email,
+                        "action": r.action,
+                        "resource_type": r.resource_type,
+                        "resource_id": r.resource_id,
+                        "ip": r.ip,
+                        "user_agent": r.user_agent,
+                        "detail": r.detail,
+                    },
+                    default=str,
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
             gz.write(line.encode("utf-8"))
             if i % batch_size == 0:
                 gz.flush()
@@ -3156,7 +3219,9 @@ def admin_backup_run_to_disk(
         },
     )
     return _redirect(
-        "/admin/ops", "success", f"Wrote {filename} ({len(zip_bytes)} bytes) to {directory}"
+        "/admin/ops",
+        "success",
+        f"Wrote {filename} ({len(zip_bytes)} bytes) to {directory}",
     )
 
 
@@ -3190,18 +3255,24 @@ def admin_backups_list(
                     if not entry.is_file():
                         continue
                     name = entry.name
-                    if not (name.startswith("nks-wdc-backup-") and name.endswith(".zip")):
+                    if not (
+                        name.startswith("nks-wdc-backup-") and name.endswith(".zip")
+                    ):
                         continue
                     try:
                         stat = entry.stat()
                     except OSError:
                         continue
-                    files.append({
-                        "name": name,
-                        "size_bytes": stat.st_size,
-                        "size_mb": round(stat.st_size / 1024 / 1024, 2),
-                        "mtime": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
-                    })
+                    files.append(
+                        {
+                            "name": name,
+                            "size_bytes": stat.st_size,
+                            "size_mb": round(stat.st_size / 1024 / 1024, 2),
+                            "mtime": datetime.fromtimestamp(
+                                stat.st_mtime, tz=timezone.utc
+                            ).isoformat(),
+                        }
+                    )
                     total_bytes += stat.st_size
         except OSError:
             dir_exists = False
@@ -3210,7 +3281,8 @@ def admin_backups_list(
     total_mb = round(total_bytes / 1024 / 1024, 2) if total_bytes else 0
 
     ctx = base_context(
-        request, username,
+        request,
+        username,
         directory=directory,
         dir_exists=dir_exists,
         files=files,
@@ -3238,18 +3310,24 @@ def admin_backups_prune_now(
     policy = db.get(GlobalPolicy, 1)
     directory = (policy.backup_directory or "").strip() if policy else ""
     if not directory or not os.path.isdir(directory):
-        return _redirect("/admin/ops/backups", "error", "No backup directory configured")
+        return _redirect(
+            "/admin/ops/backups", "error", "No backup directory configured"
+        )
 
     keep = policy.backup_retention_count or 0
     removed = _backup._prune_disk_backups(directory, keep)
     acct = _admin_account(db, username)
     _audit.emit(
-        db, request=request, actor=acct, action="backup.pruned",
+        db,
+        request=request,
+        actor=acct,
+        action="backup.pruned",
         resource_type="backup",
         detail={"directory": directory, "kept": keep, "removed": removed},
     )
     return _redirect(
-        "/admin/ops/backups", "success",
+        "/admin/ops/backups",
+        "success",
         f"Prune complete — removed {removed} file(s), kept newest {keep}",
     )
 
@@ -3269,16 +3347,20 @@ def admin_backups_delete_one(
     policy = db.get(GlobalPolicy, 1)
     directory = (policy.backup_directory or "").strip() if policy else ""
     if not directory or not os.path.isdir(directory):
-        return _redirect("/admin/ops/backups", "error", "No backup directory configured")
+        return _redirect(
+            "/admin/ops/backups", "error", "No backup directory configured"
+        )
 
     # Tight path-traversal guard: accept only plain basenames matching the
     # backup filename convention. Anything with slashes or not matching the
     # prefix is rejected before we concat the path.
     basename = os.path.basename(filename or "")
-    if (not basename
-            or basename != filename
-            or not basename.startswith("nks-wdc-backup-")
-            or not basename.endswith(".zip")):
+    if (
+        not basename
+        or basename != filename
+        or not basename.startswith("nks-wdc-backup-")
+        or not basename.endswith(".zip")
+    ):
         return _redirect("/admin/ops/backups", "error", "Invalid filename")
 
     target = os.path.join(directory, basename)
@@ -3296,7 +3378,10 @@ def admin_backups_delete_one(
 
     acct = _admin_account(db, username)
     _audit.emit(
-        db, request=request, actor=acct, action="backup.deleted",
+        db,
+        request=request,
+        actor=acct,
+        action="backup.deleted",
         resource_type="backup",
         detail={"filename": basename, "directory": directory, "bytes": size},
     )
@@ -3612,11 +3697,15 @@ def admin_kill_other_sessions(
 
     user = db.scalar(_sel(User).where(User.username == username))
     current_fp = _fingerprint(request.cookies.get(SESSION_COOKIE, ""))
-    q = _upd(AdminSession).where(
-        AdminSession.user_id == (user.id if user else -1),
-        AdminSession.revoked_at.is_(None),
-        AdminSession.fingerprint != current_fp,
-    ).values(revoked_at=datetime.now(timezone.utc))
+    q = (
+        _upd(AdminSession)
+        .where(
+            AdminSession.user_id == (user.id if user else -1),
+            AdminSession.revoked_at.is_(None),
+            AdminSession.fingerprint != current_fp,
+        )
+        .values(revoked_at=datetime.now(timezone.utc))
+    )
     killed = db.execute(q).rowcount
     acct = _admin_account(db, username)
     _audit.emit(
@@ -3661,15 +3750,23 @@ def admin_kill_all_sessions(
     current_fp = _fingerprint(request.cookies.get(SESSION_COOKIE, ""))
     now = datetime.now(timezone.utc)
 
-    kill_q = _upd(AdminSession).where(
-        AdminSession.revoked_at.is_(None),
-        AdminSession.fingerprint != current_fp,
-    ).values(revoked_at=now)
+    kill_q = (
+        _upd(AdminSession)
+        .where(
+            AdminSession.revoked_at.is_(None),
+            AdminSession.fingerprint != current_fp,
+        )
+        .values(revoked_at=now)
+    )
     admin_sessions_killed = int(db.execute(kill_q).rowcount or 0)
 
-    bump_q = _upd(Account).where(
-        Account.suspended_at.is_(None),
-    ).values(token_version=Account.token_version + 1)
+    bump_q = (
+        _upd(Account)
+        .where(
+            Account.suspended_at.is_(None),
+        )
+        .values(token_version=Account.token_version + 1)
+    )
     token_versions_bumped = int(db.execute(bump_q).rowcount or 0)
 
     acct = _admin_account(db, username)
@@ -3719,7 +3816,9 @@ def admin_account(
         pending_totp=None,
         new_recovery_codes=None,
         totp_enabled=bool(acct.totp_enabled),
-        totp_enabled_at=acct.totp_enabled_at.isoformat() if acct.totp_enabled_at else None,
+        totp_enabled_at=acct.totp_enabled_at.isoformat()
+        if acct.totp_enabled_at
+        else None,
         sessions=_session_list(db, username, request),
         flash=_pop_flash(flash),
         totp_gate_active=bool(policy and policy.require_2fa_for_admins),
@@ -3741,7 +3840,6 @@ def admin_create_account_token(
 ) -> HTMLResponse:
     from datetime import datetime, timedelta, timezone
 
-
     from . import pats as _pats
 
     acct = _admin_account(db, username)
@@ -3760,12 +3858,16 @@ def admin_create_account_token(
     ] or None
 
     row, plaintext = _pats.issue(
-        db, account_id=acct.id, name=name, expires_at=expires_at,
+        db,
+        account_id=acct.id,
+        name=name,
+        expires_at=expires_at,
         read_only=bool(read_only),
         ip_allowlist=cidrs,
     )
 
     from . import audit as _audit
+
     _audit.emit(
         db,
         request=request,
@@ -3944,7 +4046,9 @@ def _render_account(
         pending_totp=pending_totp,
         new_recovery_codes=new_recovery_codes,
         totp_enabled=bool(acct.totp_enabled),
-        totp_enabled_at=acct.totp_enabled_at.isoformat() if acct.totp_enabled_at else None,
+        totp_enabled_at=acct.totp_enabled_at.isoformat()
+        if acct.totp_enabled_at
+        else None,
         sessions=_session_list(db, username, request),
         flash=flash,
         totp_gate_active=bool(policy and policy.require_2fa_for_admins),
@@ -3974,7 +4078,11 @@ def admin_totp_setup(
 
     acct = _account_for_user(db, username)
     if acct.totp_enabled:
-        return _redirect("/admin/account", "error", "2FA is already enabled. Disable it first to re-pair.")
+        return _redirect(
+            "/admin/account",
+            "error",
+            "2FA is already enabled. Disable it first to re-pair.",
+        )
 
     secret = _totp.new_secret()
     acct.totp_secret = secret
@@ -3997,9 +4105,14 @@ def admin_totp_setup(
         db,
         pending_totp={
             "secret": secret,
-            "otpauth_uri": _totp.otpauth_uri(secret, account=acct.email, issuer="NKS WDC"),
+            "otpauth_uri": _totp.otpauth_uri(
+                secret, account=acct.email, issuer="NKS WDC"
+            ),
         },
-        flash={"kind": "info", "message": "Scan or paste the secret into your authenticator, then enter the code below."},
+        flash={
+            "kind": "info",
+            "message": "Scan or paste the secret into your authenticator, then enter the code below.",
+        },
     )
 
 
@@ -4022,7 +4135,9 @@ def admin_totp_confirm(
     if acct.totp_enabled:
         return _redirect("/admin/account", "error", "2FA is already enabled.")
     if not acct.totp_secret:
-        return _redirect("/admin/account", "error", "No pending 2FA setup — start over.")
+        return _redirect(
+            "/admin/account", "error", "No pending 2FA setup — start over."
+        )
 
     if not _totp.verify(acct.totp_secret, code):
         return _render_account(
@@ -4035,7 +4150,10 @@ def admin_totp_confirm(
                     acct.totp_secret, account=acct.email, issuer="NKS WDC"
                 ),
             },
-            flash={"kind": "error", "message": "Code didn't match — check your clock and try again."},
+            flash={
+                "kind": "error",
+                "message": "Code didn't match — check your clock and try again.",
+            },
         )
 
     # Success — bake the enablement and mint recovery codes.
@@ -4062,7 +4180,10 @@ def admin_totp_confirm(
         username,
         db,
         new_recovery_codes=codes,
-        flash={"kind": "success", "message": "2FA enabled. Save these recovery codes now — they're shown only once."},
+        flash={
+            "kind": "success",
+            "message": "2FA enabled. Save these recovery codes now — they're shown only once.",
+        },
     )
 
 
@@ -4142,11 +4263,14 @@ def admin_ops(
     uptime_str = _format_uptime(uptime_s)
 
     # --- sessions ---
-    active_sessions = db.scalar(
-        _sel(func.count()).select_from(AdminSession).where(
-            AdminSession.revoked_at.is_(None)
+    active_sessions = (
+        db.scalar(
+            _sel(func.count())
+            .select_from(AdminSession)
+            .where(AdminSession.revoked_at.is_(None))
         )
-    ) or 0
+        or 0
+    )
 
     # --- accounts ---
     accounts_total = db.scalar(_sel(func.count()).select_from(Account)) or 0
@@ -4155,11 +4279,14 @@ def admin_ops(
     # --- audit ---
     events_total = db.scalar(_sel(func.count()).select_from(AuditEvent)) or 0
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
-    events_24h = db.scalar(
-        _sel(func.count()).select_from(AuditEvent).where(
-            AuditEvent.created_at >= cutoff
+    events_24h = (
+        db.scalar(
+            _sel(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.created_at >= cutoff)
         )
-    ) or 0
+        or 0
+    )
 
     # --- DB size (sqlite only; postgres shows "—") ---
     db_backend = "sqlite" if "sqlite" in str(_engine.url) else "postgres"
@@ -4178,7 +4305,9 @@ def admin_ops(
     # --- webhooks + backup ---
     policy = db.get(GlobalPolicy, 1)
     webhook_enabled = bool(policy and (policy.webhook_url or "").strip())
-    backup_directory_configured = bool(policy and (policy.backup_directory or "").strip())
+    backup_directory_configured = bool(
+        policy and (policy.backup_directory or "").strip()
+    )
 
     # --- webhook delivery stats (last 24h) ---
     from .db import WebhookDelivery
@@ -4207,8 +4336,7 @@ def admin_ops(
         if key in wh_buckets:
             wh_buckets[key] += 1
     webhook_sparkline = [
-        {"hour": k.strftime("%H:00"), "count": v}
-        for k, v in sorted(wh_buckets.items())
+        {"hour": k.strftime("%H:00"), "count": v} for k, v in sorted(wh_buckets.items())
     ]
     webhook_sparkline_max = max((b["count"] for b in webhook_sparkline), default=0) or 1
 
@@ -4227,7 +4355,9 @@ def admin_ops(
 
         age_s = None
         if rr.started_at is not None:
-            age_s = (datetime.now(timezone.utc).replace(tzinfo=None) - rr.started_at).total_seconds()
+            age_s = (
+                datetime.now(timezone.utc).replace(tzinfo=None) - rr.started_at
+            ).total_seconds()
         retention_last_run = {
             "age": _format_uptime(age_s) + " ago" if age_s is not None else "—",
             "ok": rr.error is None,
@@ -4245,7 +4375,9 @@ def admin_ops(
     if br is not None:
         age_s = None
         if br.started_at is not None:
-            age_s = (datetime.now(timezone.utc).replace(tzinfo=None) - br.started_at).total_seconds()
+            age_s = (
+                datetime.now(timezone.utc).replace(tzinfo=None) - br.started_at
+            ).total_seconds()
         backup_last_run = {
             "age": _format_uptime(age_s) + " ago" if age_s is not None else "—",
             "ok": br.error is None,
@@ -4309,9 +4441,7 @@ def admin_scheduler_runs(
     elif status_filter == "failed":
         stmt = stmt.where(SchedulerRun.error.is_not(None))
 
-    total = db.scalar(
-        _sel(_func.count()).select_from(stmt.subquery())
-    ) or 0
+    total = db.scalar(_sel(_func.count()).select_from(stmt.subquery())) or 0
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
 
@@ -4381,9 +4511,7 @@ def admin_webhook_deliveries(
     elif status_filter == "failed":
         stmt = stmt.where(WebhookDelivery.error.is_not(None))
 
-    total = db.scalar(
-        _sel(_func.count()).select_from(stmt.subquery())
-    ) or 0
+    total = db.scalar(_sel(_func.count()).select_from(stmt.subquery())) or 0
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
 

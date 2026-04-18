@@ -38,10 +38,9 @@ def _create_locked_account(email: str, lock_minutes: int = 30):
             )
             db.add(existing)
             db.flush()
-        existing.locked_until = (
-            datetime.now(timezone.utc).replace(tzinfo=None)
-            + timedelta(minutes=lock_minutes)
-        )
+        existing.locked_until = datetime.now(timezone.utc).replace(
+            tzinfo=None
+        ) + timedelta(minutes=lock_minutes)
         existing.failed_login_count = 5
         db.commit()
         return existing.id
@@ -102,10 +101,11 @@ def test_unlocked_account_does_not_emit_locked_out():
     with session_factory() as db:
         before = int(
             db.scalar(
-                _sel(_func.count()).select_from(AuditEvent).where(
-                    AuditEvent.action == "login.locked_out"
-                )
-            ) or 0
+                _sel(_func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.action == "login.locked_out")
+            )
+            or 0
         )
 
     with TestClient(app, client=("127.0.0.1", 50000)) as c:
@@ -118,10 +118,11 @@ def test_unlocked_account_does_not_emit_locked_out():
     with session_factory() as db:
         after = int(
             db.scalar(
-                _sel(_func.count()).select_from(AuditEvent).where(
-                    AuditEvent.action == "login.locked_out"
-                )
-            ) or 0
+                _sel(_func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.action == "login.locked_out")
+            )
+            or 0
         )
     assert after == before
 
@@ -130,6 +131,7 @@ def test_locked_out_on_security_allowlist():
     """Sanity — the new action is on the metric allowlist so it rides
     the v0.41.0 Prometheus counter automatically."""
     from app.observability import SECURITY_ACTION_ALLOWLIST
+
     assert "login.locked_out" in SECURITY_ACTION_ALLOWLIST
 
 
@@ -164,6 +166,7 @@ def test_lockout_armed_audit_event_on_threshold_hit():
         assert r.status_code == 401  # plain failed, but lockout armed
 
     from app.db import session_factory as _sf
+
     with _sf() as db:
         evt = db.scalar(
             _sel(AuditEvent)
@@ -203,10 +206,11 @@ def test_no_lockout_armed_below_threshold():
     with session_factory() as db:
         before = int(
             db.scalar(
-                _sel(_func.count()).select_from(AuditEvent).where(
-                    AuditEvent.action == "login.lockout_armed"
-                )
-            ) or 0
+                _sel(_func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.action == "login.lockout_armed")
+            )
+            or 0
         )
 
     with TestClient(app, client=("127.0.0.1", 50000)) as c:
@@ -219,14 +223,16 @@ def test_no_lockout_armed_below_threshold():
     with session_factory() as db:
         after = int(
             db.scalar(
-                _sel(_func.count()).select_from(AuditEvent).where(
-                    AuditEvent.action == "login.lockout_armed"
-                )
-            ) or 0
+                _sel(_func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.action == "login.lockout_armed")
+            )
+            or 0
         )
     assert after == before
 
 
 def test_lockout_armed_on_security_allowlist():
     from app.observability import SECURITY_ACTION_ALLOWLIST
+
     assert "login.lockout_armed" in SECURITY_ACTION_ALLOWLIST

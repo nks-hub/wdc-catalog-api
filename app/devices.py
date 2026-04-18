@@ -251,6 +251,7 @@ def get_current_account(
         allowlist = pat.ip_allowlist
         if allowlist:
             import ipaddress
+
             client_host = client_ip(request)
             if not client_host:
                 raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
@@ -445,6 +446,7 @@ def login(
     account.locked_until = None
     account.last_login_at = datetime.now(timezone.utc)
     from . import audit as _audit
+
     _audit.emit(
         db,
         request=request,

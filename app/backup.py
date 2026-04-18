@@ -218,7 +218,9 @@ def generate_backup_bytes(
             "failed_login_count": a.failed_login_count,
             "locked_until": a.locked_until.isoformat() if a.locked_until else None,
             "totp_enabled": a.totp_enabled,
-            "totp_enabled_at": a.totp_enabled_at.isoformat() if a.totp_enabled_at else None,
+            "totp_enabled_at": a.totp_enabled_at.isoformat()
+            if a.totp_enabled_at
+            else None,
             # NB: password_hash, totp_secret, totp_recovery_hashes NOT included.
         }
         for a in _rows(_sel(Account).order_by(Account.id.asc()))
@@ -284,7 +286,9 @@ def generate_backup_bytes(
                     json.dumps(
                         {
                             "id": e.id,
-                            "created_at": e.created_at.isoformat() if e.created_at else None,
+                            "created_at": e.created_at.isoformat()
+                            if e.created_at
+                            else None,
                             "actor_id": e.actor_id,
                             "actor_email": e.actor_email,
                             "action": e.action,
@@ -309,7 +313,10 @@ def generate_backup_bytes(
         files.append((name, payload))
 
     def _dump(name: str, obj) -> None:
-        _add(name, json.dumps(obj, indent=2, ensure_ascii=False, default=str).encode("utf-8"))
+        _add(
+            name,
+            json.dumps(obj, indent=2, ensure_ascii=False, default=str).encode("utf-8"),
+        )
 
     _dump("apps.json", apps)
     _dump("releases.json", releases)
@@ -344,7 +351,9 @@ def generate_backup_bytes(
     manifest_bytes = json.dumps(manifest, indent=2, ensure_ascii=False).encode("utf-8")
 
     zbuf = io.BytesIO()
-    with zipfile.ZipFile(zbuf, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+    with zipfile.ZipFile(
+        zbuf, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=6
+    ) as z:
         z.writestr("manifest.json", manifest_bytes)
         for n, p in files:
             z.writestr(n, p)

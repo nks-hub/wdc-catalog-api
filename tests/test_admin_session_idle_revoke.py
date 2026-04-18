@@ -25,7 +25,9 @@ def _admin_user_id() -> int:
         return db.scalar(_sel(User).where(User.username == "admin")).id
 
 
-def _seed_session(fingerprint: str, days_ago: float, revoked_at: datetime | None = None) -> int:
+def _seed_session(
+    fingerprint: str, days_ago: float, revoked_at: datetime | None = None
+) -> int:
     """Insert an AdminSession with last_seen_at = now - days_ago. Returns its id."""
     with session_factory() as db:
         ts = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days_ago)
@@ -56,7 +58,9 @@ def _set_idle_days(days: int) -> None:
 def _reset_sessions() -> None:
     """Delete all AdminSession rows for the admin user."""
     with session_factory() as db:
-        rows = db.scalars(_sel(AdminSession).where(AdminSession.user_id == _admin_user_id())).all()
+        rows = db.scalars(
+            _sel(AdminSession).where(AdminSession.user_id == _admin_user_id())
+        ).all()
         for r in rows:
             db.delete(r)
         db.commit()

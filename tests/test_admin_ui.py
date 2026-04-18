@@ -66,6 +66,7 @@ def test_admin_nav_highlights_active_tab(admin_client: TestClient) -> None:
     r = admin_client.get("/admin/users")
     assert r.status_code == 200
     import re
+
     users_link = re.search(r'<a\s+href="/admin/users"[^>]*>', r.text)
     assert users_link, "Users nav link not found"
     assert "active" in users_link.group(0), (

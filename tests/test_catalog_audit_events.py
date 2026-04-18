@@ -109,7 +109,12 @@ def test_release_and_download_audits(admin_client: TestClient) -> None:
     # Seed an app to hang releases off.
     admin_client.post(
         "/admin/new",
-        data={"_csrf": csrf, "id": app_id, "display_name": "Rel App", "category": "other"},
+        data={
+            "_csrf": csrf,
+            "id": app_id,
+            "display_name": "Rel App",
+            "category": "other",
+        },
     )
     r = admin_client.post(
         f"/admin/apps/{app_id}/releases",

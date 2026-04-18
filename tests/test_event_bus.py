@@ -56,7 +56,9 @@ async def test_drop_oldest_when_queue_full() -> None:
 
         # The oldest item (seq=0) must have been dropped.
         first = await asyncio.wait_for(events.__anext__(), timeout=1.0)
-        assert first["seq"] != 0, f"expected oldest event dropped, got seq={first['seq']}"
+        assert first["seq"] != 0, (
+            f"expected oldest event dropped, got seq={first['seq']}"
+        )
 
         # The newest item (seq=128) must still be present somewhere in the queue.
         received = [first]

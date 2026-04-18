@@ -59,11 +59,13 @@ def _seed(action: str, count: int) -> None:
 
     with session_factory() as db:
         for i in range(count):
-            db.add(AuditEvent(
-                action=action,
-                resource_type="account",
-                resource_id=str(i),
-            ))
+            db.add(
+                AuditEvent(
+                    action=action,
+                    resource_type="account",
+                    resource_id=str(i),
+                )
+            )
         db.commit()
 
 
@@ -84,6 +86,7 @@ def test_warn_threshold_surfaces_card(admin_client: TestClient) -> None:
     assert r.status_code == 200
     assert "Security signals · last 24h" in r.text
     import re
+
     assert re.search(r'pill pill-warn">6<', r.text) is not None
 
 
@@ -94,6 +97,7 @@ def test_bad_threshold_surfaces_card(admin_client: TestClient) -> None:
     assert r.status_code == 200
     assert "Security signals · last 24h" in r.text
     import re
+
     assert re.search(r'pill pill-suspended">15<', r.text) is not None
 
 

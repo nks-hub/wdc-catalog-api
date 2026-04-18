@@ -65,7 +65,9 @@ def _read_pending(cookie: str | None) -> str | None:
     try:
         padded = cookie + "=" * (-len(cookie) % 4)
         signed = base64.urlsafe_b64decode(padded.encode("ascii"))
-        return _pending_signer().unsign(signed, max_age=_PENDING_MAX_AGE).decode("utf-8")
+        return (
+            _pending_signer().unsign(signed, max_age=_PENDING_MAX_AGE).decode("utf-8")
+        )
     except (BadSignature, SignatureExpired, ValueError, UnicodeDecodeError):
         return None
 
@@ -199,9 +201,10 @@ def login_2fa_submit(
     used_recovery = False
     used_hash: str | None = None
 
-    if code_clean.replace(" ", "").replace("-", "").isdigit() and len(
-        code_clean.replace(" ", "").replace("-", "")
-    ) == _totp.TOTP_DIGITS:
+    if (
+        code_clean.replace(" ", "").replace("-", "").isdigit()
+        and len(code_clean.replace(" ", "").replace("-", "")) == _totp.TOTP_DIGITS
+    ):
         ok = _totp.verify(acct.totp_secret, code_clean)
     else:
         norm = _totp.normalize_recovery_code(code_clean)

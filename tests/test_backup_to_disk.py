@@ -23,17 +23,27 @@ def _bootstrap_db():
 
     with session_factory() as db:
         if not db.get(App, "disk-backup-test-app-1"):
-            db.add(App(id="disk-backup-test-app-1", display_name="Disk Backup Test App", category="utility"))
+            db.add(
+                App(
+                    id="disk-backup-test-app-1",
+                    display_name="Disk Backup Test App",
+                    category="utility",
+                )
+            )
 
         existing = db.scalar(
-            __import__("sqlalchemy", fromlist=["select"]).select(Account).where(Account.email == "diskbackup-seed@admin.local")
+            __import__("sqlalchemy", fromlist=["select"])
+            .select(Account)
+            .where(Account.email == "diskbackup-seed@admin.local")
         )
         if existing is None:
-            db.add(Account(
-                email="diskbackup-seed@admin.local",
-                password_hash=hash_password("seed-pass"),
-                role="user",
-            ))
+            db.add(
+                Account(
+                    email="diskbackup-seed@admin.local",
+                    password_hash=hash_password("seed-pass"),
+                    role="user",
+                )
+            )
         db.commit()
 
     yield
@@ -100,7 +110,9 @@ def test_generate_backup_bytes_returns_same_shape_as_endpoint() -> None:
     from app import backup
 
     with session_factory() as db:
-        zip_bytes, filename, manifest = backup.generate_backup_bytes(db, actor_email="x@admin.local")
+        zip_bytes, filename, manifest = backup.generate_backup_bytes(
+            db, actor_email="x@admin.local"
+        )
 
     assert isinstance(zip_bytes, bytes)
     assert zip_bytes[:4] == b"PK\x03\x04", "ZIP magic bytes not found"

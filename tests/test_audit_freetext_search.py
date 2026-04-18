@@ -44,17 +44,25 @@ def admin_client() -> TestClient:
         yield c
 
 
-def _seed(action: str, *, resource_id: str | None = None, actor_email: str | None = None, detail: dict | None = None) -> None:
+def _seed(
+    action: str,
+    *,
+    resource_id: str | None = None,
+    actor_email: str | None = None,
+    detail: dict | None = None,
+) -> None:
     from app.db import AuditEvent, session_factory
 
     with session_factory() as db:
-        db.add(AuditEvent(
-            action=action,
-            resource_type="test",
-            resource_id=resource_id,
-            actor_email=actor_email,
-            detail=detail,
-        ))
+        db.add(
+            AuditEvent(
+                action=action,
+                resource_type="test",
+                resource_id=resource_id,
+                actor_email=actor_email,
+                detail=detail,
+            )
+        )
         db.commit()
 
 

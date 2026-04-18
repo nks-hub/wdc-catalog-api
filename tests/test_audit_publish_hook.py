@@ -56,7 +56,9 @@ def test_bus_failure_does_not_break_emit(monkeypatch, client: TestClient) -> Non
     """A publish error must be swallowed — the DB row must still be written."""
     assert client.get("/healthz").status_code == 200
 
-    monkeypatch.setattr(event_bus, "publish", lambda _: (_ for _ in ()).throw(RuntimeError("bus down")))
+    monkeypatch.setattr(
+        event_bus, "publish", lambda _: (_ for _ in ()).throw(RuntimeError("bus down"))
+    )
 
     with session_factory() as db:
         acc = _make_account(db)

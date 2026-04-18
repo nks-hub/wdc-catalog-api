@@ -60,14 +60,16 @@ def _seed_run(*, job: str, hours_ago: float, error: str | None) -> None:
 
     when = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours_ago)
     with session_factory() as db:
-        db.add(SchedulerRun(
-            job=job,
-            started_at=when,
-            finished_at=when + timedelta(seconds=1),
-            duration_ms=1000,
-            summary=None if error else {"deleted": 0},
-            error=error,
-        ))
+        db.add(
+            SchedulerRun(
+                job=job,
+                started_at=when,
+                finished_at=when + timedelta(seconds=1),
+                duration_ms=1000,
+                summary=None if error else {"deleted": 0},
+                error=error,
+            )
+        )
         db.commit()
 
 
@@ -89,7 +91,7 @@ def test_recent_failure_shows_banner(admin_client: TestClient) -> None:
     assert "retention" in r.text
     assert "IntegrityError" in r.text
     # investigate link points into the filtered scheduler history
-    assert '/admin/ops/scheduler?status_filter=failed' in r.text
+    assert "/admin/ops/scheduler?status_filter=failed" in r.text
 
 
 def test_old_failure_outside_48h_no_banner(admin_client: TestClient) -> None:
@@ -100,7 +102,9 @@ def test_old_failure_outside_48h_no_banner(admin_client: TestClient) -> None:
     assert "banner-error" not in r.text
 
 
-def test_failure_superseded_by_later_success_no_banner(admin_client: TestClient) -> None:
+def test_failure_superseded_by_later_success_no_banner(
+    admin_client: TestClient,
+) -> None:
     """If a job failed but a later run of the SAME job succeeded, the
     banner should NOT render — the operator already has a green run."""
     _reset_scheduler_runs()

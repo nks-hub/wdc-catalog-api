@@ -55,7 +55,9 @@ def _resolve_config(db) -> tuple[str | None, list[str]]:
     row = db.get(GlobalPolicy, 1)
     if row is None or not (row.webhook_url or "").strip():
         return None, []
-    prefixes = [p.strip() for p in (row.webhook_event_prefixes or "").split(",") if p.strip()]
+    prefixes = [
+        p.strip() for p in (row.webhook_event_prefixes or "").split(",") if p.strip()
+    ]
     return row.webhook_url.strip(), prefixes
 
 
@@ -144,14 +146,17 @@ def _record_delivery(*, url, event_action, status_code, duration_ms, error):
     """Best-effort delivery recorder — never raises. Called from the thread pool."""
     try:
         from .db import WebhookDelivery, session_factory
+
         with session_factory() as db:
-            db.add(WebhookDelivery(
-                url=url,
-                event_action=event_action,
-                status_code=status_code,
-                duration_ms=duration_ms,
-                error=(error[:512] if error else None),
-            ))
+            db.add(
+                WebhookDelivery(
+                    url=url,
+                    event_action=event_action,
+                    status_code=status_code,
+                    duration_ms=duration_ms,
+                    error=(error[:512] if error else None),
+                )
+            )
             db.commit()
     except Exception as exc:  # noqa: BLE001
         log.warning("webhooks: failed to record delivery: %s", exc)

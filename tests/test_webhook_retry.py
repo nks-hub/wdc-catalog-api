@@ -31,7 +31,9 @@ def _reset_totp(username: str = "admin") -> None:
     from app.db import Account, GlobalPolicy, session_factory
 
     with session_factory() as db:
-        acct = db.scalar(_sel(Account).where(Account.email == f"{username}@admin.local"))
+        acct = db.scalar(
+            _sel(Account).where(Account.email == f"{username}@admin.local")
+        )
         if acct is not None:
             acct.totp_enabled = False
             acct.totp_secret = None
@@ -43,7 +45,9 @@ def _reset_totp(username: str = "admin") -> None:
         db.commit()
 
 
-def _login(client: TestClient, username: str = "admin", password: str = "admin") -> None:
+def _login(
+    client: TestClient, username: str = "admin", password: str = "admin"
+) -> None:
     client.get("/login")
     csrf = client.cookies.get("nks_wdc_csrf") or ""
     r = client.post(
@@ -54,8 +58,10 @@ def _login(client: TestClient, username: str = "admin", password: str = "admin")
     assert r.status_code == 303, f"login failed: {r.status_code} {r.text[:200]}"
 
 
-def _configure_webhook(url: str | None = "http://127.0.0.1:1/hook",
-                       prefixes: str = "permission.,login.,session.,webhook.") -> None:
+def _configure_webhook(
+    url: str | None = "http://127.0.0.1:1/hook",
+    prefixes: str = "permission.,login.,session.,webhook.",
+) -> None:
     """Seed GlobalPolicy so webhooks.fire() actually dispatches."""
     from app.db import GlobalPolicy, session_factory
 
@@ -100,9 +106,9 @@ def _count_audit(action: str) -> int:
     with session_factory() as db:
         return int(
             db.scalar(
-                _sel(_func.count()).select_from(AuditEvent).where(
-                    AuditEvent.action == action
-                )
+                _sel(_func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.action == action)
             )
             or 0
         )
@@ -115,9 +121,7 @@ def _count_deliveries() -> int:
     from app.db import WebhookDelivery, session_factory
 
     with session_factory() as db:
-        return int(
-            db.scalar(_sel(_func.count()).select_from(WebhookDelivery)) or 0
-        )
+        return int(db.scalar(_sel(_func.count()).select_from(WebhookDelivery)) or 0)
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +171,9 @@ def test_retry_missing_csrf_rejected() -> None:
             data={},  # no _csrf
             follow_redirects=False,
         )
-        assert r.status_code == 403, f"expected 403 on missing CSRF, got {r.status_code}"
+        assert r.status_code == 403, (
+            f"expected 403 on missing CSRF, got {r.status_code}"
+        )
 
 
 # ---------------------------------------------------------------------------

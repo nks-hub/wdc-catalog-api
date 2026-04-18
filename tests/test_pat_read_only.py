@@ -38,7 +38,9 @@ def _mint_pat_direct(account_id: int, *, read_only: bool) -> str:
     from app import pats
 
     with session_factory() as db:
-        _, plaintext = pats.issue(db, account_id=account_id, name="test-ro", read_only=read_only)
+        _, plaintext = pats.issue(
+            db, account_id=account_id, name="test-ro", read_only=read_only
+        )
         db.commit()
     return plaintext
 
@@ -88,11 +90,14 @@ def test_ro_pat_rejects_post_with_403() -> None:
         assert "read-only" in r.text.lower() or "Read-only" in r.text
 
 
-@pytest.mark.parametrize("method,path,body", [
-    ("PUT", "/api/v1/devices/nonexistent-device", {"name": "x"}),
-    ("DELETE", "/api/v1/devices/nonexistent-device", None),
-    ("POST", "/api/v1/auth/tokens", {"name": "x"}),
-])
+@pytest.mark.parametrize(
+    "method,path,body",
+    [
+        ("PUT", "/api/v1/devices/nonexistent-device", {"name": "x"}),
+        ("DELETE", "/api/v1/devices/nonexistent-device", None),
+        ("POST", "/api/v1/auth/tokens", {"name": "x"}),
+    ],
+)
 def test_ro_pat_rejects_write_methods(method: str, path: str, body) -> None:
     """PUT, DELETE, and POST all return 403 for a read-only PAT."""
     with TestClient(app) as c:
@@ -115,7 +120,9 @@ def test_invalid_pat_still_401_not_403() -> None:
     with TestClient(app) as c:
         r = c.get(
             "/api/v1/auth/me",
-            headers={"Authorization": "Bearer nks_pat_totallyinvalidtoken00000000000000000000"},
+            headers={
+                "Authorization": "Bearer nks_pat_totallyinvalidtoken00000000000000000000"
+            },
         )
         assert r.status_code == 401, r.text
 

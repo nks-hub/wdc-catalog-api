@@ -67,11 +67,13 @@ def _seed(action: str, count: int) -> None:
 
     with session_factory() as db:
         for i in range(count):
-            db.add(AuditEvent(
-                action=action,
-                resource_type="account",
-                resource_id=str(i),
-            ))
+            db.add(
+                AuditEvent(
+                    action=action,
+                    resource_type="account",
+                    resource_id=str(i),
+                )
+            )
         db.commit()
 
 
@@ -109,6 +111,7 @@ def test_warn_threshold_renders_amber_pill(admin_client: TestClient) -> None:
     assert r.status_code == 200
     # Amber (warn) pill with the count.
     import re
+
     assert re.search(r'pill pill-warn">6<', r.text) is not None
 
 
@@ -120,6 +123,7 @@ def test_bad_threshold_renders_red_pill(admin_client: TestClient) -> None:
     r = admin_client.get("/admin/ops")
     assert r.status_code == 200
     import re
+
     assert re.search(r'pill pill-suspended">22<', r.text) is not None
 
 
@@ -133,6 +137,7 @@ def test_totp_login_failed_counted_alongside_password(admin_client: TestClient) 
     assert r.status_code == 200
     # 3 + 3 = 6 → amber pill at count 6.
     import re
+
     assert re.search(r'pill pill-warn">6<', r.text) is not None
 
 
@@ -143,6 +148,7 @@ def test_permission_denied_bad_threshold(admin_client: TestClient) -> None:
     r = admin_client.get("/admin/ops")
     assert r.status_code == 200
     import re
+
     # 12 >= 10 = bad
     assert re.search(r'pill pill-suspended">12<', r.text) is not None
     # Deep-link to the filtered audit page present.

@@ -38,7 +38,9 @@ def admin_account_with_totp():
     with TestClient(app) as boot:
         boot.get("/login")
         csrf = boot.cookies.get("nks_wdc_csrf") or ""
-        boot.post("/login", data={"username": "admin", "password": "admin", "_csrf": csrf})
+        boot.post(
+            "/login", data={"username": "admin", "password": "admin", "_csrf": csrf}
+        )
         boot.get("/admin/account")  # triggers _admin_account provisioning
 
     with session_factory() as db:
@@ -76,6 +78,7 @@ def test_password_alone_redirects_to_2fa(admin_account_with_totp: str) -> None:
         assert "nks_wdc_2fa_pending" in r.cookies
         # Starlette stores session under SESSION_COOKIE name; verify absent.
         from app.auth import SESSION_COOKIE
+
         assert SESSION_COOKIE not in r.cookies
 
 
@@ -94,7 +97,9 @@ def test_2fa_form_renders_when_pending_cookie_set(admin_account_with_totp: str) 
         assert "<code>admin</code>" in r.text
 
 
-def test_2fa_without_pending_cookie_bounces_to_login(admin_account_with_totp: str) -> None:
+def test_2fa_without_pending_cookie_bounces_to_login(
+    admin_account_with_totp: str,
+) -> None:
     with TestClient(app) as c:
         c.get("/login")
         r = c.get("/login/2fa", follow_redirects=False)
@@ -120,6 +125,7 @@ def test_correct_code_mints_session_cookie(admin_account_with_totp: str) -> None
         assert r.status_code == 303, r.text[:200]
         assert r.headers["location"] == "/admin"
         from app.auth import SESSION_COOKIE
+
         assert SESSION_COOKIE in r.cookies
 
         # And the session actually works.
@@ -144,6 +150,7 @@ def test_wrong_code_rejects_and_stays_on_2fa(admin_account_with_totp: str) -> No
         assert r.status_code == 401
         assert "Code didn&#39;t match" in r.text or "Code didn't match" in r.text
         from app.auth import SESSION_COOKIE
+
         assert SESSION_COOKIE not in r.cookies
 
 
@@ -156,8 +163,11 @@ def test_recovery_code_works_once(admin_account_with_totp: str) -> None:
     # Provision a single recovery code so the test is deterministic.
     recovery = "abcde-fghij"
     from app import totp as _totp
+
     norm = _totp.normalize_recovery_code(recovery)
-    hashed = _bcrypt.hashpw(norm.encode("utf-8"), _bcrypt.gensalt(rounds=4)).decode("ascii")
+    hashed = _bcrypt.hashpw(norm.encode("utf-8"), _bcrypt.gensalt(rounds=4)).decode(
+        "ascii"
+    )
     with session_factory() as db:
         acct = db.scalar(_sel(Account).where(Account.email == "admin@admin.local"))
         acct.totp_recovery_hashes = hashed
@@ -178,6 +188,7 @@ def test_recovery_code_works_once(admin_account_with_totp: str) -> None:
         )
         assert r.status_code == 303
         from app.auth import SESSION_COOKIE
+
         assert SESSION_COOKIE in r.cookies
 
     # Recovery code was burned → hashes list is empty.
@@ -210,4 +221,5 @@ def test_password_right_but_account_has_no_totp_skips_2fa():
         assert r.status_code == 303
         assert r.headers["location"] == "/admin"
         from app.auth import SESSION_COOKIE
+
         assert SESSION_COOKIE in r.cookies

@@ -12,6 +12,7 @@ def _bootstrap_db():
     direct `session_factory()` calls find the audit_events table."""
     from fastapi.testclient import TestClient
     from app.main import app
+
     with TestClient(app):
         yield
 

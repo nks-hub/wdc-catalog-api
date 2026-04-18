@@ -30,10 +30,10 @@ templates = Jinja2Templates(directory=_APP_DIR / "templates")
 # emits static HTML. Regex below matches strings (optionally followed by
 # colon → key), numbers, booleans, null, punctuation.
 _JSON_TOKEN_RE = re.compile(
-    r'("(?:\\.|[^"\\])*")(\s*:)?'     # 1: string, 2: colon (→ key when present)
-    r'|\b(true|false|null)\b'         # 3: literal
-    r'|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)'  # 4: number
-    r'|([{}\[\],])'                   # 5: punctuation
+    r'("(?:\\.|[^"\\])*")(\s*:)?'  # 1: string, 2: colon (→ key when present)
+    r"|\b(true|false|null)\b"  # 3: literal
+    r"|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)"  # 4: number
+    r"|([{}\[\],])"  # 5: punctuation
 )
 
 
@@ -51,7 +51,13 @@ def _json_highlight(value) -> Markup:
     pretty = json.dumps(parsed, indent=2, ensure_ascii=False, sort_keys=False)
 
     def replace(m: re.Match) -> str:
-        s, colon, lit, num, punct = m.group(1), m.group(2), m.group(3), m.group(4), m.group(5)
+        s, colon, lit, num, punct = (
+            m.group(1),
+            m.group(2),
+            m.group(3),
+            m.group(4),
+            m.group(5),
+        )
         if s is not None:
             cls = "jsx-key" if colon else "jsx-str"
             # All three branches return plain str — intentionally NOT Markup,
@@ -72,7 +78,7 @@ def _json_highlight(value) -> Markup:
     out_parts: list[str] = []
     pos = 0
     for m in _JSON_TOKEN_RE.finditer(pretty):
-        out_parts.append(str(escape(pretty[pos:m.start()])))
+        out_parts.append(str(escape(pretty[pos : m.start()])))
         out_parts.append(replace(m))
         pos = m.end()
     out_parts.append(str(escape(pretty[pos:])))
@@ -130,9 +136,9 @@ def _scheduler_failure_banner() -> dict | None:
             # the latest is a failure.  Small table, no materialized view
             # needed.
             jobs = db.scalars(
-                _sel(SchedulerRun.job).where(
-                    SchedulerRun.started_at >= cutoff
-                ).distinct()
+                _sel(SchedulerRun.job)
+                .where(SchedulerRun.started_at >= cutoff)
+                .distinct()
             ).all()
             newest_failure: SchedulerRun | None = None
             for job_name in jobs:
@@ -144,10 +150,8 @@ def _scheduler_failure_banner() -> dict | None:
                     .limit(1)
                 )
                 if latest is not None and latest.error:
-                    if (
-                        newest_failure is None
-                        or (latest.started_at or cutoff)
-                        > (newest_failure.started_at or cutoff)
+                    if newest_failure is None or (latest.started_at or cutoff) > (
+                        newest_failure.started_at or cutoff
                     ):
                         newest_failure = latest
 

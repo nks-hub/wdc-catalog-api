@@ -223,7 +223,11 @@ def test_delivery_recorded_on_connection_failure():
     row = rows[0]
     assert row.status_code is None
     assert row.error is not None
-    assert "URLError" in row.error or "Connection" in row.error or "refused" in row.error.lower()
+    assert (
+        "URLError" in row.error
+        or "Connection" in row.error
+        or "refused" in row.error.lower()
+    )
 
 
 def test_delivery_recorded_on_5xx_response():
@@ -261,9 +265,33 @@ def test_history_page_renders_rows(admin_client):
     _clear_deliveries()
 
     with session_factory() as db:
-        db.add(WebhookDelivery(url="http://a.test/hook", event_action="login.failed", status_code=204, duration_ms=12, error=None))
-        db.add(WebhookDelivery(url="http://b.test/hook", event_action="session.killed", status_code=200, duration_ms=8, error=None))
-        db.add(WebhookDelivery(url="http://c.test/hook", event_action="permission.denied", status_code=None, duration_ms=5001, error="URLError: <urlopen error [Errno 111] Connection refused>"))
+        db.add(
+            WebhookDelivery(
+                url="http://a.test/hook",
+                event_action="login.failed",
+                status_code=204,
+                duration_ms=12,
+                error=None,
+            )
+        )
+        db.add(
+            WebhookDelivery(
+                url="http://b.test/hook",
+                event_action="session.killed",
+                status_code=200,
+                duration_ms=8,
+                error=None,
+            )
+        )
+        db.add(
+            WebhookDelivery(
+                url="http://c.test/hook",
+                event_action="permission.denied",
+                status_code=None,
+                duration_ms=5001,
+                error="URLError: <urlopen error [Errno 111] Connection refused>",
+            )
+        )
         db.commit()
 
     r = admin_client.get("/admin/ops/webhooks")
@@ -279,8 +307,24 @@ def test_history_page_filter_failed(admin_client):
     _clear_deliveries()
 
     with session_factory() as db:
-        db.add(WebhookDelivery(url="http://ok.test/hook", event_action="login.failed", status_code=204, duration_ms=10, error=None))
-        db.add(WebhookDelivery(url="http://fail.test/hook", event_action="permission.denied", status_code=None, duration_ms=5000, error="URLError: connection refused"))
+        db.add(
+            WebhookDelivery(
+                url="http://ok.test/hook",
+                event_action="login.failed",
+                status_code=204,
+                duration_ms=10,
+                error=None,
+            )
+        )
+        db.add(
+            WebhookDelivery(
+                url="http://fail.test/hook",
+                event_action="permission.denied",
+                status_code=None,
+                duration_ms=5000,
+                error="URLError: connection refused",
+            )
+        )
         db.commit()
 
     r = admin_client.get("/admin/ops/webhooks?status_filter=failed")

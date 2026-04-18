@@ -353,12 +353,22 @@ class GlobalPolicy(Base):
     registration_enabled: Mapped[bool] = mapped_column(default=True)
     default_role: Mapped[str] = mapped_column(String(16), default="user")
     banner_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    require_2fa_for_admins: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    require_2fa_for_admins: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
     admin_ip_allowlist: Mapped[list | None] = mapped_column(JSON, nullable=True)
-    admin_session_idle_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    audit_retention_days: Mapped[int] = mapped_column(Integer, default=365, nullable=False)
-    scheduler_run_retention_days: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
-    webhook_delivery_retention_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    admin_session_idle_days: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    audit_retention_days: Mapped[int] = mapped_column(
+        Integer, default=365, nullable=False
+    )
+    scheduler_run_retention_days: Mapped[int] = mapped_column(
+        Integer, default=90, nullable=False
+    )
+    webhook_delivery_retention_days: Mapped[int] = mapped_column(
+        Integer, default=30, nullable=False
+    )
     webhook_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     webhook_event_prefixes: Mapped[str] = mapped_column(
         Text,
@@ -367,7 +377,9 @@ class GlobalPolicy(Base):
     )
     backup_directory: Mapped[str | None] = mapped_column(String(512), nullable=True)
     backup_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    backup_retention_count: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
+    backup_retention_count: Mapped[int] = mapped_column(
+        Integer, default=7, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utc_now, onupdate=_utc_now
     )
@@ -417,7 +429,9 @@ class WebhookDelivery(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     url: Mapped[str] = mapped_column(String(512), nullable=False)
-    event_action: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    event_action: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
     status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -453,9 +467,7 @@ class AdminSession(Base):
     """
 
     __tablename__ = "admin_sessions"
-    __table_args__ = (
-        UniqueConstraint("fingerprint", name="uq_admin_sessions_fp"),
-    )
+    __table_args__ = (UniqueConstraint("fingerprint", name="uq_admin_sessions_fp"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
@@ -465,8 +477,12 @@ class AdminSession(Base):
     ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(256), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, index=True)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utc_now, index=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, index=True
+    )
 
 
 class SavedAuditQuery(Base):
@@ -747,9 +763,7 @@ def create_all() -> None:
             for col in table.columns:
                 if col.name in actual_cols:
                     continue
-                ddl = str(
-                    CreateColumn(col).compile(dialect=_engine.dialect)
-                ).strip()
+                ddl = str(CreateColumn(col).compile(dialect=_engine.dialect)).strip()
                 # SQLite rejects `ADD COLUMN … NOT NULL` without a
                 # literal DEFAULT — `CreateColumn` only emits the
                 # server_default, not the client-side Python default.
@@ -759,10 +773,7 @@ def create_all() -> None:
                 # one NOT-NULL column blocks the whole upgrade (see the
                 # totp_enabled incident 2026-04-18, prod DB drift caught
                 # by the sync+settings E2E report).
-                if (
-                    not col.nullable
-                    and " DEFAULT " not in ddl.upper()
-                ):
+                if not col.nullable and " DEFAULT " not in ddl.upper():
                     lit = _literal_default(col)
                     if lit is not None:
                         ddl = f"{ddl} DEFAULT {lit}"
@@ -778,9 +789,7 @@ def create_all() -> None:
                 # for weeks).
                 try:
                     with _engine.begin() as conn:
-                        conn.execute(
-                            text(f"ALTER TABLE {table_name} ADD COLUMN {ddl}")
-                        )
+                        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {ddl}"))
                 except Exception as col_exc:  # noqa: BLE001
                     log.error(
                         "auto-ALTER failed for %s.%s: %s",

@@ -174,6 +174,7 @@ def test_save_settings_toggles_2fa_requirement(admin_client: TestClient) -> None
     # Audit row carries the diff.
     from app.db import AuditEvent
     from sqlalchemy import select as _sel
+
     with session_factory() as db:
         evt = db.scalar(
             _sel(AuditEvent)

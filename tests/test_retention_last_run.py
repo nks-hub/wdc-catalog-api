@@ -82,7 +82,9 @@ def test_manual_run_writes_scheduler_run_row() -> None:
         db.commit()
 
     with session_factory() as db:
-        rows = db.scalars(_sel(SchedulerRun).where(SchedulerRun.job == "retention")).all()
+        rows = db.scalars(
+            _sel(SchedulerRun).where(SchedulerRun.job == "retention")
+        ).all()
         assert len(rows) == 1
         row = rows[0]
         assert row.job == "retention"
@@ -102,8 +104,13 @@ def test_retention_page_shows_last_run(admin_client: TestClient) -> None:
             started_at=datetime.now(timezone.utc).replace(tzinfo=None),
             finished_at=datetime.now(timezone.utc).replace(tzinfo=None),
             duration_ms=42,
-            summary={"deleted": 7, "accounts": 2, "idempotency_purged": 0,
-                     "revoked_tokens_purged": 0, "audit_events_purged": 3},
+            summary={
+                "deleted": 7,
+                "accounts": 2,
+                "idempotency_purged": 0,
+                "revoked_tokens_purged": 0,
+                "audit_events_purged": 3,
+            },
             error=None,
         )
         db.add(row)
@@ -125,8 +132,13 @@ def test_ops_page_shows_last_run(admin_client: TestClient) -> None:
             started_at=datetime.now(timezone.utc).replace(tzinfo=None),
             finished_at=datetime.now(timezone.utc).replace(tzinfo=None),
             duration_ms=55,
-            summary={"deleted": 5, "accounts": 1, "idempotency_purged": 0,
-                     "revoked_tokens_purged": 0, "audit_events_purged": 0},
+            summary={
+                "deleted": 5,
+                "accounts": 1,
+                "idempotency_purged": 0,
+                "revoked_tokens_purged": 0,
+                "audit_events_purged": 0,
+            },
             error=None,
         )
         db.add(row)

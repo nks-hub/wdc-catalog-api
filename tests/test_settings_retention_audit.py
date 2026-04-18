@@ -154,7 +154,9 @@ def test_retention_manual_run_audits(admin_client: TestClient) -> None:
     assert isinstance(summary.get("accounts", 0), int)
 
 
-def test_retention_device_override_add_and_remove_audit(admin_client: TestClient) -> None:
+def test_retention_device_override_add_and_remove_audit(
+    admin_client: TestClient,
+) -> None:
     """Exercise the add + delete paths on a fresh device we provision
     directly in the DB. Both actions must produce audit rows."""
     from app.db import Account, DeviceConfig, session_factory

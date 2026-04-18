@@ -24,19 +24,35 @@ def _bootstrap_db():
 
     with session_factory() as db:
         if not db.get(App, "backup-test-app-1"):
-            db.add(App(id="backup-test-app-1", display_name="Backup Test App 1", category="utility"))
+            db.add(
+                App(
+                    id="backup-test-app-1",
+                    display_name="Backup Test App 1",
+                    category="utility",
+                )
+            )
         if not db.get(App, "backup-test-app-2"):
-            db.add(App(id="backup-test-app-2", display_name="Backup Test App 2", category="dev"))
+            db.add(
+                App(
+                    id="backup-test-app-2",
+                    display_name="Backup Test App 2",
+                    category="dev",
+                )
+            )
 
         existing = db.scalar(
-            __import__("sqlalchemy", fromlist=["select"]).select(Account).where(Account.email == "backup-seed@admin.local")
+            __import__("sqlalchemy", fromlist=["select"])
+            .select(Account)
+            .where(Account.email == "backup-seed@admin.local")
         )
         if existing is None:
-            db.add(Account(
-                email="backup-seed@admin.local",
-                password_hash=hash_password("seed-pass"),
-                role="user",
-            ))
+            db.add(
+                Account(
+                    email="backup-seed@admin.local",
+                    password_hash=hash_password("seed-pass"),
+                    role="user",
+                )
+            )
         db.commit()
 
     yield
@@ -90,7 +106,9 @@ def admin_client() -> TestClient:
         _reset_totp()
 
 
-def test_zip_endpoint_returns_correct_headers_and_magic(admin_client: TestClient) -> None:
+def test_zip_endpoint_returns_correct_headers_and_magic(
+    admin_client: TestClient,
+) -> None:
     r = admin_client.get("/admin/backup/export.zip")
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/zip"

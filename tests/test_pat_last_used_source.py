@@ -43,7 +43,9 @@ def _mint_pat_direct(account_id: int) -> str:
     from app import pats
 
     with session_factory() as db:
-        _, plaintext = pats.issue(db, account_id=account_id, name="test-lus", read_only=False)
+        _, plaintext = pats.issue(
+            db, account_id=account_id, name="test-lus", read_only=False
+        )
         db.commit()
     return plaintext
 
@@ -175,7 +177,9 @@ def test_account_page_shows_source_details(admin_client: TestClient) -> None:
     with session_factory() as db:
         acct = db.scalar(_sel(Account).where(Account.email == "admin@admin.local"))
         assert acct is not None, "admin@admin.local account not created by page visit"
-        row, _ = pats.issue(db, account_id=acct.id, name="source-detail-test", read_only=False)
+        row, _ = pats.issue(
+            db, account_id=acct.id, name="source-detail-test", read_only=False
+        )
         row.last_used_at = datetime.now(timezone.utc).replace(tzinfo=None)
         row.last_used_ip = "203.0.113.42"
         row.last_used_ua = "curl/7.88"

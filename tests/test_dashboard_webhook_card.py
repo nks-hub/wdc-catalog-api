@@ -110,6 +110,7 @@ def test_dashboard_no_deliveries_shows_empty_state(admin_client: TestClient) -> 
 
 def test_dashboard_shows_sent_and_failed_counts(admin_client: TestClient) -> None:
     import re
+
     _seed_deliveries(ok=7, failed=2)
     r = admin_client.get("/admin")
     assert r.status_code == 200

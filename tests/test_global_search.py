@@ -71,7 +71,9 @@ def test_search_finds_apps_by_id_substring(admin_client: TestClient) -> None:
     with session_factory() as db:
         existing = db.get(App, app_id)
         if existing is None:
-            _svc_create_app(db, app_id=app_id, display_name="Search Target", category="other")
+            _svc_create_app(
+                db, app_id=app_id, display_name="Search Target", category="other"
+            )
 
     r = admin_client.get("/admin/search?q=search-target")
     assert r.status_code == 200
@@ -97,7 +99,11 @@ def test_search_finds_audit_by_action(admin_client: TestClient) -> None:
     from app.db import AuditEvent, session_factory
 
     with session_factory() as db:
-        db.add(AuditEvent(action="search.test.event", resource_type="account", resource_id="1"))
+        db.add(
+            AuditEvent(
+                action="search.test.event", resource_type="account", resource_id="1"
+            )
+        )
         db.commit()
 
     r = admin_client.get("/admin/search?q=search.test")

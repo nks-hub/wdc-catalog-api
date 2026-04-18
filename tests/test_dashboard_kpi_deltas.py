@@ -49,15 +49,19 @@ def _seed_audit_at(offset_hours: int, count: int = 1) -> None:
     """Insert N audit events dated offset_hours ago (backdated ORM write)."""
     from app.db import AuditEvent, session_factory
 
-    when = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=offset_hours)
+    when = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+        hours=offset_hours
+    )
     with session_factory() as db:
         for i in range(count):
-            db.add(AuditEvent(
-                action=f"test.kpi-delta.{offset_hours}h",
-                resource_type="test",
-                resource_id=str(i),
-                created_at=when,
-            ))
+            db.add(
+                AuditEvent(
+                    action=f"test.kpi-delta.{offset_hours}h",
+                    resource_type="test",
+                    resource_id=str(i),
+                    created_at=when,
+                )
+            )
         db.commit()
 
 
@@ -92,8 +96,8 @@ def test_positive_delta_renders_up_arrow(admin_client: TestClient) -> None:
 
 def test_negative_delta_renders_down_arrow(admin_client: TestClient) -> None:
     _wipe_recent_audit()
-    _seed_audit_at(1, 2)   # current: 2
-    _seed_audit_at(30, 10) # prior: 10
+    _seed_audit_at(1, 2)  # current: 2
+    _seed_audit_at(30, 10)  # prior: 10
 
     r = admin_client.get("/admin")
     assert r.status_code == 200
@@ -103,7 +107,7 @@ def test_negative_delta_renders_down_arrow(admin_client: TestClient) -> None:
 
 def test_flat_delta_renders_em_dash(admin_client: TestClient) -> None:
     _wipe_recent_audit()
-    _seed_audit_at(1, 3)   # current: 3
+    _seed_audit_at(1, 3)  # current: 3
     _seed_audit_at(30, 3)  # prior: 3 → delta 0
 
     r = admin_client.get("/admin")

@@ -113,12 +113,20 @@ def test_snapshot_restore_audits(admin_client: TestClient) -> None:
 
     with session_factory() as db:
         first = _snap.create_snapshot(
-            db, device_id=dev_id, account_id=account_id,
-            payload={"v": 1}, kind="manual", label="v1",
+            db,
+            device_id=dev_id,
+            account_id=account_id,
+            payload={"v": 1},
+            kind="manual",
+            label="v1",
         )
         second = _snap.create_snapshot(
-            db, device_id=dev_id, account_id=account_id,
-            payload={"v": 2}, kind="manual", label="v2",
+            db,
+            device_id=dev_id,
+            account_id=account_id,
+            payload={"v": 2},
+            kind="manual",
+            label="v2",
         )
         _snap.set_head(db, dev_id, first.id, updated_by="test-setup")
         first_id, second_id = first.id, second.id

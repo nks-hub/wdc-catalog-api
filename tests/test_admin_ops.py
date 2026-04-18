@@ -61,7 +61,14 @@ def test_ops_page_renders(admin_client: TestClient) -> None:
     r = admin_client.get("/admin/ops")
     assert r.status_code == 200
     assert "Ops diagnostics" in r.text
-    for marker in ["Version", "Uptime", "Active sessions", "Total events", "Enabled", "Cron"]:
+    for marker in [
+        "Version",
+        "Uptime",
+        "Active sessions",
+        "Total events",
+        "Enabled",
+        "Cron",
+    ]:
         assert marker in r.text
 
 

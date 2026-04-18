@@ -48,7 +48,7 @@ def _hotp(key: bytes, counter: int) -> str:
     mac = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
     offset = mac[-1] & 0x0F
     word = struct.unpack(">I", mac[offset : offset + 4])[0] & 0x7FFFFFFF
-    return f"{word % (10 ** TOTP_DIGITS):0{TOTP_DIGITS}d}"
+    return f"{word % (10**TOTP_DIGITS):0{TOTP_DIGITS}d}"
 
 
 def now_counter(at: float | None = None) -> int:
@@ -122,7 +122,10 @@ def generate_recovery_codes(n: int = 8) -> list[str]:
     out: list[str] = []
     for _ in range(n):
         groups = [
-            "".join(secrets.choice(_RECOVERY_ALPHABET) for _ in range(RECOVERY_CODE_GROUP_LEN))
+            "".join(
+                secrets.choice(_RECOVERY_ALPHABET)
+                for _ in range(RECOVERY_CODE_GROUP_LEN)
+            )
             for _ in range(RECOVERY_CODE_GROUPS)
         ]
         out.append("-".join(groups))

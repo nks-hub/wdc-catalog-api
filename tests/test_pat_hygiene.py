@@ -61,7 +61,9 @@ def _reset_pats() -> int:
         return acct.id
 
 
-def _insert_pat(*, account_id: int, created_days_ago: int, last_used_days_ago: int | None):
+def _insert_pat(
+    *, account_id: int, created_days_ago: int, last_used_days_ago: int | None
+):
     """Directly insert a PAT row with controlled timestamps (bypasses
     bcrypt to keep the test snappy)."""
     from app.db import PersonalAccessToken, session_factory
@@ -134,7 +136,8 @@ def test_revoked_pat_never_flagged_as_stale(admin_client: TestClient) -> None:
     # Mark the row as revoked directly.
     with session_factory() as db:
         row = db.scalars(
-            __import__("sqlalchemy").select(PersonalAccessToken)
+            __import__("sqlalchemy")
+            .select(PersonalAccessToken)
             .where(PersonalAccessToken.account_id == aid)
         ).first()
         row.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)

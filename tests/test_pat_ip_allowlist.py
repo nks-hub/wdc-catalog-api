@@ -90,9 +90,7 @@ def test_pat_with_multiple_cidrs_any_match_succeeds() -> None:
     """Any matching CIDR in the list is sufficient — OR semantics."""
     with TestClient(app, client=_LOOPBACK_CLIENT) as c:
         _, account_id = _register_and_jwt(c)
-        pat = _mint_pat_direct(
-            account_id, ip_allowlist=["10.0.0.0/8", "127.0.0.0/8"]
-        )
+        pat = _mint_pat_direct(account_id, ip_allowlist=["10.0.0.0/8", "127.0.0.0/8"])
 
         r = c.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {pat}"})
         assert r.status_code == 200, r.text
@@ -102,9 +100,7 @@ def test_pat_with_malformed_cidr_is_skipped_gracefully() -> None:
     """A malformed CIDR entry is silently skipped; valid entry still matches."""
     with TestClient(app, client=_LOOPBACK_CLIENT) as c:
         _, account_id = _register_and_jwt(c)
-        pat = _mint_pat_direct(
-            account_id, ip_allowlist=["not-a-cidr", "127.0.0.0/8"]
-        )
+        pat = _mint_pat_direct(account_id, ip_allowlist=["not-a-cidr", "127.0.0.0/8"])
 
         r = c.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {pat}"})
         assert r.status_code == 200, r.text
@@ -114,9 +110,7 @@ def test_pat_with_only_malformed_cidrs_returns_401() -> None:
     """When all stored CIDRs are malformed, no valid entry matches → 401."""
     with TestClient(app, client=_LOOPBACK_CLIENT) as c:
         _, account_id = _register_and_jwt(c)
-        pat = _mint_pat_direct(
-            account_id, ip_allowlist=["not-a-cidr", "also-bad"]
-        )
+        pat = _mint_pat_direct(account_id, ip_allowlist=["not-a-cidr", "also-bad"])
 
         r = c.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {pat}"})
         assert r.status_code == 401, r.text

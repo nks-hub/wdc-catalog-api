@@ -83,6 +83,7 @@ def test_admin_ui_revoke_emits_pat_revoked(admin_client: TestClient) -> None:
     # Find it in the DB so we can target by id.
     from app.db import Account, PersonalAccessToken, session_factory
     from sqlalchemy import select as _sel
+
     with session_factory() as db:
         acct = db.scalar(_sel(Account).where(Account.email == "admin@admin.local"))
         row = db.scalar(
@@ -115,7 +116,9 @@ def test_json_api_create_and_revoke_emits_events():
 
     # Make (or reuse) a regular account so we can mint a JWT for it.
     with session_factory() as db:
-        acct = db.scalar(_sel(Account).where(Account.email == "pat-audit-json@example.com"))
+        acct = db.scalar(
+            _sel(Account).where(Account.email == "pat-audit-json@example.com")
+        )
         if acct is None:
             acct = Account(
                 email="pat-audit-json@example.com",

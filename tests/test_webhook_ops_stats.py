@@ -53,21 +53,25 @@ def _clear_deliveries() -> None:
 def _seed_deliveries(ok: int = 0, failed: int = 0) -> None:
     with session_factory() as db:
         for _ in range(ok):
-            db.add(WebhookDelivery(
-                url="http://h/hook",
-                event_action="test",
-                status_code=204,
-                duration_ms=5,
-                error=None,
-            ))
+            db.add(
+                WebhookDelivery(
+                    url="http://h/hook",
+                    event_action="test",
+                    status_code=204,
+                    duration_ms=5,
+                    error=None,
+                )
+            )
         for _ in range(failed):
-            db.add(WebhookDelivery(
-                url="http://h/hook",
-                event_action="test",
-                status_code=500,
-                duration_ms=5,
-                error="timeout",
-            ))
+            db.add(
+                WebhookDelivery(
+                    url="http://h/hook",
+                    event_action="test",
+                    status_code=500,
+                    duration_ms=5,
+                    error="timeout",
+                )
+            )
         db.commit()
 
 
@@ -97,7 +101,9 @@ def admin_client() -> TestClient:
     _clear_deliveries()
 
 
-def test_ops_page_no_webhook_deliveries_hides_sparkline(admin_client: TestClient) -> None:
+def test_ops_page_no_webhook_deliveries_hides_sparkline(
+    admin_client: TestClient,
+) -> None:
     r = admin_client.get("/admin/ops")
     assert r.status_code == 200
     assert "Sent · 24h" in r.text
@@ -113,7 +119,7 @@ def test_ops_page_shows_24h_counts(admin_client: TestClient) -> None:
     assert "Sent · 24h" in body
     # The rendered ok count should be 3 — check it appears after the label
     sent_idx = body.index("Sent · 24h")
-    assert "3" in body[sent_idx:sent_idx + 80]
+    assert "3" in body[sent_idx : sent_idx + 80]
     # Failed pill
     assert 'pill pill-suspended">2' in body
 

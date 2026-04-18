@@ -66,10 +66,9 @@ def _make_locked_account(email: str, *, lock_minutes: int = 30) -> int:
             )
             db.add(existing)
             db.flush()
-        existing.locked_until = (
-            datetime.now(timezone.utc).replace(tzinfo=None)
-            + timedelta(minutes=lock_minutes)
-        )
+        existing.locked_until = datetime.now(timezone.utc).replace(
+            tzinfo=None
+        ) + timedelta(minutes=lock_minutes)
         existing.failed_login_count = 5
         db.commit()
         return existing.id
