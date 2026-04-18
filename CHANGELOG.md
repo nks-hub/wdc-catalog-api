@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.18.0 — 2026-04-18
+
+Persistent retention last-run tracking — closes the `/admin/retention`
+`last_run=None` hardcode + surfaces last run on `/admin/ops`.
+
+- **`scheduler_runs` table** — `id, job, started_at, finished_at,
+  duration_ms, summary (JSON), error (Text)`. Auto-ALTER on startup.
+  One row per non-skipped retention run (manual + cron). Advisory-
+  lock losers don't record — they didn't actually do anything.
+- **`run_retention` instrumentation** — wraps the work with
+  `time.monotonic()` + writes the row on both success and failure.
+  Error-path record goes to a fresh session after rollback so a
+  broken pass never masks the original exception.
+- **`/admin/retention`** — the `last_run` panel now shows real data:
+  started_at, finished_at, duration_ms, summary dict, error string
+  if any.
+- **`/admin/ops`** — "Retention scheduler" card gains a "Last run"
+  row with an `ok` / `failed` pill + human age ("3h 14m ago") + a
+  "Purged X snapshots, Y audit rows" summary line.
+
+4 new tests (row written on manual run, retention page shows last
+row, ops page surfaces it, duration recorded) — 379 passing, up
+from 375.
+
 ## v0.17.0 — 2026-04-18
 
 `/admin/ops` — single-glance diagnostics page.
