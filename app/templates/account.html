@@ -204,7 +204,21 @@
         <td>{{ t.name }}</td>
         <td><code>{{ t.prefix }}…</code></td>
         <td class="nowrap">{{ t.created_at[:19] }}</td>
-        <td class="nowrap">{{ (t.last_used_at or '—')[:19] if t.last_used_at else '—' }}</td>
+        <td class="nowrap">
+          {% if t.last_used_at %}
+            {{ t.last_used_at[:19] }}
+            {% if t.last_used_ip or t.last_used_ua %}
+              <details style="display: inline;">
+                <summary class="muted" style="cursor: pointer; font-size: 0.8em;">source</summary>
+                <div class="muted" style="font-size: 0.85em; margin-top: 4px;">
+                  {% if t.last_used_ip %}<code>{{ t.last_used_ip }}</code>{% endif %}
+                  {% if t.last_used_ua %}<br><span title="{{ t.last_used_ua }}" style="max-width: 32ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block;">{{ t.last_used_ua }}</span>{% endif %}
+                </div>
+              </details>
+            {% endif %}
+          {% else %}—
+          {% endif %}
+        </td>
         <td class="nowrap">{{ (t.expires_at or '—')[:19] if t.expires_at else 'never' }}</td>
         <td>
           {% if t.revoked_at %}<span class="pill pill-suspended">revoked</span>

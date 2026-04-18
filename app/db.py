@@ -307,6 +307,8 @@ class PersonalAccessToken(Base):
     token_prefix: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_used_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    last_used_ua: Mapped[str | None] = mapped_column(String(256), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     read_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

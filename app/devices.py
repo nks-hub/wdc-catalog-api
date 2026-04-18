@@ -229,7 +229,7 @@ def get_current_account(
     from .pats import TOKEN_PREFIX, try_authenticate_pat
 
     if credentials.credentials.startswith(TOKEN_PREFIX):
-        match = try_authenticate_pat(db, credentials.credentials)
+        match = try_authenticate_pat(db, credentials.credentials, request=request)
         if match is None:
             _inc_auth_failure("invalid_pat")
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")

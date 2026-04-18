@@ -3347,6 +3347,8 @@ def _pat_view_rows(db: Session, account_id: int) -> list[dict]:
                 "stale_days": stale_days,
                 "read_only": bool(r.read_only),
                 "ip_allowlist": list(r.ip_allowlist) if r.ip_allowlist else [],
+                "last_used_ip": r.last_used_ip,
+                "last_used_ua": r.last_used_ua,
             }
         )
     return out

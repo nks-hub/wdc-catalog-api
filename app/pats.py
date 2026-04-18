@@ -90,7 +90,10 @@ def list_for(db: Session, *, account_id: int) -> list[PersonalAccessToken]:
 
 
 def try_authenticate_pat(
-    db: Session, bearer_value: str
+    db: Session,
+    bearer_value: str,
+    *,
+    request=None,
 ) -> Optional[tuple[Account, PersonalAccessToken]]:
     """Resolve a bearer token to ``(Account, PersonalAccessToken)`` if it
     matches an active PAT. Returns ``None`` on any failure (invalid format,
@@ -128,6 +131,10 @@ def try_authenticate_pat(
             return None
         try:
             row.last_used_at = now
+            if request is not None:
+                row.last_used_ip = (request.client.host if request.client else None)
+                ua = request.headers.get("user-agent")
+                row.last_used_ua = (ua or "")[:256] or None
             db.flush()
         except Exception:  # noqa: BLE001
             pass
