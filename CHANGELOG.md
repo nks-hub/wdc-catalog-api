@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.25.0 — 2026-04-18
+
+Dashboard webhook health card.
+
+- The `/admin` dashboard stat-grid gains a 5th card surfacing the
+  last-24h webhook delivery health. Shows `Sent`, `Failed`,
+  `Failure rate %`. The failed count renders as:
+  - plain number when 0 failures;
+  - amber `pill pill-warn` when 0 < rate < 5%;
+  - red `pill pill-suspended` when rate >= 5%.
+- Deep-links: "Triage failed →" appears only when there ARE failures
+  and jumps into `/admin/ops/webhooks?status_filter=failed`. The
+  empty-state variant (0 deliveries in 24 h) promotes
+  `/admin/settings` as a "configure" call-to-action instead.
+- Reuses the v0.24.0 aggregation shape. Zero new CSS, zero new JS,
+  zero new deps — the 5th card slots into the existing
+  `auto-fill, minmax(230px, 1fr)` grid.
+
+3 new tests (empty state, counts + rate render, triage-link
+conditional) — 408 passing, up from 405.
+
 ## v0.24.0 — 2026-04-18
 
 Webhook delivery stats on `/admin/ops`.
