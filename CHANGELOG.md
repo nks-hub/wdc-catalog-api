@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.11.0 — 2026-04-18
+
+**Global 2FA enforcement for admin UI users.**
+
+v0.8.0 shipped opt-in TOTP. v0.11.0 lets an owner flip a single
+checkbox that forces every admin without TOTP to pair an authenticator
+before touching any other admin page.
+
+### Shipped
+
+- **`GlobalPolicy.require_2fa_for_admins`** — new `Boolean` column,
+  default `False`. Auto-ALTER on startup handles legacy DBs.
+- **Gate dependency** `current_user_with_2fa_gate` wired as a
+  router-level `Depends` on the admin router via
+  `app.include_router(..., dependencies=[...])` — zero per-handler
+  surgery, FastAPI deduplicates the nested `Depends(current_user)`.
+  Returns 302 `/admin/account?flash=totp-required` for ungated admins
+  on gated paths.
+- **Allowlist** — `/admin/account`, `/admin/account/totp/*`,
+  `/admin/theme`, `/static/*`, and (naturally) `/logout` (not on the
+  admin router) remain reachable so a freshly-enrolled admin can
+  actually complete setup.
+- **Warning banner** on `/admin/account` explains the forced setup.
+- **Settings checkbox** under the "Access" fieldset. Changes flow
+  through the existing `settings.updated` audit diff — no new event
+  action needed.
+
+### Totals
+
+3 commits (schema + gate → settings toggle → release). 347 tests
+passing, up from 340.
+
 ## v0.10.0 — 2026-04-18
 
 **Admin session management — per-session revocation for the admin UI.**

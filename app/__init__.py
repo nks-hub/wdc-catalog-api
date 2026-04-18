@@ -1,3 +1,3 @@
 """NKS WDC cloud catalog + config sync FastAPI service."""
 
-__version__ = "0.10.0"
+__version__ = "0.11.0"
