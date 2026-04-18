@@ -309,6 +309,7 @@ class PersonalAccessToken(Base):
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    read_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 class ConsumedInvite(Base):

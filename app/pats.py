@@ -43,6 +43,7 @@ def issue(
     account_id: int,
     name: str,
     expires_at: Optional[datetime] = None,
+    read_only: bool = False,
 ) -> tuple[PersonalAccessToken, str]:
     """Mint a new token for ``account_id``.
 
@@ -59,6 +60,7 @@ def issue(
         token_hash=hashed,
         token_prefix=plaintext[:PREFIX_PERSISTED_LEN],
         expires_at=expires_at.replace(tzinfo=None) if expires_at else None,
+        read_only=bool(read_only),
     )
     db.add(row)
     db.flush()
@@ -85,10 +87,12 @@ def list_for(db: Session, *, account_id: int) -> list[PersonalAccessToken]:
     )
 
 
-def try_authenticate_pat(db: Session, bearer_value: str) -> Optional[Account]:
-    """Resolve a bearer token to an ``Account`` if it matches an active
-    PAT. Returns ``None`` on any failure (invalid format, expired,
-    revoked, wrong bcrypt).
+def try_authenticate_pat(
+    db: Session, bearer_value: str
+) -> Optional[tuple[Account, PersonalAccessToken]]:
+    """Resolve a bearer token to ``(Account, PersonalAccessToken)`` if it
+    matches an active PAT. Returns ``None`` on any failure (invalid format,
+    expired, revoked, wrong bcrypt, suspended account).
 
     Best-effort: updates ``last_used_at`` on success but doesn't raise
     if the DB write fails — auth decision already made.
@@ -125,7 +129,7 @@ def try_authenticate_pat(db: Session, bearer_value: str) -> Optional[Account]:
             db.flush()
         except Exception:  # noqa: BLE001
             pass
-        return account
+        return account, row
     return None
 
 

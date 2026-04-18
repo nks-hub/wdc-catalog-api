@@ -211,7 +211,11 @@ def _is_revoked(db: Session, jti: str) -> bool:
 # ── Dependencies ────────────────────────────────────────────────────────
 
 
+_WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
 def get_current_account(
+    request: Request,
     credentials: Annotated[
         HTTPAuthorizationCredentials | None, Depends(security)
     ] = None,
@@ -225,11 +229,19 @@ def get_current_account(
     from .pats import TOKEN_PREFIX, try_authenticate_pat
 
     if credentials.credentials.startswith(TOKEN_PREFIX):
-        pat_account = try_authenticate_pat(db, credentials.credentials)
-        if pat_account is None:
+        match = try_authenticate_pat(db, credentials.credentials)
+        if match is None:
             _inc_auth_failure("invalid_pat")
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
-        return pat_account
+        account, pat = match
+        request.state.pat_id = pat.id
+        request.state.pat_read_only = bool(pat.read_only)
+        if pat.read_only and request.method in _WRITE_METHODS:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Read-only PAT cannot perform write operations",
+            )
+        return account
 
     try:
         payload = decode_token(credentials.credentials)
