@@ -41,6 +41,14 @@
     </fieldset>
 
     <fieldset class="form-fieldset">
+      <legend>Audit retention</legend>
+      <label>Keep audit events for (days)
+        <input type="number" name="audit_retention_days" value="{{ policy.audit_retention_days }}" min="0" max="3650">
+        <span class="hint">Nightly sweep drops rows older than this. 0 = keep forever.</span>
+      </label>
+    </fieldset>
+
+    <fieldset class="form-fieldset">
       <legend>Quotas</legend>
       <label>Max bytes per user
         <input type="number" name="max_bytes_per_user" value="{{ policy.max_bytes_per_user or '' }}" min="0" step="1048576">

@@ -1933,6 +1933,7 @@ def admin_settings(
             "default_role": row.default_role,
             "banner_message": row.banner_message,
             "require_2fa_for_admins": row.require_2fa_for_admins,
+            "audit_retention_days": row.audit_retention_days,
             "updated_at": row.updated_at.isoformat() if row.updated_at else None,
             "updated_by_email": row.updated_by_email,
         },
@@ -1955,6 +1956,7 @@ def admin_save_settings(
     default_role: Annotated[str, Form()] = "user",
     banner_message: Annotated[str, Form()] = "",
     require_2fa_for_admins: Annotated[str, Form()] = "",
+    audit_retention_days: Annotated[int, Form()] = 365,
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
     from . import audit as _audit
@@ -1982,6 +1984,7 @@ def admin_save_settings(
         "default_role": row.default_role,
         "banner_message": row.banner_message,
         "require_2fa_for_admins": row.require_2fa_for_admins,
+        "audit_retention_days": row.audit_retention_days,
     }
 
     row.snapshot_keep_last_n = max(1, min(int(snapshot_keep_last_n), 500))
@@ -1993,6 +1996,7 @@ def admin_save_settings(
     row.default_role = default_role
     row.banner_message = banner_message.strip() or None
     row.require_2fa_for_admins = bool(require_2fa_for_admins)
+    row.audit_retention_days = max(0, min(int(audit_retention_days), 3650))
     row.updated_by_email = f"{username}@admin.local"
 
     after = {
@@ -2003,6 +2007,7 @@ def admin_save_settings(
         "default_role": row.default_role,
         "banner_message": row.banner_message,
         "require_2fa_for_admins": row.require_2fa_for_admins,
+        "audit_retention_days": row.audit_retention_days,
     }
     changed = {k: {"from": before[k], "to": after[k]} for k in after if before[k] != after[k]}
     if changed:
