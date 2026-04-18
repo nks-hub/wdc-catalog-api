@@ -76,11 +76,12 @@
       "channel": "stable",
       "downloads": [
         {
-          "url": "https://windows.php.net/downloads/releases/php-8.3.25-nts-Win32-vs16-x64.zip",
+          "url": "https://windows.php.net/downloads/releases/archives/php-8.3.25-nts-Win32-vs16-x64.zip",
           "os": "windows",
           "arch": "x64",
           "archive_type": "zip",
-          "source": "php.net"
+          "source": "php.net",
+          "notes": "Temporary: php.net rotated 8.3.25 out of /releases/ after 8.3.26 shipped — point at /releases/archives/. Revert once catalog is bumped to the current 8.3 patch."
         },
         {
           "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.3.25/php-8.3.25-linux-x64.tar.xz",
