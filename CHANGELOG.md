@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.26.0 — 2026-04-18
+
+Backup-to-disk — server-side manual snapshot write.
+
+- **`app/backup.py::generate_backup_bytes`** — the v0.20.0 ZIP
+  assembly extracted into a pure function (no HTTP concerns)
+  returning `(zip_bytes, filename, manifest_dict)`. The download
+  endpoint `GET /admin/backup/export.zip` becomes a thin wrapper.
+- **`GlobalPolicy.backup_directory`** — server-side path. Blank /
+  NULL disables the feature. Auto-ALTER handles legacy DBs.
+- **`POST /admin/backup/run-now-to-disk`** — writes the ZIP to
+  `<backup_directory>/<filename>`. Emits `backup.saved_to_disk`
+  audit event with `path`, `bytes`, per-table `counts`. Redirects
+  to `/admin/ops` with a success flash.
+- **Settings UI** — new "Backup" fieldset with the directory
+  input; changes flow through the existing `settings.updated`
+  audit diff.
+- **Ops card** — the Backup card gains a "Save to disk" button
+  next to "Download ZIP" when the directory is configured.
+
+Retention / pruning of on-disk backups + APScheduler automation
+are deferred to a later release — ops-critical but orthogonal to
+this scope.
+
+4 new tests (helper shape, disk write, no-dir error flash, audit
+event) — 412 passing, up from 408.
+
 ## v0.25.0 — 2026-04-18
 
 Dashboard webhook health card.
