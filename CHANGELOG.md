@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.16.0 — 2026-04-18
+
+Outbound webhook notifications — push-notify for critical audit events.
+
+- **`app/webhooks.py`** — stdlib-only dispatcher (`urllib` + a bounded
+  `ThreadPoolExecutor(max_workers=4)`). `fire(event, *, db=None)` is
+  non-blocking from the audit write path. `_matches` implements
+  prefix semantics: trailing-dot (`session.`) matches children,
+  exact (`login.ok`) matches itself only. 5-second HTTP timeout;
+  failures logged, never raised.
+- **`GlobalPolicy.webhook_url` + `webhook_event_prefixes`** — single
+  URL per instance (Slack-compatible incoming webhook format works
+  out of the box). Default prefix list: `permission.denied,
+  login.failed, session.killed, user.suspended, user.deleted,
+  totp.login_failed`. Auto-ALTER handles legacy DBs.
+- **`audit.emit` hook** — publishes to the bus AND to webhooks, each
+  behind its own try/except so neither can break the audit write.
+- **Settings UI** — new "Outbound notifications" fieldset with URL +
+  prefixes inputs. `POST /admin/settings/webhook-test` enqueues a
+  synthetic `webhook.test` event for immediate feedback.
+- **`NKS_WDC_DISABLE_WEBHOOKS=1`** env-flag short-circuits delivery
+  (CI isolation).
+
+6 new tests (fire-on-match, skip-on-mismatch, disabled-when-blank,
+failure-doesn't-break-audit, wildcard prefix, settings test button)
+— 370 passing, up from 364.
+
 ## v0.15.0 — 2026-04-18
 
 Audit bulk JSONL export — completes the audit forensics story.
