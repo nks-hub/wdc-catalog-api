@@ -32,6 +32,7 @@ from .db import (
     GlobalPolicy,
     IdempotencyRecord,
     RevokedToken,
+    SchedulerRun,
     SnapshotRetentionPolicy,
     session_factory,
 )
@@ -152,12 +153,27 @@ def _do_retention(session: Session) -> dict:
             AuditEvent.created_at < cutoff,
         )
 
+    scheduler_retain_days = policy_row.scheduler_run_retention_days if policy_row else 90
+    if scheduler_retain_days is None:
+        scheduler_retain_days = 90
+    scheduler_purged = 0
+    if scheduler_retain_days > 0:
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+            days=scheduler_retain_days
+        )
+        scheduler_purged = _batched_delete(
+            session,
+            SchedulerRun,
+            SchedulerRun.started_at < cutoff,
+        )
+
     return {
         "accounts": len(account_ids),
         "deleted": deleted_total,
         "idempotency_purged": idempotency_purged,
         "revoked_tokens_purged": revoked_purged,
         "audit_events_purged": audit_purged,
+        "scheduler_runs_purged": scheduler_purged,
     }
 
 
@@ -260,6 +276,7 @@ def run_retention(db: Optional[Session] = None) -> dict:
                     "idempotency_purged": 0,
                     "revoked_tokens_purged": 0,
                     "audit_events_purged": 0,
+                    "scheduler_runs_purged": 0,
                     "skipped": True,
                 }
             try:

@@ -1767,7 +1767,8 @@ def admin_retention_run_now(
         f"deleted={summary.get('deleted', 0)}, "
         f"idempotency_purged={summary.get('idempotency_purged', 0)}, "
         f"revoked_tokens_purged={summary.get('revoked_tokens_purged', 0)}, "
-        f"audit_events_purged={summary.get('audit_events_purged', 0)}"
+        f"audit_events_purged={summary.get('audit_events_purged', 0)}, "
+        f"scheduler_runs_purged={summary.get('scheduler_runs_purged', 0)}"
     )
     acct = _admin_account(db, username)
     _audit.emit(
@@ -2066,6 +2067,7 @@ def admin_settings(
             "banner_message": row.banner_message,
             "require_2fa_for_admins": row.require_2fa_for_admins,
             "audit_retention_days": row.audit_retention_days,
+            "scheduler_run_retention_days": row.scheduler_run_retention_days,
             "webhook_url": row.webhook_url,
             "webhook_event_prefixes": row.webhook_event_prefixes,
             "updated_at": row.updated_at.isoformat() if row.updated_at else None,
@@ -2091,6 +2093,7 @@ def admin_save_settings(
     banner_message: Annotated[str, Form()] = "",
     require_2fa_for_admins: Annotated[str, Form()] = "",
     audit_retention_days: Annotated[int, Form()] = 365,
+    scheduler_run_retention_days: Annotated[int, Form()] = 90,
     webhook_url: Annotated[str, Form()] = "",
     webhook_event_prefixes: Annotated[str, Form()] = "",
     db: Session = Depends(get_session),
@@ -2121,6 +2124,7 @@ def admin_save_settings(
         "banner_message": row.banner_message,
         "require_2fa_for_admins": row.require_2fa_for_admins,
         "audit_retention_days": row.audit_retention_days,
+        "scheduler_run_retention_days": row.scheduler_run_retention_days,
         "webhook_url": row.webhook_url,
         "webhook_event_prefixes": row.webhook_event_prefixes,
     }
@@ -2135,6 +2139,7 @@ def admin_save_settings(
     row.banner_message = banner_message.strip() or None
     row.require_2fa_for_admins = bool(require_2fa_for_admins)
     row.audit_retention_days = max(0, min(int(audit_retention_days), 3650))
+    row.scheduler_run_retention_days = max(0, min(int(scheduler_run_retention_days), 3650))
     row.webhook_url = webhook_url.strip() or None
     row.webhook_event_prefixes = (
         webhook_event_prefixes.strip()
@@ -2151,6 +2156,7 @@ def admin_save_settings(
         "banner_message": row.banner_message,
         "require_2fa_for_admins": row.require_2fa_for_admins,
         "audit_retention_days": row.audit_retention_days,
+        "scheduler_run_retention_days": row.scheduler_run_retention_days,
         "webhook_url": row.webhook_url,
         "webhook_event_prefixes": row.webhook_event_prefixes,
     }

@@ -41,10 +41,14 @@
     </fieldset>
 
     <fieldset class="form-fieldset">
-      <legend>Audit retention</legend>
+      <legend>Retention windows</legend>
       <label>Keep audit events for (days)
         <input type="number" name="audit_retention_days" value="{{ policy.audit_retention_days }}" min="0" max="3650">
         <span class="hint">Nightly sweep drops rows older than this. 0 = keep forever.</span>
+      </label>
+      <label>Keep scheduler runs for (days)
+        <input type="number" name="scheduler_run_retention_days" value="{{ policy.scheduler_run_retention_days }}" min="0" max="3650">
+        <span class="hint">Nightly sweep drops rows from <code>/admin/ops/scheduler</code> older than this. 0 = keep forever.</span>
       </label>
     </fieldset>
 
