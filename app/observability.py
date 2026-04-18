@@ -134,6 +134,7 @@ SECURITY_ACTION_ALLOWLIST = frozenset({
     "totp.disabled",
     "backup.exported",
     "webhook.retried",
+    "pat.rotated",
 })
 
 

@@ -131,6 +131,52 @@ def list_tokens(
     )
 
 
+@router.post("/{token_id}/rotate", response_model=TokenCreateResponse, status_code=201)
+def rotate_token(
+    token_id: int,
+    request: Request,
+    account: Account = Depends(get_current_account),
+    db: Session = Depends(get_session),
+) -> TokenCreateResponse:
+    """Revoke the given PAT and mint a replacement inheriting its name,
+    ``read_only`` flag, ``ip_allowlist`` and expiry timestamp.
+
+    Returns ``404`` if the token isn't owned by the caller or is already
+    revoked — rotating a dead token makes no forensic sense. The new
+    token's plaintext is shown once, same contract as mint.
+    """
+    result = pats.rotate(db, account_id=account.id, token_id=token_id)
+    if result is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Token not found")
+    old_id, row, plaintext = result
+    try:
+        audit.emit(
+            db,
+            request=request,
+            actor=account,
+            action="pat.rotated",
+            resource_type="pat",
+            resource_id=str(row.id),
+            detail={
+                "old_token_id": old_id,
+                "new_name": row.name,
+                "new_prefix": row.token_prefix,
+                "read_only": bool(row.read_only),
+                "ip_allowlist_count": len(row.ip_allowlist) if row.ip_allowlist else 0,
+                "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+            },
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    return TokenCreateResponse(
+        id=row.id,
+        name=row.name,
+        token=plaintext,
+        created_at=row.created_at.isoformat() if row.created_at else "",
+        expires_at=row.expires_at.isoformat() if row.expires_at else None,
+    )
+
+
 @router.delete("/{token_id}", status_code=204)
 def revoke_token(
     token_id: int,

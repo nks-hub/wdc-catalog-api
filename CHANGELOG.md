@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.48.0 — 2026-04-18
+
+PAT rotation with atomic revoke + replacement mint.
+
+- New `POST /api/v1/auth/tokens/{id}/rotate` revokes the given
+  PAT and issues a replacement carrying over its name, `read_only`
+  flag, `ip_allowlist` and expiry timestamp. Response returns the
+  new plaintext once, same contract as mint.
+- Expiry is carried over as an absolute timestamp — rotation does
+  not silently extend a caller's access window.
+- Emits `pat.rotated` audit event (distinct from `pat.created` /
+  `pat.revoked`) with `old_token_id` + new row attributes in the
+  detail payload, so forensics can distinguish rotations from
+  ad-hoc mints during incident triage.
+- Added `pat.rotated` to `SECURITY_ACTION_ALLOWLIST` for Prometheus
+  + Grafana coverage.
+- 404 on foreign tokens and on already-revoked rows — no silently
+  reviving dead PATs.
+
 ## v0.47.0 — 2026-04-18
 
 Webhook delivery manual retry.

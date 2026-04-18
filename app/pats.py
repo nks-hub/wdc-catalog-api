@@ -79,6 +79,43 @@ def revoke(db: Session, *, account_id: int, token_id: int) -> bool:
     return True
 
 
+def rotate(
+    db: Session,
+    *,
+    account_id: int,
+    token_id: int,
+) -> Optional[tuple[int, PersonalAccessToken, str]]:
+    """Atomically revoke the given PAT and mint a replacement carrying
+    over its name, ``read_only`` flag, ``ip_allowlist`` and remaining TTL.
+
+    Returns ``(old_id, new_row, plaintext)`` on success. Returns ``None``
+    if the token doesn't exist, belongs to another account, or is already
+    revoked — rotating a dead token would muddle the audit trail.
+    """
+    old = db.get(PersonalAccessToken, token_id)
+    if old is None or old.account_id != account_id:
+        return None
+    if old.revoked_at is not None:
+        return None
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    # Compute remaining TTL — if the old PAT had an expiry in the
+    # future, carry the same absolute timestamp so rotation doesn't
+    # silently extend a caller's access window.
+    expires_at: Optional[datetime] = None
+    if old.expires_at is not None and old.expires_at > now:
+        expires_at = old.expires_at.replace(tzinfo=timezone.utc)
+    old.revoked_at = now
+    new_row, plaintext = issue(
+        db,
+        account_id=account_id,
+        name=old.name,
+        expires_at=expires_at,
+        read_only=bool(old.read_only),
+        ip_allowlist=list(old.ip_allowlist) if old.ip_allowlist else None,
+    )
+    return old.id, new_row, plaintext
+
+
 def list_for(db: Session, *, account_id: int) -> list[PersonalAccessToken]:
     return list(
         db.scalars(
@@ -147,6 +184,7 @@ __all__ = [
     "generate_token",
     "issue",
     "revoke",
+    "rotate",
     "list_for",
     "try_authenticate_pat",
 ]
