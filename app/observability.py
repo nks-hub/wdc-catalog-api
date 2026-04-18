@@ -125,6 +125,7 @@ SECURITY_ACTION_ALLOWLIST = frozenset({
     "permission.denied",
     "password.change_failed",
     "user.suspended",
+    "user.unlocked",
     "user.deleted",
     "user.tokens_revoked",
     "session.killed",

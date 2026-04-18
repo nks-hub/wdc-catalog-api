@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Locked accounts — NKS WDC{% endblock %}
+{% block content %}
+<section class="section">
+  <header class="section-head">
+    <h1>Locked accounts ({{ total }})</h1>
+    <p class="muted">Accounts currently inside a timed lockout window or at/above the 5-fails threshold. Clearing the lockout resets <code>failed_login_count</code> and <code>locked_until</code> in one step.</p>
+  </header>
+
+  <table class="data">
+    <thead>
+      <tr>
+        <th>Email</th>
+        <th>Role</th>
+        <th>Failed logins</th>
+        <th>Locked until</th>
+        <th>Last login</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in accounts %}
+      <tr>
+        <td><a href="/admin/users/{{ a.id }}">{{ a.email }}</a></td>
+        <td><span class="pill pill-role-{{ a.role }}">{{ a.role }}</span></td>
+        <td>
+          {% if a.failed_login_count >= 5 %}
+            <span class="pill pill-suspended">{{ a.failed_login_count }}</span>
+          {% elif a.failed_login_count %}
+            <span class="pill pill-warn">{{ a.failed_login_count }}</span>
+          {% else %}
+            {{ a.failed_login_count }}
+          {% endif %}
+        </td>
+        <td>
+          {% if a.locked_until %}
+            <span class="pill pill-warn">{{ a.locked_until }}</span>
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td>{{ a.last_login_at or '—' }}</td>
+        <td class="actions">
+          <form method="post" action="/admin/users/{{ a.id }}/unlock" class="inline">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <input type="hidden" name="next" value="/admin/accounts/locked">
+            <button class="btn btn-sm">Clear lockout</button>
+          </form>
+          <a class="btn btn-sm btn-ghost" href="/admin/users/{{ a.id }}">view</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6">
+          <div class="empty-state">
+            <div class="empty-icon" style="color: var(--ok);">✓</div>
+            <h3 style="color: var(--ok);">No accounts currently locked</h3>
+            <p>
+              Lockouts auto-arm after 5 failed logins and auto-expire
+              on the cooldown window. Until then, stuck users land
+              here for one-click operator unlock.
+            </p>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

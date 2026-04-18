@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.45.0 — 2026-04-18
+
+`/admin/accounts/locked` — operator view + one-click unlock.
+
+- New page at `/admin/accounts/locked` lists every account with
+  `locked_until > now` OR `failed_login_count >= 5`, sorted by most
+  recently locked. Each row has a CSRF-guarded unlock button that
+  reuses the existing `/admin/users/{id}/unlock` handler and bounces
+  the operator back to the list via a safe-prefixed `next=` param
+  (open-redirect guard: only `/admin/` prefixes accepted).
+- `user.unlocked` added to `SECURITY_ACTION_ALLOWLIST` so the
+  closing-signal (operator short-circuited a lockout) rides the
+  v0.41 Prometheus counter + v0.42 Grafana panels automatically.
+- Ties the victim-axis together with the lockout-signal series:
+  v0.43 `login.locked_out` (attempts vs. locked door) → v0.44
+  `login.lockout_armed` (threshold fires) → v0.45 aggregated
+  operator view to act on the state those two signals produce.
+
 ## v0.44.0 — 2026-04-18
 
 `login.lockout_armed` audit event.

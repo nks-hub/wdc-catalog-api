@@ -950,6 +950,68 @@ def admin_users_list(
     return response
 
 
+@router.get("/admin/accounts/locked", response_class=HTMLResponse)
+def admin_accounts_locked(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    flash: Annotated[str | None, Cookie(alias="flash")] = None,
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    """List accounts currently locked out or at/above the lockout threshold.
+
+    Aggregates the victim-axis of the lockout audit signal series:
+    rows where ``locked_until`` is still in the future OR where
+    ``failed_login_count`` has reached the 5-fails threshold (even if
+    the timed lock has since expired). One-click unlock form on each
+    row redirects back here via a safe-prefixed ``next`` field.
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import or_ as _or_, select as _sel
+
+    from .db import Account
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    stmt = (
+        _sel(Account)
+        .where(
+            _or_(
+                Account.locked_until > now,
+                Account.failed_login_count >= 5,
+            )
+        )
+        .order_by(
+            Account.locked_until.is_(None),  # NULLs last
+            Account.locked_until.desc(),
+            Account.id.desc(),
+        )
+    )
+    rows = db.scalars(stmt).all()
+
+    accounts = [
+        {
+            "id": a.id,
+            "email": a.email,
+            "role": a.role,
+            "failed_login_count": a.failed_login_count or 0,
+            "locked_until": a.locked_until.isoformat() if a.locked_until else None,
+            "last_login_at": a.last_login_at.isoformat() if a.last_login_at else None,
+        }
+        for a in rows
+    ]
+
+    ctx = base_context(
+        request,
+        username,
+        accounts=accounts,
+        total=len(accounts),
+        flash=_pop_flash(flash),
+    )
+    response = templates.TemplateResponse(request, "accounts_locked.html", ctx)
+    _clear_flash(response)
+    return response
+
+
 @router.get("/admin/users/{user_id}", response_class=HTMLResponse)
 def admin_user_detail(
     request: Request,
@@ -1121,6 +1183,7 @@ def admin_unlock(
     request: Request,
     user_id: int,
     username: Annotated[str, Depends(current_user)],
+    next: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
     """Clear the failed-login counter + lockout timestamp on an account.
@@ -1129,6 +1192,11 @@ def admin_unlock(
     Lockout is an automatic anti-bruteforce measure from the login path
     (5 failures → 1 min lock, 10 → 5 min, 15 → 30 min) and honest users
     who get stuck in it need an operator to short-circuit the cooldown.
+
+    Accepts an optional ``next`` form field. If the value is a safe
+    admin-prefixed path (starts with ``/admin/``), redirect there
+    instead of the per-user detail page — lets the locked-accounts
+    aggregate view round-trip the caller back to itself.
     """
     from . import audit as _audit
     from .db import Account
@@ -1152,6 +1220,9 @@ def admin_unlock(
             )
         except Exception:  # noqa: BLE001
             pass
+    # Safe-prefix guard prevents open-redirect via user-controlled `next`.
+    if next and next.startswith("/admin/"):
+        return _redirect(next, "success", "Lockout cleared")
     return _redirect(f"/admin/users/{user_id}", "success", "Lockout cleared")
 
 
