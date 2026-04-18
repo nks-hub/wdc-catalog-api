@@ -184,5 +184,17 @@
       {% endif %}
     </div>
   </div>
+
+  <div class="stat-grid stat-grid-3" style="margin-top: var(--space-4);">
+    <div class="stat-card stat-card-wide danger" style="border: 1px solid var(--color-danger, #b00020);">
+      <h3>Emergency: revoke all sessions</h3>
+      <p class="muted">Revokes every admin session and invalidates every JWT. Your current admin session is preserved. Type <code>KILL-ALL</code> to confirm.</p>
+      <form method="post" action="/admin/security/kill-all-sessions">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <input type="text" name="confirm" required pattern="KILL-ALL" placeholder="KILL-ALL" autocomplete="off" style="margin-right: var(--space-2);">
+        <button class="btn btn-sm" style="background: var(--color-danger, #b00020); color: #fff;">Revoke all sessions</button>
+      </form>
+    </div>
+  </div>
 </section>
 {% endblock %}

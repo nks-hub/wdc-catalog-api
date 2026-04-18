@@ -130,6 +130,7 @@ SECURITY_ACTION_ALLOWLIST = frozenset({
     "user.tokens_revoked",
     "session.killed",
     "session.killed_others",
+    "admin.global_session_kill",
     "totp.disabled",
     "backup.exported",
 })

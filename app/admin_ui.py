@@ -3631,6 +3631,72 @@ def admin_kill_other_sessions(
     return _redirect("/admin/account", "success", f"Killed {killed} other session(s)")
 
 
+@router.post(
+    "/admin/security/kill-all-sessions",
+    dependencies=[Depends(require_csrf)],
+)
+def admin_kill_all_sessions(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    confirm: Annotated[str, Form()] = "",
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Emergency kill switch — revoke every admin session + bump every
+    Account.token_version (invalidates all outstanding JWTs). Caller's
+    own admin session is preserved so they land on the success page."""
+    from datetime import datetime, timezone
+
+    from sqlalchemy import update as _upd
+
+    from . import audit as _audit
+    from .auth import SESSION_COOKIE, _fingerprint
+    from .db import Account, AdminSession
+
+    if confirm != "KILL-ALL":
+        return _redirect(
+            "/admin/ops",
+            "error",
+            "Confirmation phrase mismatch — nothing revoked",
+        )
+
+    current_fp = _fingerprint(request.cookies.get(SESSION_COOKIE, ""))
+    now = datetime.now(timezone.utc)
+
+    kill_q = _upd(AdminSession).where(
+        AdminSession.revoked_at.is_(None),
+        AdminSession.fingerprint != current_fp,
+    ).values(revoked_at=now)
+    admin_sessions_killed = int(db.execute(kill_q).rowcount or 0)
+
+    bump_q = _upd(Account).where(
+        Account.suspended_at.is_(None),
+    ).values(token_version=Account.token_version + 1)
+    token_versions_bumped = int(db.execute(bump_q).rowcount or 0)
+
+    acct = _admin_account(db, username)
+    try:
+        _audit.emit(
+            db,
+            request=request,
+            actor=acct,
+            action="admin.global_session_kill",
+            resource_type="admin_session",
+            detail={
+                "admin_sessions_killed": admin_sessions_killed,
+                "token_versions_bumped": token_versions_bumped,
+            },
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+    return _redirect(
+        "/admin/ops",
+        "success",
+        f"Revoked {admin_sessions_killed} admin session(s) and bumped "
+        f"{token_versions_bumped} token version(s)",
+    )
+
+
 @router.get("/admin/account", response_class=HTMLResponse)
 def admin_account(
     request: Request,

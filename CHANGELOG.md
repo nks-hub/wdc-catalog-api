@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.46.0 — 2026-04-18
+
+Global session kill — emergency panic button.
+
+- New `POST /admin/security/kill-all-sessions` revokes every
+  `AdminSession` (except the caller's) and bumps `token_version`
+  on every non-suspended account (invalidates every outstanding
+  JWT bearer token). Gated by CSRF + admin auth + a typed
+  confirmation phrase `KILL-ALL` to prevent misclicks.
+- Emits a new `admin.global_session_kill` audit event with
+  `admin_sessions_killed` / `token_versions_bumped` counts in
+  the detail payload; added to `SECURITY_ACTION_ALLOWLIST`.
+- Danger-styled form on `/admin/ops` ties the control into the
+  existing ops page where the incident-response operator is
+  already looking when a breach is suspected.
+
 ## v0.45.0 — 2026-04-18
 
 `/admin/accounts/locked` — operator view + one-click unlock.
