@@ -2374,6 +2374,69 @@ def admin_audit_csv(
     )
 
 
+# ── Audit SSE stream ─────────────────────────────────────────────────
+
+
+@router.get("/admin/audit/stream")
+async def admin_audit_stream(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+):
+    """Stream audit events as Server-Sent Events.
+
+    Yields ``event: connected`` on open, then ``event: audit`` for each
+    published audit row, with a ``': ping'`` heartbeat comment every 15 s
+    to keep proxies from closing an idle connection.
+    """
+    import asyncio
+    import json
+
+    from fastapi.responses import JSONResponse, StreamingResponse
+
+    from . import event_bus
+
+    # Check subscriber cap before committing to a streaming response.
+    # _register raises RuntimeError("event bus saturated") at the cap.
+    _probe_queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=1)
+    try:
+        event_bus._bus._register(_probe_queue)
+    except RuntimeError as exc:
+        if "saturated" in str(exc):
+            return JSONResponse({"error": "too many subscribers"}, status_code=503)
+        raise
+    event_bus._bus._unregister(_probe_queue)
+
+    async def gen():
+        yield "event: connected\ndata: {}\n\n"
+        # Use a fresh queue registered directly so we can call queue.get()
+        # with asyncio.wait_for — wrapping anext() on an async generator
+        # with wait_for leaks StopAsyncIteration through task cancellation
+        # in Python 3.12 and causes a RuntimeError in the streaming body.
+        queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=128)
+        event_bus._bus._register(queue)
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    evt = await asyncio.wait_for(queue.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+                    continue
+                yield f"event: audit\ndata: {json.dumps(evt, default=str)}\n\n"
+        finally:
+            event_bus._bus._unregister(queue)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 # ── Device detail view ──────────────────────────────────────────────
 
 
