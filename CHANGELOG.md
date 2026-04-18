@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.29.0 — 2026-04-18
+
+PAT hygiene pill on `/admin/account`.
+
+- Active (non-revoked, non-expired) Personal Access Tokens now
+  render a `⚠ unused Nd` amber pill next to their status when they
+  haven't seen use in ≥ 30 days. "Unused" counts either:
+  - last-used-at older than 30 days, OR
+  - never used and created more than 30 days ago.
+- Hover-title spells out the specific case (`Last used N days ago`
+  vs `Never used since creation N days ago`).
+- Revoked tokens never get the pill — they're already effectively
+  gone and the noise would distract from real issues.
+- 30-day threshold is hardcoded; no settings knob yet. The pill
+  visually teaches the threshold.
+
+5 new tests (recent use skipped, old never-used flagged, used long
+ago flagged, recently created not stale, revoked not flagged) —
+428 passing, up from 423.
+
 ## v0.28.0 — 2026-04-18
 
 Backup management page — `/admin/ops/backups`.
