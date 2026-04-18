@@ -122,10 +122,12 @@
   --shadow:     0 4px 16px rgba(15,23,42,.08), 0 1px 4px rgba(15,23,42,.05);
   --shadow-md:  0 8px 24px rgba(15,23,42,.10), 0 2px 6px rgba(15,23,42,.06);
 
-  /* Typography */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
-               Arial, "Noto Sans", sans-serif, "Apple Color Emoji";
-  --font-mono: ui-monospace, "Cascadia Code", "Fira Code", "JetBrains Mono",
+  /* Typography — Inter variable for UI, JetBrains Mono for code/KPI.
+     Self-hosted via /static/fonts so we don't hit Google Fonts at
+     runtime (CSP stays strict, no third-party tracking). */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+               "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji";
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code",
                "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   /* Topbar */
@@ -560,6 +562,25 @@ main.container {
 .stat-grid-3 {
   grid-template-columns: repeat(3, 1fr);
 }
+/* 4-col KPI row — Catalog · Users · Devices · Webhooks. Prevents the
+   Webhooks card from wrapping alone to a second row. Falls back to
+   2×2 below 1040px, single column below 680px. */
+.stat-grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+@media (max-width: 1040px) {
+  .stat-grid-4 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 680px) {
+  .stat-grid-4 { grid-template-columns: 1fr; }
+}
+
+/* Compact tables on dashboard-style pages don't need a sticky header
+   — they're <10 rows and live alongside other cards, so the sticky
+   sliced into section titles above (verified 2026-04-18). */
+.data.compact thead th {
+  position: static;
+}
 
 /* Hero KPI card — the dashboard now leads with one full-width card
    so the 24h activity pulse doesn't share visual weight with "total
@@ -896,22 +917,24 @@ main.container {
   gap: var(--space-4);
 }
 
+/* Form field labels — sentence case, modest weight. Uppercase micro-caps
+   were harder to parse on dense admin screens (verified 2026-04-18 user
+   review: "spatny fonty spatny odsazeni"). Stripe/Linear/Vercel all use
+   sentence case with 500 weight for consistency. */
 .form label {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  gap: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: 0;
 }
 .form label span {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: 0;
 }
 
 .form input,
@@ -1575,16 +1598,15 @@ details > summary:hover { color: var(--accent-hover); }
 .card-body label {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  gap: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: 0;
 }
 .card-body label span {
-  font-size: 0.75rem;
-  color: var(--text-3);
+  font-size: 0.8125rem;
+  color: var(--text-2);
 }
 .card-body input,
 .card-body select,

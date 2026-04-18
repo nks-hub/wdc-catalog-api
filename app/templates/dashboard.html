@@ -70,7 +70,7 @@
     {% endif %}
   </div>
 
-  <div class="stat-grid stat-grid-3">
+  <div class="stat-grid stat-grid-4">
     <div class="stat-card">
       <h3>Catalog</h3>
       <div class="stat-row"><span>Apps</span><b>{{ stats.catalog.apps }}</b></div>
@@ -129,7 +129,7 @@
       {% else %}
         <div class="stat-row muted"><span>No deliveries in last 24h</span></div>
         <div class="stat-sub">
-          <a class="btn btn-ghost btn-sm" href="/admin/settings">Configure →</a>
+          <a class="btn btn-ghost btn-sm" href="/admin/ops/webhooks">View deliveries →</a>
         </div>
       {% endif %}
     </div>
