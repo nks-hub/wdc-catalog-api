@@ -11,7 +11,7 @@ import threading
 import pytest
 from fastapi.testclient import TestClient
 
-from app import audit
+from app import audit, webhooks
 from app.db import AuditEvent, GlobalPolicy, session_factory
 from app.main import app
 
@@ -82,6 +82,53 @@ def _emit(action: str) -> AuditEvent:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
+
+def _set_2fa_required(value: bool) -> None:
+    with session_factory() as db:
+        p = db.get(GlobalPolicy, 1)
+        if p is None:
+            p = GlobalPolicy(id=1)
+            db.add(p)
+        p.require_2fa_for_admins = value
+        db.commit()
+
+
+def _reset_totp() -> None:
+    from app.db import Account
+    from sqlalchemy import select as _sel
+
+    with session_factory() as db:
+        acct = db.scalar(_sel(Account).where(Account.email == "admin@admin.local"))
+        if acct is not None:
+            acct.totp_enabled = False
+            acct.totp_secret = None
+            acct.totp_recovery_hashes = None
+            acct.totp_enabled_at = None
+            db.commit()
+
+
+@pytest.fixture()
+def admin_client() -> TestClient:
+    """Authenticated admin client with TOTP + 2FA gate reset."""
+    with TestClient(app) as c:
+        _reset_totp()
+        _set_2fa_required(False)
+
+        c.get("/login")
+        csrf = c.cookies.get("nks_wdc_csrf") or ""
+        r = c.post(
+            "/login",
+            data={"username": "admin", "password": "admin", "_csrf": csrf},
+            follow_redirects=False,
+        )
+        assert r.status_code == 303
+        c.get("/admin/account")
+
+        yield c
+
+        _set_2fa_required(False)
+        _reset_totp()
 
 
 @pytest.fixture()
@@ -200,3 +247,22 @@ def test_prefix_match_wildcard(mock_webhook):
     assert "session.killed" in actions
     assert "session.killed_others" in actions
     assert "login.ok" not in actions
+
+
+def test_settings_test_button_posts_synthetic_event(admin_client, mock_webhook):
+    """POST /admin/settings/webhook-test enqueues a synthetic webhook.test event."""
+    csrf = admin_client.cookies.get("nks_wdc_csrf") or ""
+    r = admin_client.post(
+        "/admin/settings/webhook-test",
+        data={"_csrf": csrf},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    webhooks.drain(timeout=3)
+    webhooks._reset_pool_for_tests()
+
+    assert len(_CapturingHandler.received) == 1
+    got = _CapturingHandler.received[0]
+    assert got["event"]["action"] == "webhook.test"
+    assert got.get("test") is True

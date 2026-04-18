@@ -2024,6 +2024,8 @@ def admin_settings(
             "banner_message": row.banner_message,
             "require_2fa_for_admins": row.require_2fa_for_admins,
             "audit_retention_days": row.audit_retention_days,
+            "webhook_url": row.webhook_url,
+            "webhook_event_prefixes": row.webhook_event_prefixes,
             "updated_at": row.updated_at.isoformat() if row.updated_at else None,
             "updated_by_email": row.updated_by_email,
         },
@@ -2047,6 +2049,8 @@ def admin_save_settings(
     banner_message: Annotated[str, Form()] = "",
     require_2fa_for_admins: Annotated[str, Form()] = "",
     audit_retention_days: Annotated[int, Form()] = 365,
+    webhook_url: Annotated[str, Form()] = "",
+    webhook_event_prefixes: Annotated[str, Form()] = "",
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
     from . import audit as _audit
@@ -2075,6 +2079,8 @@ def admin_save_settings(
         "banner_message": row.banner_message,
         "require_2fa_for_admins": row.require_2fa_for_admins,
         "audit_retention_days": row.audit_retention_days,
+        "webhook_url": row.webhook_url,
+        "webhook_event_prefixes": row.webhook_event_prefixes,
     }
 
     row.snapshot_keep_last_n = max(1, min(int(snapshot_keep_last_n), 500))
@@ -2087,6 +2093,11 @@ def admin_save_settings(
     row.banner_message = banner_message.strip() or None
     row.require_2fa_for_admins = bool(require_2fa_for_admins)
     row.audit_retention_days = max(0, min(int(audit_retention_days), 3650))
+    row.webhook_url = webhook_url.strip() or None
+    row.webhook_event_prefixes = (
+        webhook_event_prefixes.strip()
+        or "permission.denied,login.failed,session.killed,user.suspended,user.deleted,totp.login_failed"
+    )
     row.updated_by_email = f"{username}@admin.local"
 
     after = {
@@ -2098,6 +2109,8 @@ def admin_save_settings(
         "banner_message": row.banner_message,
         "require_2fa_for_admins": row.require_2fa_for_admins,
         "audit_retention_days": row.audit_retention_days,
+        "webhook_url": row.webhook_url,
+        "webhook_event_prefixes": row.webhook_event_prefixes,
     }
     changed = {k: {"from": before[k], "to": after[k]} for k in after if before[k] != after[k]}
     if changed:
@@ -2113,6 +2126,24 @@ def admin_save_settings(
         )
 
     return _redirect("/admin/settings", "success", "Settings saved")
+
+
+@router.post("/admin/settings/webhook-test", dependencies=[Depends(require_csrf)])
+def admin_settings_webhook_test(
+    username: Annotated[str, Depends(current_user)],
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    from . import webhooks as _webhooks
+
+    url, _ = _webhooks._resolve_config(db)
+    if not url:
+        return _redirect("/admin/settings", "error", "No webhook URL configured")
+    _webhooks._pool.submit(_webhooks._post, url, {
+        "source": "nks-wdc-catalog-api",
+        "test": True,
+        "event": {"action": "webhook.test", "actor_email": f"{username}@admin.local"},
+    })
+    return _redirect("/admin/settings", "success", "Test webhook enqueued")
 
 
 # ── Invite history (consumed) ────────────────────────────────────────
