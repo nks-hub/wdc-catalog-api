@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.22.0 — 2026-04-18
+
+Webhook delivery log — confirm dispatches, debug receiver errors.
+
+- **`webhook_deliveries` table** — `id, url, event_action,
+  status_code, duration_ms, error, created_at`. One row per outbound
+  POST attempt (both audit-event dispatches and the Settings
+  "Send test webhook" button). Auto-ALTER on startup. `status_code
+  IS NULL + error populated` for connection-refused / timeouts;
+  `status_code` set (including 4xx/5xx) when the HTTP round-trip
+  completes.
+- **`_post` instrumentation** — timing via `time.monotonic`, status
+  capture from `urlopen` response, caught `URLError` / unexpected
+  exceptions go into the `error` column (capped at 512 chars).
+  Recording is best-effort in a try/except so a failing DB write
+  never crashes the worker thread.
+- **`/admin/ops/webhooks`** — paginated history page mirroring the
+  v0.19.0 scheduler-runs layout. Filter by ok / failed. Pill shows
+  `ok · 204` or `failed · 503` so operators see the receiver-side
+  status at a glance.
+- **`/admin/ops`** — Webhooks card gains a "History →" link
+  alongside the existing "Configure →".
+
+Retention of these rows is deferred — rows accumulate today. A follow-
+up patch will mirror the v0.21.0 scheduler-runs retention.
+
+6 new tests (success recorded, connection-failure recorded, 5xx
+recorded, history page, status filter, ops page link) — 399
+passing, up from 393.
+
 ## v0.21.1 — 2026-04-18
 
 Test-stability patch.
