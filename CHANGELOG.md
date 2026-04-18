@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.39.0 — 2026-04-18
+
+Security-signals card on `/admin/ops` — last-24h threat indicators.
+
+- Full-width card surfaces three rolling 24 h counts with threshold
+  pills:
+  - **Failed logins** (`login.failed` + `totp.login_failed` summed):
+    amber at ≥ 5, red at ≥ 20.
+  - **RBAC denials** (`permission.denied`): amber at ≥ 3, red at ≥ 10.
+  - **Password-change failures** (`password.change_failed`): amber at
+    ≥ 3, red at ≥ 10.
+- Each row has a `view →` deep-link into the appropriate filtered
+  `/admin/audit` page so operators can drill from count to rows in
+  one click.
+- Thresholds chosen for typical single-tenant admin deployments —
+  operators running public-facing APIs with heavier login traffic
+  can raise via env override in a future release (left hardcoded
+  for now to avoid yet another GlobalPolicy knob).
+- Zero counts render as plain numbers; threshold pills kick in
+  only when there's actually something to look at.
+
+6 new tests (card renders, zero-counts, amber threshold, red
+threshold, login+TOTP aggregated, RBAC red threshold) — 480
+passing, up from 474.
+
 ## v0.38.0 — 2026-04-18
 
 Scheduler-failure banner on every admin page.
