@@ -12,13 +12,15 @@
       "channel": "stable",
       "downloads": [
         {
-          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-apache-2.4.66/httpd-2.4.66-windows-x64.zip",
+          "url": "https://www.apachelounge.com/download/VS17/binaries/httpd-2.4.66-251206-win64-VS17.zip",
           "os": "windows",
           "arch": "x64",
           "archive_type": "zip",
-          "source": "nks-hub",
-          "sha_256": "c7b7d9361862e57c1919ecd07e26e3491c667c16fe53a29d775ebec5a30b0d16",
-          "size_bytes": 2451
+          "source": "apachelounge",
+          "headers": {
+            "User-Agent": "NKS-WebDevConsole/1.0 (compatible)"
+          },
+          "notes": "Temporary: nks-hub mirror asset is a 2,451-byte HTML error page — build-apache.yml had no content-type/size validation. Revert after nks-hub/webdev-console-binaries#2 merges and the workflow re-publishes a real ZIP."
         },
         {
           "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-apache-2.4.66/httpd-2.4.66-linux-x64.tar.xz",
