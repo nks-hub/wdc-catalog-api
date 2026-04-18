@@ -792,16 +792,27 @@ def create_all() -> None:
 def _literal_default(col):  # noqa: ANN001 — SA Column
     """Render a SQL literal for the Python default of ``col``.
 
-    Returns None if no safe literal can be derived. Only covers the
-    shapes we actually use in the model (bool, int, str, None) so we
-    don't ship DDL that embeds arbitrary Python.
+    Returns None if no safe literal can be derived. Covers the shapes
+    we actually use in the model (bool, int, str, DateTime-with-
+    ``_utc_now``-callable). Arbitrary callables other than timestamp
+    factories return None — they'd need a server_default instead.
     """
+    from sqlalchemy import DateTime
+
     d = getattr(col, "default", None)
     if d is None:
         return None
     val = getattr(d, "arg", None)
+    # Timestamp factories on NOT NULL DateTime columns — emit
+    # ``CURRENT_TIMESTAMP`` so existing rows get a concrete value on
+    # SQLite + Postgres. Without this, any callable-default datetime
+    # column would silently fall through to "no DEFAULT" → SQLite
+    # rejects the ALTER → per-column catch logs + skips → column
+    # stays missing, matching the totp_enabled class of incident.
+    if callable(val) and isinstance(col.type, DateTime):
+        return "CURRENT_TIMESTAMP"
     if callable(val):
-        return None  # can't safely render a factory
+        return None
     if val is True:
         return "1"
     if val is False:
