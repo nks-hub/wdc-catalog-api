@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.12.0 — 2026-04-18
+
+Invite-history filter + CSV export.
+
+- `/admin/invites/history` gains `email` (substring, case-insensitive),
+  `since` (YYYY-MM-DD, inclusive), `until` (YYYY-MM-DD, inclusive
+  end-of-day) query params; filters applied by a shared
+  `_invites_history_stmt` helper so the HTML and CSV endpoints can't
+  drift.
+- New `GET /admin/invites/history.csv` — up to 10 000 rows with a
+  4-column CSV (email, consumed_at, account_id, nonce), attachment
+  filename `invite-history.csv`, `Cache-Control: no-store`. Cells
+  escaped by `csv.writer` so commas / quotes in email-local-parts
+  round-trip cleanly.
+- UI: filter form above the table with `clear` + `Export CSV` buttons,
+  matching the `/admin/audit` pattern.
+
+4 new tests (CSV content, email filter, date filter, unauth redirect)
+— 351 passing, up from 347.
+
 ## v0.11.0 — 2026-04-18
 
 **Global 2FA enforcement for admin UI users.**
