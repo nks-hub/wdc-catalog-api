@@ -589,6 +589,25 @@ def _admin_account(db: Session, username: str):
     return acct
 
 
+def _audit_filter_stmt(stmt, *, action="", resource_type="", resource_id="", actor_id=None):
+    """Apply audit-log filter params to *stmt* and return the modified statement.
+
+    Shared by admin_audit (HTML), admin_audit_csv, and admin_audit_export_jsonl
+    so the three handlers can never drift from each other.
+    """
+    from .db import AuditEvent
+
+    if action:
+        stmt = stmt.where(AuditEvent.action == action)
+    if resource_type:
+        stmt = stmt.where(AuditEvent.resource_type == resource_type)
+    if resource_id:
+        stmt = stmt.where(AuditEvent.resource_id == resource_id)
+    if actor_id:
+        stmt = stmt.where(AuditEvent.actor_id == actor_id)
+    return stmt
+
+
 # Routes the user can reach even while the 2FA-enforcement gate is
 # active — without these we'd deadlock a freshly-enrolled admin who
 # hasn't paired an authenticator yet.
@@ -1166,15 +1185,13 @@ def admin_audit(
 
     from .db import AuditEvent, count_query
 
-    stmt = _sel(AuditEvent)
-    if action:
-        stmt = stmt.where(AuditEvent.action == action)
-    if resource_type:
-        stmt = stmt.where(AuditEvent.resource_type == resource_type)
-    if resource_id:
-        stmt = stmt.where(AuditEvent.resource_id == resource_id)
-    if actor_id:
-        stmt = stmt.where(AuditEvent.actor_id == actor_id)
+    stmt = _audit_filter_stmt(
+        _sel(AuditEvent),
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        actor_id=actor_id,
+    )
 
     total = count_query(db, stmt)
     limit = max(1, min(limit, 200))
@@ -2558,15 +2575,13 @@ def admin_audit_csv(
 
     from .db import AuditEvent
 
-    stmt = _sel(AuditEvent)
-    if action:
-        stmt = stmt.where(AuditEvent.action == action)
-    if resource_type:
-        stmt = stmt.where(AuditEvent.resource_type == resource_type)
-    if resource_id:
-        stmt = stmt.where(AuditEvent.resource_id == resource_id)
-    if actor_id:
-        stmt = stmt.where(AuditEvent.actor_id == actor_id)
+    stmt = _audit_filter_stmt(
+        _sel(AuditEvent),
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        actor_id=actor_id,
+    )
 
     rows = db.scalars(
         stmt.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).limit(
@@ -2620,6 +2635,91 @@ def admin_audit_csv(
         _iter(),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ── Audit JSONL.gz bulk export ────────────────────────────────────────
+
+
+@router.get("/admin/audit/export.jsonl.gz")
+def admin_audit_export_jsonl(
+    username: Annotated[str, Depends(current_user)],
+    action: str = "",
+    resource_type: str = "",
+    resource_id: str = "",
+    actor_id: int | None = None,
+    limit: int = 50000,
+    db: Session = Depends(get_session),
+):
+    """Stream the filtered audit log as gzip-compressed NDJSON.
+
+    Each line is a JSON object with the full audit event shape.  Honors
+    the same filter params as the HTML audit page.  Default limit 50k,
+    hard cap 200k.  Trivially ingestible:  curl … | gunzip | jq -c .
+    """
+    import gzip
+    import io
+    import json
+
+    from fastapi.responses import StreamingResponse
+    from sqlalchemy import select as _sel
+
+    from .db import AuditEvent
+
+    stmt = _audit_filter_stmt(
+        _sel(AuditEvent),
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        actor_id=actor_id,
+    ).order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).limit(
+        max(1, min(limit, 200000))
+    )
+
+    rows = db.scalars(stmt).all()
+
+    def generator():
+        buf = io.BytesIO()
+        gz = gzip.GzipFile(fileobj=buf, mode="wb", compresslevel=6)
+        batch_size = 1000
+        for i, r in enumerate(rows, 1):
+            line = json.dumps(
+                {
+                    "id": r.id,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                    "actor_id": r.actor_id,
+                    "actor_email": r.actor_email,
+                    "action": r.action,
+                    "resource_type": r.resource_type,
+                    "resource_id": r.resource_id,
+                    "ip": r.ip,
+                    "user_agent": r.user_agent,
+                    "detail": r.detail,
+                },
+                default=str,
+                ensure_ascii=False,
+            ) + "\n"
+            gz.write(line.encode("utf-8"))
+            if i % batch_size == 0:
+                gz.flush()
+                data = buf.getvalue()
+                buf.seek(0)
+                buf.truncate()
+                if data:
+                    yield data
+        gz.close()
+        final = buf.getvalue()
+        if final:
+            yield final
+
+    return StreamingResponse(
+        generator(),
+        media_type="application/gzip",
+        headers={
+            "Content-Disposition": 'attachment; filename="audit.jsonl.gz"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

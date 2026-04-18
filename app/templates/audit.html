@@ -5,6 +5,7 @@
   <header class="section-head">
     <h1>Audit log ({{ total }})</h1>
     <a class="btn" href="/admin/audit.csv{% if qs %}?{{ qs[:-1] }}{% endif %}" download>Export CSV</a>
+    <a class="btn" href="/admin/audit/export.jsonl.gz{% if qs %}?{{ qs[:-1] }}{% endif %}" download>Export JSONL.gz</a>
     <button type="button" class="live-toggle" data-live="off" aria-pressed="false">
       <span class="live-dot" aria-hidden="true"></span>
       <span class="live-label">Live</span>
