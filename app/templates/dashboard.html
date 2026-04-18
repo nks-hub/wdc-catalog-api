@@ -86,6 +86,33 @@
       <div class="stat-row"><span>Linked to accounts</span><b>{{ stats.users.devices_linked }}</b></div>
       <div class="stat-row"><span>Online (last 5 min)</span><b>{{ stats.users.devices_online_recent }}</b></div>
     </div>
+
+    <div class="stat-card">
+      <h3>Webhooks · 24h</h3>
+      {% if webhook_health.total %}
+        <div class="stat-row"><span>Sent</span><b>{{ webhook_health.ok }}</b></div>
+        <div class="stat-row"><span>Failed</span>
+          <b>
+            {% if webhook_health.status == "bad" %}<span class="pill pill-suspended">{{ webhook_health.failed }}</span>
+            {% elif webhook_health.status == "warn" %}<span class="pill pill-warn">{{ webhook_health.failed }}</span>
+            {% else %}{{ webhook_health.failed }}{% endif %}
+          </b>
+        </div>
+        <div class="stat-row"><span>Failure rate</span>
+          <b>{{ "%.1f"|format(webhook_health.failure_pct) }}%</b>
+        </div>
+        {% if webhook_health.failed %}
+        <div class="stat-sub">
+          <a class="btn btn-ghost btn-sm" href="/admin/ops/webhooks?status_filter=failed">Triage failed →</a>
+        </div>
+        {% endif %}
+      {% else %}
+        <div class="stat-row muted"><span>No deliveries in last 24h</span></div>
+        <div class="stat-sub">
+          <a class="btn btn-ghost btn-sm" href="/admin/settings">Configure →</a>
+        </div>
+      {% endif %}
+    </div>
   </div>
 
   {% if stats.audit.top_actions %}

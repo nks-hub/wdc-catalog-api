@@ -740,6 +740,31 @@ def admin_dashboard(
         {"hour": k.strftime("%H:00"), "count": v} for k, v in sorted(buckets.items())
     ]
     sparkline_max = max((b["count"] for b in sparkline), default=0) or 1
+
+    # --- webhook delivery health (last 24h) ---
+    from .db import WebhookDelivery
+
+    wh_rows = db.scalars(
+        _sel(WebhookDelivery).where(
+            WebhookDelivery.created_at >= day_ago.replace(tzinfo=None)
+        )
+    ).all()
+    wh_ok = sum(1 for r in wh_rows if r.error is None)
+    wh_failed = sum(1 for r in wh_rows if r.error is not None)
+    wh_total = wh_ok + wh_failed
+    wh_failure_pct = (wh_failed / wh_total * 100.0) if wh_total else 0.0
+    webhook_health = {
+        "ok": wh_ok,
+        "failed": wh_failed,
+        "total": wh_total,
+        "failure_pct": wh_failure_pct,
+        "status": (
+            "ok" if wh_total == 0 or wh_failed == 0 else
+            "warn" if wh_failure_pct < 5 else
+            "bad"
+        ),
+    }
+
     ctx = base_context(
         request,
         username,
@@ -747,6 +772,7 @@ def admin_dashboard(
         recent_events=recent_events,
         sparkline=sparkline,
         sparkline_max=sparkline_max,
+        webhook_health=webhook_health,
         flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "dashboard.html", ctx)
