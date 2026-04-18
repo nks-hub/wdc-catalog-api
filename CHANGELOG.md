@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.31.0 — 2026-04-18
+
+PAT IP allowlist — per-token network scope.
+
+- **`PersonalAccessToken.ip_allowlist`** — nullable JSON column
+  storing a list of CIDR strings. Empty / NULL = no restriction
+  (back-compat). Auto-ALTER handles legacy rows.
+- **`get_current_account` CIDR check** — after the v0.30.0
+  read-only enforcement, the handler compares the request's client
+  IP against every CIDR in the allowlist using stdlib `ipaddress`.
+  Match → proceed; no match → HTTP 401 (not 403, to avoid hinting
+  that the same token would work from another IP).
+- **Graceful handling of malformed CIDRs** — individual bad entries
+  in the stored list are silently skipped during enforcement;
+  only if ZERO valid entries match → 401. The JSON API validates
+  CIDR syntax at POST time via a Pydantic validator so operators
+  get immediate feedback.
+- **Admin UI** — mint form gains a textarea (newline / comma
+  separated). PAT list shows a `🌐 N IPs` amber pill with the full
+  list in the tooltip title.
+- **JSON API** — `POST /api/v1/auth/tokens` body accepts
+  `ip_allowlist: list[str] | null`.
+- **Audit** — `pat.created` detail gains `ip_allowlist_count`.
+
+IPv4 + IPv6 both supported via `ipaddress`. Complements the v0.30.0
+read-only flag: scope-by-method + scope-by-network-origin layered
+on top of the existing PAT primitive.
+
+8 new tests (no-list works anywhere, matching CIDR succeeds,
+non-matching 401, multiple CIDRs any-match, malformed skipped,
+all-malformed fails, UI textarea parse, API validator rejects
+bad CIDR) — 445 passing, up from 437.
+
 ## v0.30.0 — 2026-04-18
 
 PAT read-only flag.
