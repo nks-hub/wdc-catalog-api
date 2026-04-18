@@ -356,6 +356,7 @@ class GlobalPolicy(Base):
         default="permission.denied,login.failed,session.killed,user.suspended,user.deleted,totp.login_failed",
         nullable=False,
     )
+    backup_directory: Mapped[str | None] = mapped_column(String(512), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utc_now, onupdate=_utc_now
     )

@@ -118,7 +118,15 @@
       <h3>Backup</h3>
       <div class="stat-row">
         <span>Full JSON + audit snapshot</span>
-        <b><a class="btn btn-primary btn-sm" href="/admin/backup/export.zip" download>Download ZIP</a></b>
+        <b>
+          <a class="btn btn-primary btn-sm" href="/admin/backup/export.zip" download>Download ZIP</a>
+          {% if backup_directory_configured %}
+          <form method="post" action="/admin/backup/run-now-to-disk" class="inline" style="display: inline; margin-left: var(--space-2);">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="btn btn-sm">Save to disk</button>
+          </form>
+          {% endif %}
+        </b>
       </div>
       <div class="stat-sub muted">
         Contains apps, releases, downloads, accounts (no secrets), users, invites_consumed, scheduler_runs, settings, audit.jsonl.gz, manifest.json (with per-file SHA-256).

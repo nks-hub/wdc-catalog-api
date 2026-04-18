@@ -69,6 +69,14 @@
     </fieldset>
 
     <fieldset class="form-fieldset">
+      <legend>Backup</legend>
+      <label class="span-all">Backup directory
+        <input type="text" name="backup_directory" value="{{ policy.backup_directory or '' }}" placeholder="/state/backups">
+        <span class="hint">Server-side path. Blank = disable. The "Save to disk" button on <code>/admin/ops</code> writes a ZIP here.</span>
+      </label>
+    </fieldset>
+
+    <fieldset class="form-fieldset">
       <legend>Quotas</legend>
       <label>Max bytes per user
         <input type="number" name="max_bytes_per_user" value="{{ policy.max_bytes_per_user or '' }}" min="0" step="1048576">
