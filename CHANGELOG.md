@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.15.0 — 2026-04-18
+
+Audit bulk JSONL export — completes the audit forensics story.
+
+- New `GET /admin/audit/export.jsonl.gz` — streams compressed NDJSON
+  (one JSON object per line, gzip-wrapped) honoring the same `action`,
+  `resource_type`, `resource_id`, `actor_id` filter params as the
+  HTML audit page. Default limit 50 000 rows, hard cap 200 000.
+  Shape: `{id, created_at, actor_id, actor_email, action,
+  resource_type, resource_id, ip, user_agent, detail}`. Trivially
+  ingestible by `jq` / logstash / SIEM pipelines:
+  `curl … | gunzip | jq -c .`.
+- `_audit_filter_stmt` helper extracted so HTML, CSV, and JSONL
+  handlers share identical filter logic — can't drift.
+- UI: "Export JSONL.gz" button next to the existing Export CSV.
+
+4 new tests (gzip headers, decompress + NDJSON shape, filter honoured,
+auth gate) — 364 passing, up from 360.
+
 ## v0.14.0 — 2026-04-18
 
 Global search (`/admin/search`).
