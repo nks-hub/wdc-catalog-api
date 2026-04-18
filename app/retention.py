@@ -21,12 +21,13 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete
 
 from .db import (
     Account,
+    AuditEvent,
     GlobalPolicy,
     IdempotencyRecord,
     RevokedToken,
@@ -135,11 +136,27 @@ def _do_retention(session: Session) -> dict:
         RevokedToken,
         (RevokedToken.expires_at.is_not(None)) & (RevokedToken.expires_at <= now),
     )
+
+    policy_row = session.get(GlobalPolicy, 1)
+    _raw = policy_row.audit_retention_days if policy_row is not None else None
+    audit_retain_days = _raw if _raw is not None else 365
+    audit_purged = 0
+    if audit_retain_days > 0:
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+            days=audit_retain_days
+        )
+        audit_purged = _batched_delete(
+            session,
+            AuditEvent,
+            AuditEvent.created_at < cutoff,
+        )
+
     return {
         "accounts": len(account_ids),
         "deleted": deleted_total,
         "idempotency_purged": idempotency_purged,
         "revoked_tokens_purged": revoked_purged,
+        "audit_events_purged": audit_purged,
     }
 
 
@@ -196,6 +213,7 @@ def run_retention(db: Optional[Session] = None) -> dict:
                     "deleted": 0,
                     "idempotency_purged": 0,
                     "revoked_tokens_purged": 0,
+                    "audit_events_purged": 0,
                     "skipped": True,
                 }
             summary = _do_retention(session)

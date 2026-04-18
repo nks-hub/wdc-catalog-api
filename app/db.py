@@ -347,6 +347,7 @@ class GlobalPolicy(Base):
     default_role: Mapped[str] = mapped_column(String(16), default="user")
     banner_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
     require_2fa_for_admins: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    audit_retention_days: Mapped[int] = mapped_column(Integer, default=365, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utc_now, onupdate=_utc_now
     )

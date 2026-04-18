@@ -1634,7 +1634,8 @@ def admin_retention_run_now(
         f"Retention run: accounts={summary.get('accounts', 0)}, "
         f"deleted={summary.get('deleted', 0)}, "
         f"idempotency_purged={summary.get('idempotency_purged', 0)}, "
-        f"revoked_tokens_purged={summary.get('revoked_tokens_purged', 0)}"
+        f"revoked_tokens_purged={summary.get('revoked_tokens_purged', 0)}, "
+        f"audit_events_purged={summary.get('audit_events_purged', 0)}"
     )
     acct = _admin_account(db, username)
     _audit.emit(
