@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.24.0 — 2026-04-18
+
+Webhook delivery stats on `/admin/ops`.
+
+- The Webhooks card gains two new rows — **Sent · 24h** and
+  **Failed · 24h** (the failed count renders as a red pill when > 0,
+  a plain `0` otherwise) — plus an inline 64 px SVG sparkline of
+  deliveries per hour over the last 24 h. The sparkline only
+  renders when there's at least one delivery; an all-zero grid
+  would be visually dishonest.
+- When there are failures, a third deep-link button lights up under
+  the card — "Failed →" jumps straight into
+  `/admin/ops/webhooks?status_filter=failed` for triage.
+- Reuses the audit-sparkline SVG pattern shipped in v0.7.2 —
+  zero new CSS, zero new JS, zero new deps.
+
+3 new tests (no-data hides sparkline, counts render correctly,
+sparkline present when non-zero) — 405 passing, up from 402.
+
 ## v0.23.0 — 2026-04-18
 
 `webhook_deliveries` retention — closes the explicit debt called out
