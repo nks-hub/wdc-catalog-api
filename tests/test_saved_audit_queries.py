@@ -179,7 +179,6 @@ def test_delete_saved_filter(admin_client: TestClient) -> None:
 def test_delete_other_users_saved_filter_404s(admin_client: TestClient) -> None:
     """Account scoping — we can't delete another account's saved filter."""
     from app.db import Account, SavedAuditQuery, session_factory
-    from sqlalchemy import select as _sel
     from app.auth import hash_password
 
     with session_factory() as db:

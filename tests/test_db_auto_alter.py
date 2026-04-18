@@ -10,9 +10,7 @@ pin the contract so future NOT NULL columns don't regress the flow.
 
 from __future__ import annotations
 
-from datetime import datetime
 
-import pytest
 from sqlalchemy import Column, DateTime, Integer, String, Boolean
 
 from app.db import _literal_default, _utc_now

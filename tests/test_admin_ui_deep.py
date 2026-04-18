@@ -287,7 +287,6 @@ def test_audit_log_captures_rbac_denial(deep_client: TestClient) -> None:
 
 
 def test_user_detail_shows_activity_timeline(deep_client: TestClient) -> None:
-    from sqlalchemy import select as _sel
 
     from app.auth import hash_password
     from app.db import Account, AuditEvent, session_factory

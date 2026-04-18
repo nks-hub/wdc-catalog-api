@@ -15,7 +15,6 @@ without any cross-thread signalling issues.
 from __future__ import annotations
 
 import anyio
-import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app

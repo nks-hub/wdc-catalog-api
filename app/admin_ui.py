@@ -206,7 +206,6 @@ def _invites_history_stmt(stmt, email: str, since: str, until: str):
     """Apply email/date filters to a ConsumedInvite SELECT statement."""
     from datetime import datetime, time, timezone
 
-    from sqlalchemy import select as _sel
 
     from .db import ConsumedInvite
 
@@ -3742,13 +3741,10 @@ def admin_create_account_token(
 ) -> HTMLResponse:
     from datetime import datetime, timedelta, timezone
 
-    from sqlalchemy import select as _sel
 
     from . import pats as _pats
-    from .db import User
 
     acct = _admin_account(db, username)
-    user = db.scalar(_sel(User).where(User.username == username))
     expires_at = None
     if ttl_days.strip():
         try:

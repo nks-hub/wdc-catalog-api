@@ -83,7 +83,7 @@ class _EventBus:
 
     def _unregister(self, queue: asyncio.Queue[dict]) -> None:
         with self._lock:
-            self._queues = {(q, l) for (q, l) in self._queues if q is not queue}
+            self._queues = {(q, lp) for (q, lp) in self._queues if q is not queue}
 
     # ------------------------------------------------------------------
     # Public API

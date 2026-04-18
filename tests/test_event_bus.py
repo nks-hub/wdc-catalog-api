@@ -7,7 +7,6 @@ import threading
 
 import pytest
 
-import app.event_bus as bus_module
 from app.event_bus import MAX_SUBSCRIBERS, _EventBus
 
 

@@ -93,7 +93,6 @@ def test_confirm_wrong_code_keeps_pending(admin_client: TestClient) -> None:
 
 def test_confirm_right_code_enables_and_renders_recovery(admin_client: TestClient) -> None:
     from app.db import Account, session_factory
-    from app import totp as _totp
     from sqlalchemy import select as _sel
 
     _reset_2fa(admin_client)
@@ -106,7 +105,11 @@ def test_confirm_right_code_enables_and_renders_recovery(admin_client: TestClien
         secret = acct.totp_secret
         assert secret and not acct.totp_enabled
 
-    import base64, hmac, hashlib, struct, time
+    import base64
+    import hmac
+    import hashlib
+    import struct
+    import time
     key = base64.b32decode(secret + "=" * (-len(secret) % 8))
     counter = int(time.time()) // 30
     mac = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
@@ -161,7 +164,11 @@ def test_disable_requires_valid_code(admin_client: TestClient) -> None:
         assert acct.totp_enabled is True
 
     # Right code → disabled.
-    import base64, hmac, hashlib, struct, time
+    import base64
+    import hmac
+    import hashlib
+    import struct
+    import time
     key = base64.b32decode(known_secret + "=" * (-len(known_secret) % 8))
     counter = int(time.time()) // 30
     mac = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()

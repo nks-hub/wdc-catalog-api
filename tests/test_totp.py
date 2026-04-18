@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 import time
 
-import pytest
 
 from app.totp import (
     TOTP_DIGITS,
@@ -62,7 +61,6 @@ def test_verify_tolerates_drift_one_step():
     s = new_secret()
     # Current code must match at the previous and next window too.
     now = time.time()
-    import struct, hmac as _hmac, hashlib as _hashlib
     from app.totp import _decode
     key = _decode(s)
     counter = now_counter(now)

@@ -105,8 +105,7 @@ def test_snapshot_import_audits(admin_client: TestClient) -> None:
 def test_snapshot_restore_audits(admin_client: TestClient) -> None:
     """Import two snapshots, pin the first as HEAD, restore the second,
     verify snapshot.restored carries previous_head_id."""
-    from app.db import Account, DeviceSnapshot, session_factory
-    from sqlalchemy import select as _sel
+    from app.db import session_factory
     from app import snapshots as _snap
 
     dev_id = "snap-audit-restore-device"

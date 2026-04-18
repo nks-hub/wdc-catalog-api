@@ -7,9 +7,7 @@ tests. Real wire shape is verified manually after deploy + env upload.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 

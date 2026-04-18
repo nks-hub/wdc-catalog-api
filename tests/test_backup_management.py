@@ -177,7 +177,7 @@ def test_delete_rejects_path_traversal(admin_client: TestClient, tmp_path) -> No
 
         r = admin_client.post(
             "/admin/ops/backups/delete",
-            data={"_csrf": csrf, "filename": f"../nks-wdc-backup-outside.zip"},
+            data={"_csrf": csrf, "filename": "../nks-wdc-backup-outside.zip"},
             follow_redirects=False,
         )
         assert r.status_code == 303
