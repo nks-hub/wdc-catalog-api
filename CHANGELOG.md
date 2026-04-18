@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.28.0 — 2026-04-18
+
+Backup management page — `/admin/ops/backups`.
+
+- **`GET /admin/ops/backups`** — lists files matching
+  `nks-wdc-backup-*.zip` in the configured `backup_directory`.
+  Shows filename, size (MB), mtime, plus a dir-totals header row.
+  Three distinct empty states: "no directory configured",
+  "directory not found", "empty directory".
+- **`POST /admin/ops/backups/prune-now`** — operator-triggered
+  version of the nightly retention sweep. Reuses
+  `backup._prune_disk_backups`; emits `backup.pruned` audit
+  event with `directory`, `kept`, `removed` detail.
+- **`POST /admin/ops/backups/delete`** — per-file delete with
+  belt-and-braces path-traversal guard. Filename must be a plain
+  basename matching the backup naming convention; any slash or
+  prefix mismatch rejects before touching the filesystem.
+  Emits `backup.deleted` audit event.
+- **Ops card** — gains a "Manage files →" link when the directory
+  is configured.
+- Restore-from-file remains intentionally out-of-band (matches the
+  v0.20.0 stance).
+
+6 new tests (empty-dir listing, files listed, prune removes old,
+delete single file, traversal rejection, ops-page link) — 423
+passing, up from 417.
+
 ## v0.27.0 — 2026-04-18
 
 Scheduled nightly backup + on-disk retention — completes the backup
