@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.33.0 — 2026-04-18
+
+PAT last-used source tracking.
+
+- **`PersonalAccessToken.last_used_ip`** (`String(45)` — IPv6-ready)
+  + **`last_used_ua`** (`String(256)`) — stamped on every successful
+  authentication alongside the existing `last_used_at`.
+  Auto-ALTER handles legacy rows; NULL until next use.
+- **`try_authenticate_pat`** gains a `request=None` kwarg. When
+  provided, pulls `request.client.host` + `request.headers['user-agent']`
+  (capped at 256 chars, matching the `admin_sessions.user_agent`
+  convention).
+- **`get_current_account`** passes `request` through.
+- **`/admin/account`** — the "Last used" PAT column gains an inline
+  `<details>` toggle revealing `<code>IP</code>` + truncated UA.
+  Hover shows full UA via the title attribute.
+- **No audit event** — stamping per-auth-request would balloon the
+  audit table; the row itself is the record.
+
+Forensic win for the v0.30.0/v0.31.0 scope stack: operators can now
+spot a read-only PAT suddenly used from a new IP without digging
+through audit.
+
+4 new tests (auth stamps IP+UA, missing-UA-header, UA truncation,
+account page shows source details) — 455 passing, up from 451.
+
 ## v0.32.0 — 2026-04-18
 
 Global admin-UI IP allowlist.
