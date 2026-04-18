@@ -390,6 +390,25 @@ class AuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, index=True)
 
 
+class SchedulerRun(Base):
+    """One row per scheduled-job execution (manual or cron).
+
+    We only persist retention today, but the ``job`` column keeps it
+    open for future jobs (catalog refresh, blob cleanup) without
+    schema churn.
+    """
+
+    __tablename__ = "scheduler_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class AdminSession(Base):
     """Per-browser session row for the admin UI.
 

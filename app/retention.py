@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time as _time
 from dataclasses import dataclass
 from typing import Optional
 
@@ -189,6 +190,29 @@ def _try_acquire_leader_lock(session: Session) -> bool:
     return bool(result)
 
 
+def _write_scheduler_run(
+    db: Session,
+    *,
+    job: str,
+    started_at: datetime,
+    duration_ms: int | None,
+    summary: dict | None,
+    error: str | None,
+) -> None:
+    from .db import SchedulerRun
+
+    row = SchedulerRun(
+        job=job,
+        started_at=started_at,
+        finished_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        duration_ms=duration_ms,
+        summary=summary,
+        error=error,
+    )
+    db.add(row)
+    db.flush()
+
+
 def run_retention(db: Optional[Session] = None) -> dict:
     """Iterate every account and apply their resolved retention policy.
 
@@ -200,9 +224,31 @@ def run_retention(db: Optional[Session] = None) -> dict:
     multi-worker deployments don't run retention N times in parallel.
     Losers return early with ``{"skipped": True}`` and don't touch DB.
     """
+    started_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    t0 = _time.monotonic()
+
     if db is not None:
-        summary = _do_retention(db)
-        db.flush()
+        try:
+            summary = _do_retention(db)
+            db.flush()
+            _write_scheduler_run(
+                db,
+                job="retention",
+                started_at=started_at,
+                duration_ms=int((_time.monotonic() - t0) * 1000),
+                summary=summary,
+                error=None,
+            )
+        except Exception as exc:
+            _write_scheduler_run(
+                db,
+                job="retention",
+                started_at=started_at,
+                duration_ms=int((_time.monotonic() - t0) * 1000),
+                summary=None,
+                error=str(exc),
+            )
+            raise
     else:
         session = session_factory()
         try:
@@ -216,11 +262,34 @@ def run_retention(db: Optional[Session] = None) -> dict:
                     "audit_events_purged": 0,
                     "skipped": True,
                 }
-            summary = _do_retention(session)
-            session.commit()
-        except Exception:
-            session.rollback()
-            raise
+            try:
+                summary = _do_retention(session)
+                _write_scheduler_run(
+                    session,
+                    job="retention",
+                    started_at=started_at,
+                    duration_ms=int((_time.monotonic() - t0) * 1000),
+                    summary=summary,
+                    error=None,
+                )
+                session.commit()
+            except Exception as exc:
+                session.rollback()
+                try:
+                    err_s = session_factory()
+                    _write_scheduler_run(
+                        err_s,
+                        job="retention",
+                        started_at=started_at,
+                        duration_ms=int((_time.monotonic() - t0) * 1000),
+                        summary=None,
+                        error=str(exc),
+                    )
+                    err_s.commit()
+                    err_s.close()
+                except Exception:
+                    pass
+                raise
         finally:
             session.close()  # releases advisory lock on Postgres
 

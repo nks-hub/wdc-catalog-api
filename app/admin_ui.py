@@ -1550,6 +1550,24 @@ def admin_retention_page(
         if d.device_id not in taken
     ]
 
+    from .db import SchedulerRun
+
+    last_run_row = db.scalar(
+        _sel(SchedulerRun)
+        .where(SchedulerRun.job == "retention")
+        .order_by(SchedulerRun.started_at.desc())
+        .limit(1)
+    )
+    last_run = None
+    if last_run_row is not None:
+        last_run = {
+            "started_at": last_run_row.started_at.isoformat() if last_run_row.started_at else None,
+            "finished_at": last_run_row.finished_at.isoformat() if last_run_row.finished_at else None,
+            "duration_ms": last_run_row.duration_ms,
+            "summary": last_run_row.summary,
+            "error": last_run_row.error,
+        }
+
     ctx = base_context(
         request,
         username,
@@ -1557,7 +1575,7 @@ def admin_retention_page(
         policy=policy,
         device_policies=device_policies,
         devices=devices,
-        last_run=None,
+        last_run=last_run,
         flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "retention.html", ctx)
@@ -3555,6 +3573,29 @@ def admin_ops(
     policy = db.get(GlobalPolicy, 1)
     webhook_enabled = bool(policy and (policy.webhook_url or "").strip())
 
+    # --- retention last run ---
+    from .db import SchedulerRun
+
+    rr = db.scalar(
+        _sel(SchedulerRun)
+        .where(SchedulerRun.job == "retention")
+        .order_by(SchedulerRun.started_at.desc())
+        .limit(1)
+    )
+    retention_last_run = None
+    if rr is not None:
+        from datetime import datetime, timezone
+
+        age_s = None
+        if rr.started_at is not None:
+            age_s = (datetime.now(timezone.utc).replace(tzinfo=None) - rr.started_at).total_seconds()
+        retention_last_run = {
+            "age": _format_uptime(age_s) + " ago" if age_s is not None else "—",
+            "ok": rr.error is None,
+            "deleted": (rr.summary or {}).get("deleted", 0),
+            "audit_purged": (rr.summary or {}).get("audit_events_purged", 0),
+        }
+
     ctx = base_context(
         request,
         username,
@@ -3571,6 +3612,7 @@ def admin_ops(
         scheduler_on=scheduler_on,
         retention_cron=retention_cron,
         webhook_enabled=webhook_enabled,
+        retention_last_run=retention_last_run,
     )
     return templates.TemplateResponse(request, "ops.html", ctx)
 

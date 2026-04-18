@@ -39,6 +39,14 @@
         <b>{% if scheduler_on %}<span class="pill pill-ok">yes</span>{% else %}<span class="pill pill-warn">no</span>{% endif %}</b>
       </div>
       <div class="stat-row"><span>Cron</span><b><code>{{ retention_cron }}</code></b></div>
+      {% if retention_last_run %}
+      <div class="stat-row"><span>Last run</span>
+        <b>{% if retention_last_run.ok %}<span class="pill pill-ok">ok</span>{% else %}<span class="pill pill-suspended">failed</span>{% endif %} {{ retention_last_run.age }}</b>
+      </div>
+      <div class="stat-row"><span>Purged</span><b>{{ retention_last_run.deleted }} snapshots, {{ retention_last_run.audit_purged }} audit rows</b></div>
+      {% else %}
+      <div class="stat-row"><span>Last run</span><b><span class="muted">never</span></b></div>
+      {% endif %}
       <div class="stat-sub"><a class="btn btn-ghost btn-sm" href="/admin/retention">Policy →</a></div>
     </div>
 
