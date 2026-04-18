@@ -202,6 +202,9 @@
           {% if t.revoked_at %}<span class="pill pill-suspended">revoked</span>
           {% elif t.expired %}<span class="pill pill-warn">expired</span>
           {% else %}<span class="pill pill-ok">active</span>{% endif %}
+          {% if t.stale_days %}
+            <span class="pill pill-warn" title="{% if t.last_used_ever %}Last used {{ t.stale_days }} days ago{% else %}Never used since creation {{ t.stale_days }} days ago{% endif %}">⚠ unused {{ t.stale_days }}d</span>
+          {% endif %}
         </td>
         <td class="actions">
           {% if not t.revoked_at %}

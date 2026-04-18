@@ -3298,26 +3298,45 @@ def admin_toggle_theme(
 
 
 def _pat_view_rows(db: Session, account_id: int) -> list[dict]:
-    """Shared render helper — tokens list with ``expired`` derived flag."""
+    """Shared render helper — tokens list with derived ``expired`` +
+    ``stale_days`` flags. ``stale_days`` is populated when the token is
+    still active (not revoked, not expired) but hasn't been used in a
+    while — never-used-since-creation counts too, so forgotten CI keys
+    bubble up for cleanup on the PAT listing."""
     from datetime import datetime, timezone
 
     from . import pats as _pats
 
     rows = _pats.list_for(db, account_id=account_id)
     now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
-    return [
-        {
-            "id": r.id,
-            "name": r.name,
-            "prefix": r.token_prefix,
-            "created_at": r.created_at.isoformat() if r.created_at else "",
-            "last_used_at": r.last_used_at.isoformat() if r.last_used_at else None,
-            "revoked_at": r.revoked_at.isoformat() if r.revoked_at else None,
-            "expires_at": r.expires_at.isoformat() if r.expires_at else None,
-            "expired": r.expires_at is not None and r.expires_at <= now_naive,
-        }
-        for r in rows
-    ]
+    STALE_THRESHOLD_DAYS = 30
+    out: list[dict] = []
+    for r in rows:
+        expired = r.expires_at is not None and r.expires_at <= now_naive
+        stale_days: int | None = None
+        if r.revoked_at is None and not expired and r.created_at is not None:
+            reference = r.last_used_at or r.created_at
+            try:
+                age_days = (now_naive - reference).days
+            except TypeError:  # tz-aware / naive mismatch guard
+                age_days = None
+            if age_days is not None and age_days >= STALE_THRESHOLD_DAYS:
+                stale_days = age_days
+        out.append(
+            {
+                "id": r.id,
+                "name": r.name,
+                "prefix": r.token_prefix,
+                "created_at": r.created_at.isoformat() if r.created_at else "",
+                "last_used_at": r.last_used_at.isoformat() if r.last_used_at else None,
+                "last_used_ever": r.last_used_at is not None,
+                "revoked_at": r.revoked_at.isoformat() if r.revoked_at else None,
+                "expires_at": r.expires_at.isoformat() if r.expires_at else None,
+                "expired": expired,
+                "stale_days": stale_days,
+            }
+        )
+    return out
 
 
 @router.post(
