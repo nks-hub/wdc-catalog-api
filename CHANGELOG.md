@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.21.1 — 2026-04-18
+
+Test-stability patch.
+
+- `test_kill_others_preserves_current` was order-sensitive in the full
+  suite: if `test_2fa_enforcement.py` ran first and left
+  `GlobalPolicy.require_2fa_for_admins=True` (e.g. between the save
+  and the teardown), the later kill-others POST bounced off the
+  `current_user_with_2fa_gate` redirect to
+  `/admin/account?flash=totp-required`. The redirect satisfied the
+  `status in (302, 303)` assertion but the SQL UPDATE never ran, so
+  the synthetic session rows stayed un-revoked and the
+  `revoked_at is not None` check failed.
+- Fix: extend the `_reset_totp` helper in `tests/test_admin_sessions_mgmt.py`
+  to ALSO clear `require_2fa_for_admins` on GlobalPolicy. Every test
+  in this file already calls `_reset_totp()`, so one change fixes
+  them all. Three consecutive full-suite runs green after the patch.
+
+No production code changed. 393 tests passing (unchanged from v0.21.0).
+
 ## v0.21.0 — 2026-04-18
 
 `scheduler_runs` retention — closes the unbounded-growth debt from
