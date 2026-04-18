@@ -57,11 +57,20 @@ def test_admin_page_renders(admin_client: TestClient, path: str, marker: str) ->
 
 
 def test_admin_nav_highlights_active_tab(admin_client: TestClient) -> None:
-    """The nav entry matching the current URL must carry the .active class."""
+    """The nav entry matching the current URL must carry the .active class.
+
+    Post-sidebar-redesign the link lives in `<a class="sidebar-link ... active">`
+    rather than the old `<a ... class="active">` flat form, so we anchor on
+    the Users href + ``active`` appearing in the same link open-tag.
+    """
     r = admin_client.get("/admin/users")
     assert r.status_code == 200
-    # The Users link should have class="active" when on /admin/users.
-    assert 'href="/admin/users" class="active"' in r.text
+    import re
+    users_link = re.search(r'<a\s+href="/admin/users"[^>]*>', r.text)
+    assert users_link, "Users nav link not found"
+    assert "active" in users_link.group(0), (
+        f"Users link has no active class on /admin/users: {users_link.group(0)}"
+    )
 
 
 def test_admin_settings_roundtrip(admin_client: TestClient) -> None:

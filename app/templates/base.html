@@ -7,78 +7,161 @@
   <link rel="stylesheet" href="/static/admin.css">
   <script src="/static/admin.js" defer></script>
 </head>
-<body>
-  <header class="topbar">
-    <a href="/admin" class="brand">NKS WDC Catalog</a>
-    {% set path = request.url.path %}
-    {# Checkbox-hack drawer: label toggles nav open on <=720px without JS.
-       Desktop: .nav-toggle hidden, .nav flows inline. No <details> element
-       because its UA-imposed content-visibility zero-widths the nav even
-       when display:contents is set on the host (verified 2026-04-18). #}
-    <input type="checkbox" id="nav-toggle-cb" class="nav-toggle-cb" hidden>
-    <div class="nav-drawer">
-      <label for="nav-toggle-cb" class="nav-toggle" aria-label="Toggle navigation">
-        <span class="nav-toggle-bar"></span>
-        <span class="nav-toggle-bar"></span>
-        <span class="nav-toggle-bar"></span>
-      </label>
-      <nav class="nav">
-        <a href="/admin" class="{% if path == '/admin' %}active{% endif %}">Dashboard</a>
-        <a href="/admin/catalog" class="{% if path.startswith('/admin/catalog') or path.startswith('/admin/apps') or path == '/admin/new' %}active{% endif %}">Apps</a>
-        <a href="/admin/users" class="{% if path.startswith('/admin/users') %}active{% endif %}">Users</a>
-        <a href="/admin/invites" class="{% if path.startswith('/admin/invites') %}active{% endif %}">Invites</a>
-        <a href="/admin/devices" class="{% if path.startswith('/admin/devices') %}active{% endif %}">Devices</a>
-        <a href="/admin/retention" class="{% if path.startswith('/admin/retention') %}active{% endif %}">Retention</a>
-        <a href="/admin/audit" class="{% if path.startswith('/admin/audit') %}active{% endif %}">Audit</a>
-        <a href="/admin/revoked-tokens" class="{% if path.startswith('/admin/revoked-tokens') %}active{% endif %}">Revoked</a>
-        <a href="/admin/settings" class="{% if path.startswith('/admin/settings') %}active{% endif %}">Settings</a>
-        <a href="/admin/ops" class="{% if path.startswith('/admin/ops') %}active{% endif %}">Ops</a>
-        <a href="/api/v1/catalog" target="_blank" rel="noopener">JSON</a>
-        <a href="/docs" target="_blank" rel="noopener">API docs</a>
-      </nav>
-    </div>
-    {% if username %}
-      <form method="get" action="/admin/search" class="topbar-search">
-        <input type="text" name="q" placeholder="Search…" value="{{ request.query_params.get('q', '') if request and request.url.path == '/admin/search' else '' }}">
+<body class="app-shell{% if not username %} app-shell-guest{% endif %}">
+  {# Mobile sidebar toggle — checkbox-hack so CSP stays strict.
+     Desktop: sidebar is always visible, label hidden.
+     Mobile (<=960px): sidebar slides in from left when checked. #}
+  <input type="checkbox" id="sidebar-toggle" class="sidebar-toggle-cb" hidden>
+  {% set path = request.url.path %}
+
+  {% if username %}
+  <aside class="sidebar" aria-label="Primary navigation">
+    <a href="/admin" class="sidebar-brand">
+      <img src="/static/logo-icon.png" alt="" class="sidebar-brand-logo" width="28" height="28">
+      <span class="sidebar-brand-text">
+        <span class="sidebar-brand-name">NKS WDC</span>
+        <span class="sidebar-brand-tag">Catalog</span>
+      </span>
+    </a>
+
+    <nav class="sidebar-nav">
+      <div class="sidebar-group">
+        <span class="sidebar-group-label">Overview</span>
+        <a href="/admin" class="sidebar-link {% if path == '/admin' %}active{% endif %}">
+          <svg class="sidebar-icon" viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M3 11h6V3H3v8Zm0 6h6v-4H3v4Zm8 0h6V9h-6v8Zm0-14v4h6V3h-6Z"/></svg>
+          <span>Dashboard</span>
+        </a>
+        <a href="/admin/ops" class="sidebar-link {% if path.startswith('/admin/ops') %}active{% endif %}">
+          <svg class="sidebar-icon" viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 2a1 1 0 0 1 .95.69l1.52 4.68 4.91.04a1 1 0 0 1 .59 1.8l-3.97 2.89 1.5 4.68a1 1 0 0 1-1.54 1.12L10 15l-3.96 2.9a1 1 0 0 1-1.54-1.12l1.5-4.68-3.97-2.89a1 1 0 0 1 .59-1.8l4.91-.04L9.05 2.7A1 1 0 0 1 10 2Z"/></svg>
+          <span>Ops</span>
+        </a>
+      </div>
+
+      <div class="sidebar-group">
+        <span class="sidebar-group-label">Catalog</span>
+        <a href="/admin/catalog" class="sidebar-link {% if path.startswith('/admin/catalog') or path.startswith('/admin/apps') or path == '/admin/new' %}active{% endif %}">
+          <svg class="sidebar-icon" viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M3 3h5v5H3V3Zm0 9h5v5H3v-5Zm9-9h5v5h-5V3Zm0 9h5v5h-5v-5Z"/></svg>
+          <span>Apps</span>
+        </a>
+        <a href="/admin/devices" class="sidebar-link {% if path.startswith('/admin/devices') %}active{% endif %}">
+          <svg class="sidebar-icon" viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M2 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-5v2h3a1 1 0 1 1 0 2H6a1 1 0 1 1 0-2h3v-2H4a2 2 0 0 1-2-2V5Zm2 0v7h12V5H4Z"/></svg>
+          <span>Devices</span>
+        </a>
+      </div>
+
+      <div class="sidebar-group">
+        <span class="sidebar-group-label">Access</span>
+        <a href="/admin/users" class="sidebar-link {% if path.startswith('/admin/users') %}active{% endif %}">
+          <svg class="sidebar-icon" viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0v1H3v-1Z"/></svg>
+          <span>Users</span>
+        </a>
+        <a href="/admin/invites" class="sidebar-link {% if path.startswith('/admin/invites') %}active{% endif %}">
+          <svg class="sidebar-icon" viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M2 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6Zm2 0 6 4.5L16 6H4Zm12 2.2-5.4 4.1a1 1 0 0 1-1.2 0L4 8.2V14h12V8.2Z"/></svg>
+          <span>Invites</span>
+        </a>
+        <a href="/admin/revoked-tokens" class="sidebar-link {% if path.startswith('/admin/revoked-tokens') %}active{% endif %}">
+          <svg class="sidebar-icon" viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm5.2 3.4L5.4 15.2a6 6 0 0 1 9.8-9.8Zm-.6 1L6 14.6a6 6 0 0 0 8.6-8.2Z"/></svg>
+          <span>Revoked</span>
+        </a>
+      </div>
+
+      <div class="sidebar-group">
+        <span class="sidebar-group-label">Reliability</span>
+        <a href="/admin/audit" class="sidebar-link {% if path.startswith('/admin/audit') %}active{% endif %}">
+          <svg class="sidebar-icon" viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M5 3h7l4 4v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm6 1v3h3l-3-3ZM6 9h8v1.5H6V9Zm0 3h8v1.5H6V12Zm0 3h5v1.5H6V15Z"/></svg>
+          <span>Audit log</span>
+        </a>
+        <a href="/admin/retention" class="sidebar-link {% if path.startswith('/admin/retention') %}active{% endif %}">
+          <svg class="sidebar-icon" viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M10 2a8 8 0 0 0-6.93 4L2 4.6v3.8h3.8L4.4 7A6 6 0 1 1 4 10h2A4 4 0 1 0 10 6v-2a8 8 0 0 0 0 16 8 8 0 0 0 0-16Z"/></svg>
+          <span>Retention</span>
+        </a>
+      </div>
+
+      <div class="sidebar-group">
+        <span class="sidebar-group-label">System</span>
+        <a href="/admin/settings" class="sidebar-link {% if path.startswith('/admin/settings') %}active{% endif %}">
+          <svg class="sidebar-icon" viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M8.6 2.6a1 1 0 0 1 1 0l1 .58 1-.58a1 1 0 0 1 1 1.73L12.2 5l.9 1.56 1.73-.58a1 1 0 0 1 .64 1.9l-1.73.58v1.14l1.73.58a1 1 0 0 1-.64 1.9l-1.73-.58-.9 1.56 1.4 1.66a1 1 0 0 1-1.72.68l-1-.95-1 .95a1 1 0 0 1-1.72-.68l1.4-1.66-.9-1.56-1.73.58a1 1 0 0 1-.64-1.9l1.73-.58V8.46l-1.73-.58a1 1 0 0 1 .64-1.9l1.73.58.9-1.56L6.87 3.34a1 1 0 0 1 .73-1.74ZM10 8.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/></svg>
+          <span>Settings</span>
+        </a>
+        <a href="/docs" target="_blank" rel="noopener" class="sidebar-link">
+          <svg class="sidebar-icon" viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M4 3h9l4 4v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm8 1.5V7h2.5L12 4.5ZM5 9h10v1.5H5V9Zm0 3h10v1.5H5V12Zm0 3h7v1.5H5V15Z"/></svg>
+          <span>API docs</span>
+          <svg class="sidebar-icon-ext" viewBox="0 0 12 12" aria-hidden="true"><path fill="currentColor" d="M4 3h5v5H7.5V5.56L4.56 8.5 3.5 7.44 6.44 4.5H4V3Z"/></svg>
+        </a>
+        <a href="/api/v1/catalog" target="_blank" rel="noopener" class="sidebar-link">
+          <svg class="sidebar-icon" viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M7 4.5 3 10l4 5.5L5 17 0 10l5-7 2 1.5ZM13 4.5 15 3l5 7-5 7-2-1.5L17 10l-4-5.5ZM8.5 16.5 11 3.5l1.5.25-2.5 13L8.5 16.5Z"/></svg>
+          <span>JSON feed</span>
+          <svg class="sidebar-icon-ext" viewBox="0 0 12 12" aria-hidden="true"><path fill="currentColor" d="M4 3h5v5H7.5V5.56L4.56 8.5 3.5 7.44 6.44 4.5H4V3Z"/></svg>
+        </a>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a href="/admin/account" class="sidebar-user" title="My account">
+        <div class="sidebar-user-avatar">{{ username[0]|upper }}</div>
+        <div class="sidebar-user-meta">
+          <span class="sidebar-user-name">{{ username }}</span>
+          <span class="sidebar-user-hint">My account</span>
+        </div>
+      </a>
+      <form method="post" action="/logout" class="inline">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <button class="sidebar-logout" type="submit" title="Log out" aria-label="Log out">
+          <svg viewBox="0 0 20 20" aria-hidden="true" width="16" height="16"><path fill="currentColor" d="M11 3H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h6v-2H5V5h6V3Zm2.3 3.7L12 8l1.3 1.3H8v1.5h5.3L12 12l1.3 1.3 4-3.8-4-3.8Z"/></svg>
+        </button>
       </form>
-      <div class="user">
+    </div>
+  </aside>
+  {% endif %}
+
+  <div class="app-main">
+    {% if username %}
+    <header class="topbar">
+      <label for="sidebar-toggle" class="sidebar-mobile-toggle" aria-label="Open menu">
+        <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 5h14v2H3V5Zm0 4h14v2H3V9Zm0 4h14v2H3v-2Z"/></svg>
+      </label>
+      <form method="get" action="/admin/search" class="topbar-search">
+        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" class="topbar-search-icon"><path fill="currentColor" d="M8 2a6 6 0 1 1-3.49 10.88l-3 3a1 1 0 1 1-1.41-1.41l3-3A6 6 0 0 1 8 2Zm0 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/></svg>
+        <input type="text" name="q" placeholder="Search apps, users, audit…" value="{{ request.query_params.get('q', '') if request and request.url.path == '/admin/search' else '' }}">
+      </form>
+      <div class="topbar-actions">
         <form method="post" action="/admin/theme" class="inline" title="Toggle light/dark theme">
           <input type="hidden" name="_csrf" value="{{ csrf_token }}">
           <input type="hidden" name="next" value="{{ request.url.path }}">
-          <button class="btn btn-ghost theme-toggle" type="submit" aria-label="Toggle theme">
+          <button class="btn-ghost-icon" type="submit" aria-label="Toggle theme">
             {% if theme == 'dark' %}☀{% elif theme == 'light' %}☾{% else %}◐{% endif %}
           </button>
         </form>
-        <a href="/admin/account" class="user-name" title="My account">{{ username }}</a>
-        <form method="post" action="/logout" class="inline">
-          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-          <button class="btn btn-ghost" type="submit">Log out</button>
-        </form>
+      </div>
+    </header>
+    {% endif %}
+
+    {% if banner %}
+      <div class="banner">{{ banner }}</div>
+    {% endif %}
+
+    {% if scheduler_failure %}
+      <div class="banner banner-error">
+        <strong>Scheduled <code>{{ scheduler_failure.job }}</code> job failed {{ scheduler_failure.age }} ago.</strong>
+        <span class="muted">{{ scheduler_failure.error }}</span>
+        <a href="/admin/ops/scheduler?status_filter=failed" style="margin-left: auto;">investigate →</a>
       </div>
     {% endif %}
-  </header>
 
-  {% if banner %}
-    <div class="banner">{{ banner }}</div>
+    <main class="container">
+      {% if flash %}
+        <div class="flash flash-{{ flash.kind }}">{{ flash.message }}</div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+      <span>NKS WebDev Console Catalog API v{{ version }}</span>
+    </footer>
+  </div>
+
+  {% if username %}
+  <label for="sidebar-toggle" class="sidebar-scrim" aria-hidden="true"></label>
   {% endif %}
-
-  {% if scheduler_failure %}
-    <div class="banner banner-error">
-      <strong>Scheduled <code>{{ scheduler_failure.job }}</code> job failed {{ scheduler_failure.age }} ago.</strong>
-      <span class="muted">{{ scheduler_failure.error }}</span>
-      <a href="/admin/ops/scheduler?status_filter=failed" style="margin-left: auto;">investigate →</a>
-    </div>
-  {% endif %}
-
-  <main class="container">
-    {% if flash %}
-      <div class="flash flash-{{ flash.kind }}">{{ flash.message }}</div>
-    {% endif %}
-    {% block content %}{% endblock %}
-  </main>
-
-  <footer class="footer">
-    <span>NKS WebDev Console Catalog API v{{ version }}</span>
-  </footer>
 </body>
 </html>
