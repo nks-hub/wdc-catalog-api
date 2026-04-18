@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.49.2 — 2026-04-18
+
+Hotfix batch for SSO polish.
+
+- **Logo:** auto-cropped to content bbox (original 512×512 had 35px
+  transparent top/bottom padding) + resized to 256×256, rounded
+  12px border. Crisper at login-page render size.
+- **SSO button CSS:** dropped `.btn` base class so inherited hover
+  rules don't wash out the gradient. Added explicit `!important`
+  hover + active gradients (`#4F46E5→#7C3AED` and `#4338CA→#6D28D9`)
+  so the button stays readable on interaction.
+- **Authentik client secret:** rotated again + env synchronized.
+  Prior rotate had a phantom second rotation elsewhere that desync'd
+  server-side from deploy-host env. Verified round-trip with PATCH
+  response hash match.
+
 ## v0.49.1 — 2026-04-18
 
 Hotfix for v0.49.0 SSO.

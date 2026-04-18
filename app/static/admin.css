@@ -1727,10 +1727,17 @@ body:has(.login-wrap) main.container { padding-top: 0; }
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 .btn-sso:hover {
+  /* Keep gradient explicit on hover — without this the inherited
+     ``.btn:hover`` rule overwrites background and renders washed-out. */
+  background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%) !important;
+  color: #fff !important;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.45);
 }
-.btn-sso:active { transform: translateY(0); }
+.btn-sso:active {
+  background: linear-gradient(135deg, #4338CA 0%, #6D28D9 100%) !important;
+  transform: translateY(0);
+}
 .btn-sso svg { flex: none; stroke: currentColor; }
 
 .login-divider {
