@@ -3841,6 +3841,38 @@ def admin_ops(
     policy = db.get(GlobalPolicy, 1)
     webhook_enabled = bool(policy and (policy.webhook_url or "").strip())
 
+    # --- webhook delivery stats (last 24h) ---
+    from .db import WebhookDelivery
+
+    now_hr = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    day_ago_hr = now_hr - timedelta(hours=23)
+
+    webhook_rows = db.scalars(
+        _sel(WebhookDelivery).where(
+            WebhookDelivery.created_at >= day_ago_hr.replace(tzinfo=None)
+        )
+    ).all()
+
+    webhook_ok_24h = sum(1 for r in webhook_rows if r.error is None)
+    webhook_failed_24h = sum(1 for r in webhook_rows if r.error is not None)
+    webhook_total_24h = webhook_ok_24h + webhook_failed_24h
+
+    wh_buckets = {day_ago_hr + timedelta(hours=i): 0 for i in range(24)}
+    for r in webhook_rows:
+        if r.created_at is None:
+            continue
+        dt = r.created_at
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        key = dt.replace(minute=0, second=0, microsecond=0)
+        if key in wh_buckets:
+            wh_buckets[key] += 1
+    webhook_sparkline = [
+        {"hour": k.strftime("%H:00"), "count": v}
+        for k, v in sorted(wh_buckets.items())
+    ]
+    webhook_sparkline_max = max((b["count"] for b in webhook_sparkline), default=0) or 1
+
     # --- retention last run ---
     from .db import SchedulerRun
 
@@ -3880,6 +3912,13 @@ def admin_ops(
         scheduler_on=scheduler_on,
         retention_cron=retention_cron,
         webhook_enabled=webhook_enabled,
+        webhook_stats={
+            "ok_24h": webhook_ok_24h,
+            "failed_24h": webhook_failed_24h,
+            "total_24h": webhook_total_24h,
+        },
+        webhook_sparkline=webhook_sparkline,
+        webhook_sparkline_max=webhook_sparkline_max,
         retention_last_run=retention_last_run,
     )
     return templates.TemplateResponse(request, "ops.html", ctx)
