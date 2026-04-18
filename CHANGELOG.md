@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.37.0 — 2026-04-18
+
+Dashboard KPI delta chips.
+
+- The hero KPI and the Webhooks card's Sent row gain a compact
+  `▲ +N` / `▼ -N` / `—` chip showing current-24h minus prior-24h
+  counts for audit events and webhook deliveries. Operators see
+  "today busier than yesterday" at a glance without navigating
+  into `/admin/ops`.
+- Both the current-24h and prior-24h counts queried fresh in the
+  handler — NOT mixed with the 30-s cached
+  `stats.audit.events_last_24h` — so the arrow direction always
+  matches the visible count math.
+- Zero-delta renders as a muted em-dash so a flat period doesn't
+  show up as a misleading arrow.
+- New `.kpi-delta` / `.kpi-delta-up/-down/-flat` CSS using the
+  existing success / danger / surface-2 tokens.
+
+3 new tests (positive, negative, flat) — 469 passing, up from 466.
+
 ## v0.36.0 — 2026-04-18
 
 `user.tokens_revoked` audit event.
