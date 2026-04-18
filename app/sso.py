@@ -255,19 +255,34 @@ def exchange_code(
     if not id_token:
         raise SSOError("id_token missing from token response")
 
-    # Verify id_token signature against JWKS
+    # Verify id_token. Authentik's default for confidential OIDC
+    # providers is ``HS256`` (HMAC-SHA256, shared secret = client_secret) —
+    # confirmed via GET /application/o/<slug>/.well-known/openid-configuration
+    # returning ``id_token_signing_alg_values_supported: ["HS256"]``. The
+    # JWKS endpoint is still exposed but carries no usable public key, so
+    # RS256 verification fails at the JWKS-lookup step. HMAC secret doubles
+    # as signing key + client auth; fine for our single-tenant setup.
     try:
-        jwks_client = jwt.PyJWKClient(jwks_url(), cache_keys=True)
-        signing_key = jwks_client.get_signing_key_from_jwt(id_token)
+        # First peek at the header to honor whatever alg Authentik uses
+        # (future-proof if an admin flips to RS256).
+        header = jwt.get_unverified_header(id_token)
+        alg = header.get("alg", "HS256")
+        if alg.startswith("HS"):
+            key = _client_secret()
+        else:
+            # RS/ES path — fetch the public key from JWKS
+            jwks_client = jwt.PyJWKClient(jwks_url(), cache_keys=True)
+            key = jwks_client.get_signing_key_from_jwt(id_token).key
         claims = jwt.decode(
             id_token,
-            signing_key.key,
-            algorithms=["RS256", "ES256"],
+            key,
+            algorithms=[alg],
             audience=client_id(),
             issuer=f"{authority()}/application/o/{app_slug()}/",
             options={"require": ["exp", "iat", "iss", "aud", "sub"]},
         )
     except jwt.PyJWTError as exc:
+        log.warning("SSO id_token verification failed: %s", exc)
         raise SSOError(f"id_token verification failed: {exc}") from exc
 
     email = str(claims.get("email", "")).strip().lower()
