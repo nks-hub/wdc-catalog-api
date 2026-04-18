@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.36.0 — 2026-04-18
+
+`user.tokens_revoked` audit event.
+
+- **`POST /admin/users/{id}/revoke-tokens`** — the mass-JWT-revocation
+  button on the user detail page has been in the codebase since the
+  early admin UI, but never emitted an audit event. A security-
+  critical admin action leaving no trail was a real gap.
+- **New `user.tokens_revoked` audit action** — detail carries
+  `target_email`, `token_version_before`, `token_version_after` so
+  operators reconstruct the chain (who revoked, whose tokens, when,
+  from which TV to which TV) without database spelunking.
+- **404 path suppressed** — an attempt against a missing user_id
+  returns 404 without writing a phantom audit row.
+
+2 new regression tests (happy path + 404 no-audit) — 466 passing,
+up from 464.
+
 ## v0.35.0 — 2026-04-18
 
 Audit free-text search.
