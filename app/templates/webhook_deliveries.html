@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Webhook deliveries — NKS WDC{% endblock %}
+{% block content %}
+<section class="section">
+  <header class="section-head">
+    <h1>Webhook deliveries ({{ total }})</h1>
+    <a class="btn" href="/admin/ops">← Ops</a>
+  </header>
+
+  <form method="get" class="inline-form">
+    <select name="status_filter">
+      <option value="" {% if not status_filter %}selected{% endif %}>Any status</option>
+      <option value="ok" {% if status_filter == 'ok' %}selected{% endif %}>ok</option>
+      <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>failed</option>
+    </select>
+    <button class="btn">Filter</button>
+    {% if status_filter %}
+      <a class="btn btn-ghost" href="/admin/ops/webhooks">clear</a>
+    {% endif %}
+  </form>
+
+  <table class="data compact">
+    <thead>
+      <tr><th>When</th><th>Action</th><th>URL</th><th>Status</th><th>Duration</th><th>Error</th></tr>
+    </thead>
+    <tbody>
+      {% for d in deliveries %}
+      <tr>
+        <td class="nowrap">{{ d.created_at[:19] }}</td>
+        <td>{% if d.event_action %}<code>{{ d.event_action }}</code>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="muted" style="max-width: 28ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ d.url }}">{{ d.url }}</td>
+        <td>
+          {% if d.ok %}<span class="pill pill-ok">ok{% if d.status_code %} · {{ d.status_code }}{% endif %}</span>
+          {% else %}<span class="pill pill-suspended">failed{% if d.status_code %} · {{ d.status_code }}{% endif %}</span>{% endif %}
+        </td>
+        <td class="nowrap">{% if d.duration_ms is not none %}{{ d.duration_ms }} ms{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td>
+          {% if d.error %}<details><summary class="muted">view</summary><pre class="detail">{{ d.error }}</pre></details>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6">
+          <div class="empty-state">
+            <div class="empty-icon">🪝</div>
+            <h3>{% if status_filter %}No deliveries match the filter{% else %}No webhook deliveries recorded yet{% endif %}</h3>
+            <p>Configure a webhook URL in Settings; rows land here after the next matching event.</p>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="pager">
+    {% if offset > 0 %}
+      <a class="btn" href="?{{ qs }}offset={{ [offset - limit, 0]|max }}&limit={{ limit }}">← prev</a>
+    {% endif %}
+    {% if deliveries %}
+      <span class="muted">showing {{ offset + 1 }}–{{ offset + deliveries|length }} of {{ total }}</span>
+    {% endif %}
+    {% if offset + limit < total %}
+      <a class="btn" href="?{{ qs }}offset={{ offset + limit }}&limit={{ limit }}">next →</a>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

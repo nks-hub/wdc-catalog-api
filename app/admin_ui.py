@@ -3954,4 +3954,65 @@ def admin_scheduler_runs(
     return templates.TemplateResponse(request, "scheduler_runs.html", ctx)
 
 
+@router.get("/admin/ops/webhooks", response_class=HTMLResponse)
+def admin_webhook_deliveries(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    status_filter: str = "",  # "" | "ok" | "failed"
+    offset: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    from sqlalchemy import func as _func
+    from sqlalchemy import select as _sel
+
+    from .db import WebhookDelivery
+
+    stmt = _sel(WebhookDelivery)
+    if status_filter == "ok":
+        stmt = stmt.where(WebhookDelivery.error.is_(None))
+    elif status_filter == "failed":
+        stmt = stmt.where(WebhookDelivery.error.is_not(None))
+
+    total = db.scalar(
+        _sel(_func.count()).select_from(stmt.subquery())
+    ) or 0
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+
+    rows = db.scalars(
+        stmt.order_by(WebhookDelivery.created_at.desc(), WebhookDelivery.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+
+    deliveries = [
+        {
+            "id": r.id,
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+            "url": r.url,
+            "event_action": r.event_action,
+            "status_code": r.status_code,
+            "duration_ms": r.duration_ms,
+            "error": r.error,
+            "ok": r.error is None,
+        }
+        for r in rows
+    ]
+
+    qs = (f"status_filter={status_filter}&") if status_filter else ""
+
+    ctx = base_context(
+        request,
+        username,
+        deliveries=deliveries,
+        total=total,
+        offset=offset,
+        limit=limit,
+        status_filter=status_filter,
+        qs=qs,
+    )
+    return templates.TemplateResponse(request, "webhook_deliveries.html", ctx)
+
+
 __all__ = ["router"]

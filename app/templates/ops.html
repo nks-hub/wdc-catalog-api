@@ -58,7 +58,10 @@
       <div class="stat-row"><span>Configured</span>
         <b>{% if webhook_enabled %}<span class="pill pill-ok">yes</span>{% else %}<span class="pill pill-warn">no</span>{% endif %}</b>
       </div>
-      <div class="stat-sub"><a class="btn btn-ghost btn-sm" href="/admin/settings">Configure →</a></div>
+      <div class="stat-sub">
+        <a class="btn btn-ghost btn-sm" href="/admin/settings">Configure →</a>
+        <a class="btn btn-ghost btn-sm" href="/admin/ops/webhooks">History →</a>
+      </div>
     </div>
 
     <div class="stat-card">

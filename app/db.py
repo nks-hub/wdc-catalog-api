@@ -391,6 +391,26 @@ class AuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, index=True)
 
 
+class WebhookDelivery(Base):
+    """One row per outbound webhook POST attempt.
+
+    Covers both the audit-event-triggered dispatches (via
+    ``audit.emit`` → ``webhooks.fire``) and the explicit "Send test
+    webhook" button on /admin/settings. Captures the attempt outcome
+    so operators can confirm deliveries + spot receiver-side errors.
+    """
+
+    __tablename__ = "webhook_deliveries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    url: Mapped[str] = mapped_column(String(512), nullable=False)
+    event_action: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, index=True)
+
+
 class SchedulerRun(Base):
     """One row per scheduled-job execution (manual or cron).
 

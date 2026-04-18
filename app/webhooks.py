@@ -15,7 +15,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from urllib import request as _urlreq
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 log = logging.getLogger(__name__)
 
@@ -94,6 +94,12 @@ def fire(event: dict[str, Any], *, db=None) -> None:
 
 
 def _post(url: str, payload: dict) -> None:
+    event_action: str | None = None
+    try:
+        event_action = (payload.get("event") or {}).get("action")
+    except Exception:
+        pass
+
     body = json.dumps(payload, default=str).encode("utf-8")
     req = _urlreq.Request(
         url,
@@ -104,14 +110,51 @@ def _post(url: str, payload: dict) -> None:
             "User-Agent": "nks-wdc-catalog-api/webhook",
         },
     )
+    t0 = time.monotonic()
+    status_code: int | None = None
+    err: str | None = None
     try:
         with _urlreq.urlopen(req, timeout=_POST_TIMEOUT) as resp:
+            status_code = resp.status
             if resp.status >= 300:
+                err = f"HTTP {resp.status}"
                 log.warning("webhooks: POST %s returned %s", url, resp.status)
+    except HTTPError as exc:
+        status_code = exc.code
+        err = f"HTTP {exc.code}"
+        log.warning("webhooks: POST %s returned %s", url, exc.code)
     except URLError as exc:
+        err = f"URLError: {exc}"
         log.warning("webhooks: POST %s failed: %s", url, exc)
     except Exception as exc:  # noqa: BLE001
+        err = f"{type(exc).__name__}: {exc}"
         log.warning("webhooks: POST %s unexpected error: %s", url, exc)
+    finally:
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        _record_delivery(
+            url=url,
+            event_action=event_action,
+            status_code=status_code,
+            duration_ms=duration_ms,
+            error=err,
+        )
+
+
+def _record_delivery(*, url, event_action, status_code, duration_ms, error):
+    """Best-effort delivery recorder — never raises. Called from the thread pool."""
+    try:
+        from .db import WebhookDelivery, session_factory
+        with session_factory() as db:
+            db.add(WebhookDelivery(
+                url=url,
+                event_action=event_action,
+                status_code=status_code,
+                duration_ms=duration_ms,
+                error=(error[:512] if error else None),
+            ))
+            db.commit()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("webhooks: failed to record delivery: %s", exc)
 
 
 def drain(timeout: float = 10.0) -> None:
