@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.41.0 — 2026-04-18
+
+`nks_wdc_security_events_total` Prometheus counter.
+
+- **New Counter** with a single `action` label. Incremented from
+  `audit.emit` for a curated allowlist of security-significant
+  action names (login.failed, totp.login_failed, permission.denied,
+  password.change_failed, user.suspended, user.deleted,
+  user.tokens_revoked, session.killed, session.killed_others,
+  totp.disabled, backup.exported).
+- **Cardinality discipline** — the allowlist is explicit; arbitrary
+  admin actions (e.g. `app.updated`) do NOT increment, keeping the
+  Prometheus series count bounded. Unit-tested with a sanity check
+  that core security actions stay in the allowlist across refactors.
+- **Alert rules** — `ops/prometheus/alerts.yml` gains three rules
+  under a new `nks-wdc-security` group: failed-login spike
+  (warning, >5/min sustained 10m), sustained RBAC denials (critical,
+  >3/min sustained 10m), and a mass-session-kill info alert
+  (>5 kills in 30m — usually incident response).
+- **Best-effort** — metric increment is wrapped so a broken
+  prometheus_client never breaks the audit write path.
+- Complementary to the existing `nks_wdc_auth_failures_total` which
+  tracks pre-audit rejections (bad_password etc.); the new counter
+  tracks post-audit, fully-recorded events.
+
+4 new tests (allowlist increments, non-allowlist doesn't, /metrics
+exposes counter, core-actions sanity) — 488 passing, up from 484.
+
 ## v0.40.0 — 2026-04-18
 
 Dashboard security signals card — companion to v0.39.0 ops card.
