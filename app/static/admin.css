@@ -381,8 +381,8 @@ select, input, textarea, button {
   color: var(--topbar-text);
   transition: background var(--t-fast);
 }
-.nav-toggle::-webkit-details-marker { display: none; }
 .nav-toggle:hover { background: var(--topbar-hover-bg); }
+.nav-toggle-cb { position: absolute; opacity: 0; pointer-events: none; }
 .nav-toggle-bar {
   display: block;
   width: 18px;
@@ -437,8 +437,8 @@ select, input, textarea, button {
     flex-wrap: nowrap;
     gap: 2px;
   }
-  details.nav-drawer[open] > .nav { display: flex; }
-  details.nav-drawer[open] > .nav-toggle { background: var(--topbar-active-bg); }
+  .nav-toggle-cb:checked ~ .nav-drawer > .nav { display: flex; }
+  .nav-toggle-cb:checked ~ .nav-drawer > .nav-toggle { background: var(--topbar-active-bg); }
   .nav a {
     padding: var(--space-2) var(--space-3);
     font-size: 0.929rem;

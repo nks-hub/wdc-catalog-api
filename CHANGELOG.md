@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.50.0 — 2026-04-18
+
+Critical admin nav fix + audit IP fidelity sweep.
+
+- **Nav regression fix (P0):** the `<details>`-based nav drawer
+  collapsed to `width: 0` on desktop despite `display: contents`
+  on the host — UA content-visibility on non-summary descendants
+  of a closed `<details>` isn't bypassed. Replaced with a
+  CSS-only checkbox-hack (`<input type="checkbox">` + `<label>`)
+  so desktop shows nav inline and mobile (≤720px) toggles a
+  drawer. Zero JS required.
+- **Audit IP fidelity:** swapped raw `request.client.host` for
+  the existing `ratelimit.client_ip()` helper across `auth.py`
+  (3 call-sites — login, 2FA, IP allowlist), `backups.py` (2 —
+  `created_by_ip`), `devices.py` (1 — PAT IP allowlist), and
+  `pats.py` (1 — `last_used_ip`). Prior versions recorded the
+  upstream proxy IP in audit rows even though rate-limit keys
+  already respected XFF.
+
 ## v0.49.2 — 2026-04-18
 
 Hotfix batch for SSO polish.

@@ -11,15 +11,17 @@
   <header class="topbar">
     <a href="/admin" class="brand">NKS WDC Catalog</a>
     {% set path = request.url.path %}
-    {# <details> wraps the nav so phones get a tap-to-open drawer without
-       any JS (CSP stays strict). On >=720px the toggle is hidden and the
-       nav flows inline as usual. #}
-    <details class="nav-drawer">
-      <summary class="nav-toggle" aria-label="Toggle navigation">
+    {# Checkbox-hack drawer: label toggles nav open on <=720px without JS.
+       Desktop: .nav-toggle hidden, .nav flows inline. No <details> element
+       because its UA-imposed content-visibility zero-widths the nav even
+       when display:contents is set on the host (verified 2026-04-18). #}
+    <input type="checkbox" id="nav-toggle-cb" class="nav-toggle-cb" hidden>
+    <div class="nav-drawer">
+      <label for="nav-toggle-cb" class="nav-toggle" aria-label="Toggle navigation">
         <span class="nav-toggle-bar"></span>
         <span class="nav-toggle-bar"></span>
         <span class="nav-toggle-bar"></span>
-      </summary>
+      </label>
       <nav class="nav">
         <a href="/admin" class="{% if path == '/admin' %}active{% endif %}">Dashboard</a>
         <a href="/admin/catalog" class="{% if path.startswith('/admin/catalog') or path.startswith('/admin/apps') or path == '/admin/new' %}active{% endif %}">Apps</a>
@@ -34,7 +36,7 @@
         <a href="/api/v1/catalog" target="_blank" rel="noopener">JSON</a>
         <a href="/docs" target="_blank" rel="noopener">API docs</a>
       </nav>
-    </details>
+    </div>
     {% if username %}
       <form method="get" action="/admin/search" class="topbar-search">
         <input type="text" name="q" placeholder="Search…" value="{{ request.query_params.get('q', '') if request and request.url.path == '/admin/search' else '' }}">

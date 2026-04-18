@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from . import audit, idempotency, snapshots
 from .db import Account, DeviceConfig, DeviceSnapshot, get_session
 from .devices import get_current_account
+from .ratelimit import client_ip
 
 router = APIRouter(
     prefix="/api/v1/devices/{device_id}/backups",
@@ -176,7 +177,7 @@ def create_backup(
             payload=payload,
             kind=body.kind,
             label=body.label,
-            created_by_ip=request.client.host if request.client else None,
+            created_by_ip=client_ip(request),
             encrypt=body.encrypt,
             passphrase=x_wdc_passphrase,
         )
@@ -355,7 +356,7 @@ def import_backup(
             payload=body.payload,
             kind="import",
             label=label,
-            created_by_ip=request.client.host if request.client else None,
+            created_by_ip=client_ip(request),
         )
     except snapshots.PayloadTooLarge as exc:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, str(exc))

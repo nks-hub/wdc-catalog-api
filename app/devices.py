@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from .auth import hash_password, verify_dummy_password, verify_password
 from .db import Account, DeviceConfig, RevokedToken, get_session
-from .ratelimit import limiter
+from .ratelimit import client_ip, limiter
 
 log = logging.getLogger(__name__)
 
@@ -251,7 +251,7 @@ def get_current_account(
         allowlist = pat.ip_allowlist
         if allowlist:
             import ipaddress
-            client_host = request.client.host if request.client else None
+            client_host = client_ip(request)
             if not client_host:
                 raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
             try:

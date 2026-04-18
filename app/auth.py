@@ -28,6 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .db import User, get_session, session_factory
+from .ratelimit import client_ip
 
 if TYPE_CHECKING:
     pass
@@ -161,7 +162,7 @@ def issue_session(
                     _sel(AdminSession).where(AdminSession.fingerprint == fp)
                 )
                 if existing is None:
-                    ip = request.client.host if request and request.client else None
+                    ip = client_ip(request) if request else None
                     ua = request.headers.get("user-agent") if request else None
                     db.add(
                         AdminSession(
@@ -263,7 +264,7 @@ def current_user(
             # Legacy session — no row yet. Write one now so future kill works.
             user = db.scalar(_sel(_User).where(_User.username == username))
             if user is not None:
-                ip = request.client.host if request.client else None
+                ip = client_ip(request)
                 ua = request.headers.get("user-agent")
                 db.add(
                     AdminSession(
@@ -290,7 +291,7 @@ def current_user(
         if allowlist:
             import ipaddress
 
-            client_host = request.client.host if request.client else None
+            client_host = client_ip(request)
             ok = False
             if client_host:
                 try:

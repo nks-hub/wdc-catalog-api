@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from .auth import BCRYPT_ROUNDS
 from .db import Account, PersonalAccessToken
+from .ratelimit import client_ip
 
 
 TOKEN_PREFIX = "nks_pat_"
@@ -169,7 +170,7 @@ def try_authenticate_pat(
         try:
             row.last_used_at = now
             if request is not None:
-                row.last_used_ip = (request.client.host if request.client else None)
+                row.last_used_ip = client_ip(request)
                 ua = request.headers.get("user-agent")
                 row.last_used_ua = (ua or "")[:256] or None
             db.flush()
