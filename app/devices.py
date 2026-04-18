@@ -363,6 +363,31 @@ def login(
         if locked_until.tzinfo is None:
             locked_until = locked_until.replace(tzinfo=timezone.utc)
         if locked_until > now:
+            # Emit an audit event + commit BEFORE raising. The attempt
+            # is a distinct signal from regular login.failed — this
+            # account is in cool-down, so a password test here means
+            # someone's pounding on a known-locked door. Wire into
+            # SECURITY_ACTION_ALLOWLIST via audit.emit's hook.
+            from . import audit as _audit
+
+            try:
+                _audit.emit(
+                    db,
+                    request=request,
+                    actor=account,
+                    action="login.locked_out",
+                    resource_type="account",
+                    resource_id=str(account.id),
+                    detail={
+                        "email": account.email,
+                        "locked_until": locked_until.isoformat(),
+                    },
+                )
+                db.commit()
+            except Exception:  # noqa: BLE001
+                # Audit failure must not mask the 423 response.
+                pass
+            _inc_auth_failure("locked")
             raise HTTPException(
                 status.HTTP_423_LOCKED,
                 f"Account temporarily locked — try again after {locked_until.isoformat()}",

@@ -119,6 +119,7 @@ SECURITY_EVENTS = Counter(
 # security-signal-shaped, not "every admin click".
 SECURITY_ACTION_ALLOWLIST = frozenset({
     "login.failed",
+    "login.locked_out",
     "totp.login_failed",
     "permission.denied",
     "password.change_failed",
