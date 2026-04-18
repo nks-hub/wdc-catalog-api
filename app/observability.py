@@ -100,6 +100,47 @@ AUTH_FAILURES = Counter(
     ["reason"],
 )
 
+SECURITY_EVENTS = Counter(
+    "nks_wdc_security_events_total",
+    "Security-significant audit events bucketed by action. "
+    "Incremented from ``audit.emit`` for a curated subset of action "
+    "names so Alertmanager can page on auth failures, RBAC denials, "
+    "and session revocations without querying the DB directly. "
+    "Complementary to ``nks_wdc_auth_failures_total`` — the latter "
+    "counts pre-audit rejections (bad_password etc.) while this one "
+    "tracks post-audit, fully-recorded security events.",
+    ["action"],
+)
+
+
+# Curated allowlist of action prefixes/names that warrant a
+# security-metric increment. Kept explicit (not "everything") so the
+# counter's cardinality stays bounded and the meaning stays
+# security-signal-shaped, not "every admin click".
+SECURITY_ACTION_ALLOWLIST = frozenset({
+    "login.failed",
+    "totp.login_failed",
+    "permission.denied",
+    "password.change_failed",
+    "user.suspended",
+    "user.deleted",
+    "user.tokens_revoked",
+    "session.killed",
+    "session.killed_others",
+    "totp.disabled",
+    "backup.exported",
+})
+
+
+def inc_security_event(action: str) -> None:
+    """Best-effort increment from ``audit.emit``. Never raises — metric
+    failures must not block the audit write."""
+    if action in SECURITY_ACTION_ALLOWLIST:
+        try:
+            SECURITY_EVENTS.labels(action=action).inc()
+        except Exception:  # noqa: BLE001
+            pass
+
 
 # ── Logging config ─────────────────────────────────────────────────────
 
@@ -215,4 +256,7 @@ __all__ = [
     "RETENTION_DELETED",
     "BLOB_ORPHAN_TOTAL",
     "AUTH_FAILURES",
+    "SECURITY_EVENTS",
+    "SECURITY_ACTION_ALLOWLIST",
+    "inc_security_event",
 ]

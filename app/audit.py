@@ -80,6 +80,16 @@ def emit(
     except Exception as exc:
         log.warning("webhooks.fire failed: %s", exc)
 
+    # Security-metric increment — separate from the webhook try/except so
+    # neither path can break the other. Only actions on the curated
+    # allowlist move the counter so cardinality stays bounded.
+    try:
+        from . import observability as _obs
+
+        _obs.inc_security_event(action)
+    except Exception as exc:
+        log.warning("security metric increment failed: %s", exc)
+
     return event
 
 

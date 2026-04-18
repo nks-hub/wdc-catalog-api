@@ -136,3 +136,62 @@ groups:
             Either the snapshot population is small enough that nothing
             is up for GC, or APScheduler didn't fire. Check scheduler
             log line ``retention sweep`` timestamps.
+
+  # ── Security signals (from nks_wdc_security_events_total) ──────────
+  - name: nks-wdc-security
+    interval: 30s
+    rules:
+      - alert: WDCCatalogFailedLoginSpike
+        # Password + TOTP failures summed. Baseline under light use
+        # should be zero; >5/min sustained for 10 minutes is almost
+        # certainly automated.
+        expr: |
+          sum(rate(nks_wdc_security_events_total{
+            action=~"login.failed|totp.login_failed"
+          }[5m])) > 0.083
+        for: 10m
+        labels:
+          severity: warning
+          service: nks-wdc-catalog-api
+          category: security
+        annotations:
+          summary: "Failed-login rate >5/min sustained 10m"
+          description: |
+            Credential-stuffing / brute-force signature. Check
+            /admin/audit?q=login.failed + the v0.39.0 Security Signals
+            card on /admin/ops for IP distribution.
+          runbook_url: "https://github.com/nks-hub/wdc-catalog-api/blob/main/docs/deploy.md#credential-stuffing"
+
+      - alert: WDCCatalogRBACDenialSpike
+        # A real admin hitting RBAC denials is either mid-reorg or
+        # suddenly exploring paths they shouldn't. Either way: page.
+        expr: sum(rate(nks_wdc_security_events_total{action="permission.denied"}[10m])) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+          service: nks-wdc-catalog-api
+          category: security
+        annotations:
+          summary: "Sustained RBAC denials >3/min for 10m"
+          description: |
+            Cross-reference with /admin/audit?action=permission.denied
+            to identify actor + target resource.
+
+      - alert: WDCCatalogMassSessionKillEvent
+        # Normal session kills are rare (operator-initiated). A burst
+        # usually means incident response. Not an alert per-se — an
+        # informational "something is happening" signal.
+        expr: |
+          sum(increase(nks_wdc_security_events_total{
+            action=~"session.killed|session.killed_others"
+          }[30m])) > 5
+        for: 5m
+        labels:
+          severity: info
+          service: nks-wdc-catalog-api
+          category: security
+        annotations:
+          summary: "Session-kill burst (>5 in 30m)"
+          description: |
+            Usually incident response. Verify via /admin/audit?q=session.killed
+            and /admin/account/sessions.
