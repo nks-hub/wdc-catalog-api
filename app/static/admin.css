@@ -771,9 +771,24 @@ main.container {
   padding: var(--space-4) var(--space-6);
   text-align: center;
   color: var(--text-4);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   border-top: 1px solid var(--border);
   background: var(--surface);
+  letter-spacing: 0.02em;
+}
+/* UX audit #8: footer text should not inherit `color: var(--accent)` from
+   the global `a{}` rule — it's chrome, not a link. */
+.footer a, .footer a:hover { color: var(--text-4); text-decoration: none; }
+.footer a:hover { color: var(--text-2); }
+
+/* Metadata / cache timestamps demoted — they're debugging context, not
+   body content. UX audit #8. */
+.meta-note {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-4);
+  letter-spacing: 0.01em;
+  margin-top: var(--space-2);
 }
 
 /* --------------------------------------------------------------------------

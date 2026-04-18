@@ -47,7 +47,7 @@
 
   <div class="pager">
     {% if offset > 0 %}<a class="btn" href="?{{ qs }}offset={{ [offset - limit, 0]|max }}&limit={{ limit }}">← prev</a>{% endif %}
-    <span class="muted">{{ offset + 1 }}–{{ offset + rows|length }} of {{ total }}</span>
+    <span class="muted">{% if rows|length %}{{ offset + 1 }}–{{ offset + rows|length }} of {{ total }}{% else %}0 of {{ total }}{% endif %}</span>
     {% if offset + limit < total %}<a class="btn" href="?{{ qs }}offset={{ offset + limit }}&limit={{ limit }}">next →</a>{% endif %}
   </div>
 </section>
