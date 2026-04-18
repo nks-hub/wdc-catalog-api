@@ -349,6 +349,7 @@ class GlobalPolicy(Base):
     require_2fa_for_admins: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     audit_retention_days: Mapped[int] = mapped_column(Integer, default=365, nullable=False)
     scheduler_run_retention_days: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
+    webhook_delivery_retention_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     webhook_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     webhook_event_prefixes: Mapped[str] = mapped_column(
         Text,

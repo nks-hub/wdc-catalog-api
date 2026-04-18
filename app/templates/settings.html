@@ -50,6 +50,10 @@
         <input type="number" name="scheduler_run_retention_days" value="{{ policy.scheduler_run_retention_days }}" min="0" max="3650">
         <span class="hint">Nightly sweep drops rows from <code>/admin/ops/scheduler</code> older than this. 0 = keep forever.</span>
       </label>
+      <label>Keep webhook deliveries for (days)
+        <input type="number" name="webhook_delivery_retention_days" value="{{ policy.webhook_delivery_retention_days }}" min="0" max="3650">
+        <span class="hint">Nightly sweep drops rows from <code>/admin/ops/webhooks</code> older than this. 0 = keep forever.</span>
+      </label>
     </fieldset>
 
     <fieldset class="form-fieldset">

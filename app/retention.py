@@ -34,6 +34,7 @@ from .db import (
     RevokedToken,
     SchedulerRun,
     SnapshotRetentionPolicy,
+    WebhookDelivery,
     session_factory,
 )
 from .snapshots import purge_auto_older_than
@@ -167,6 +168,20 @@ def _do_retention(session: Session) -> dict:
             SchedulerRun.started_at < cutoff,
         )
 
+    webhook_retain_days = policy_row.webhook_delivery_retention_days if policy_row else 30
+    if webhook_retain_days is None:
+        webhook_retain_days = 30
+    webhook_purged = 0
+    if webhook_retain_days > 0:
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+            days=webhook_retain_days
+        )
+        webhook_purged = _batched_delete(
+            session,
+            WebhookDelivery,
+            WebhookDelivery.created_at < cutoff,
+        )
+
     return {
         "accounts": len(account_ids),
         "deleted": deleted_total,
@@ -174,6 +189,7 @@ def _do_retention(session: Session) -> dict:
         "revoked_tokens_purged": revoked_purged,
         "audit_events_purged": audit_purged,
         "scheduler_runs_purged": scheduler_purged,
+        "webhook_deliveries_purged": webhook_purged,
     }
 
 
@@ -277,6 +293,7 @@ def run_retention(db: Optional[Session] = None) -> dict:
                     "revoked_tokens_purged": 0,
                     "audit_events_purged": 0,
                     "scheduler_runs_purged": 0,
+                    "webhook_deliveries_purged": 0,
                     "skipped": True,
                 }
             try:
