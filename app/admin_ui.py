@@ -4426,4 +4426,60 @@ def admin_webhook_deliveries(
     return templates.TemplateResponse(request, "webhook_deliveries.html", ctx)
 
 
+@router.post(
+    "/admin/ops/webhooks/{delivery_id}/retry",
+    dependencies=[Depends(require_csrf)],
+)
+def admin_webhook_retry(
+    request: Request,
+    delivery_id: int,
+    username: Annotated[str, Depends(current_user)],
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    """Re-dispatch a webhook for a prior delivery row.
+
+    The original event payload isn't persisted on the delivery row, so we
+    reconstruct a minimal synthetic event carrying the original action plus
+    a ``retried_from`` back-reference. In practice the useful signal from
+    a retry is "did the receiver come back online" rather than "replay
+    identical bytes" — if full-fidelity replay ever matters we'd need to
+    stash the original payload alongside the delivery.
+    """
+    from . import audit as _audit
+    from . import webhooks as _webhooks
+    from .db import WebhookDelivery
+
+    row = db.get(WebhookDelivery, delivery_id)
+    if row is None:
+        return _redirect("/admin/ops/webhooks", "error", "Delivery not found")
+
+    event = {
+        "action": row.event_action or "",
+        "resource_type": "retry",
+        "resource_id": str(row.id),
+        "detail": {"retried_from": row.id},
+    }
+    _webhooks.fire(event, db=db)
+
+    acct = _admin_account(db, username)
+    try:
+        _audit.emit(
+            db,
+            request=request,
+            actor=acct,
+            action="webhook.retried",
+            resource_type="webhook_delivery",
+            resource_id=str(row.id),
+            detail={
+                "from_delivery_id": row.id,
+                "url": row.url,
+                "event_action": row.event_action,
+            },
+        )
+    except Exception:
+        pass
+
+    return _redirect("/admin/ops/webhooks", "success", "Retry enqueued")
+
+
 __all__ = ["router"]

@@ -21,7 +21,7 @@
 
   <table class="data compact">
     <thead>
-      <tr><th>When</th><th>Action</th><th>URL</th><th>Status</th><th>Duration</th><th>Error</th></tr>
+      <tr><th>When</th><th>Action</th><th>URL</th><th>Status</th><th>Duration</th><th>Error</th><th>Actions</th></tr>
     </thead>
     <tbody>
       {% for d in deliveries %}
@@ -38,10 +38,18 @@
           {% if d.error %}<details><summary class="muted">view</summary><pre class="detail">{{ d.error }}</pre></details>
           {% else %}<span class="muted">—</span>{% endif %}
         </td>
+        <td class="nowrap">
+          {% if not d.ok %}
+          <form method="post" action="/admin/ops/webhooks/{{ d.id }}/retry" style="display:inline">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button type="submit" class="btn btn-ghost">Retry</button>
+          </form>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
       </tr>
       {% else %}
       <tr>
-        <td colspan="6">
+        <td colspan="7">
           <div class="empty-state">
             <div class="empty-icon">🪝</div>
             <h3>{% if status_filter %}No deliveries match the filter{% else %}No webhook deliveries recorded yet{% endif %}</h3>

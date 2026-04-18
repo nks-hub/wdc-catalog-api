@@ -133,6 +133,7 @@ SECURITY_ACTION_ALLOWLIST = frozenset({
     "admin.global_session_kill",
     "totp.disabled",
     "backup.exported",
+    "webhook.retried",
 })
 
 

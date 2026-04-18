@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.47.0 — 2026-04-18
+
+Webhook delivery manual retry.
+
+- New `POST /admin/ops/webhooks/{delivery_id}/retry` re-dispatches
+  a webhook event whose original delivery failed. Useful when the
+  receiver was transiently down and the operator wants to confirm
+  it's back without waiting for the next real event.
+- Inline `Retry` button on the `/admin/ops/webhooks` page, shown
+  only on failed rows. CSRF-guarded.
+- Minimal payload reconstruction (original event body isn't stored
+  on the delivery row) — test is "does the URL come back online",
+  not "replay exact bytes". Documented in handler docstring.
+- Emits `webhook.retried` audit event; added to
+  `SECURITY_ACTION_ALLOWLIST` for Prometheus + Grafana coverage.
+
 ## v0.46.0 — 2026-04-18
 
 Global session kill — emergency panic button.
