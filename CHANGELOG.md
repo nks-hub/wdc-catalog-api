@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.42.0 — 2026-04-18
+
+Grafana dashboard — security signals row.
+
+- `ops/grafana/dashboard.json` gains a `Security signals` collapsible
+  row containing four stat panels and one time-series chart:
+  - **Failed logins · 5m** (password + TOTP summed) — green/yellow/red
+    thresholds at 0 / 5 / 25.
+  - **RBAC denials · 5m** — green/yellow/red at 0 / 3 / 15.
+  - **Session kills · 30m** — green/yellow/orange at 0 / 3 / 10.
+  - **Token revocations · 30m** — green/yellow/red at 0 / 1 / 5.
+  - **Security events by action** — per-action rate timeseries so
+    operators can spot which category is driving a paged alert.
+- New regression test suite (`tests/test_grafana_dashboard.py`)
+  validates JSON syntax, presence of the security row, grid-position
+  non-overlap within each row, and that every non-row panel has
+  `gridPos` + non-empty `targets`. A corrupt dashboard JSON breaks
+  the Grafana import silently; catching it in CI is cheaper than
+  catching it in production.
+
+4 new tests — 492 passing, up from 488.
+
 ## v0.41.0 — 2026-04-18
 
 `nks_wdc_security_events_total` Prometheus counter.
