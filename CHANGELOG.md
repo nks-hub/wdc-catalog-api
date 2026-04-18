@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.32.0 — 2026-04-18
+
+Global admin-UI IP allowlist.
+
+- **`GlobalPolicy.admin_ip_allowlist`** — nullable JSON list of
+  CIDR strings. Empty / NULL = no restriction (back-compat).
+  Auto-ALTER handles legacy DBs.
+- **`current_user` CIDR check** — after the v0.10.0 fingerprint
+  lookup, compare the request's client IP against every configured
+  CIDR via stdlib `ipaddress`. No match → `HTTPException(302,
+  Location=/login)` — the same response a cookie-less admin
+  request would get, so scanners can't distinguish the two.
+- **Fail-OPEN on unexpected errors** — opposite of v0.31.0's
+  per-PAT fail-closed stance. Breaking the gate while it's broken
+  (DB unreachable, parse error) is better than locking every admin
+  out of the UI globally.
+- **Settings UI** — textarea in the "Access" fieldset accepts
+  newline/comma-separated CIDRs. Changes flow through the
+  existing `settings.updated` audit diff.
+- **No per-account allowlist** — too risky (home IP changes lock
+  you out). Operators who need per-principal scope use PAT +
+  v0.31.0's `ip_allowlist`.
+
+Defense-in-depth layers: (v0.11) global 2FA enforcement, (v0.30)
+PAT read-only, (v0.31) PAT IP allowlist, (v0.32) global admin-UI
+IP allowlist.
+
+6 new tests (no-allowlist works, matching CIDR 200, non-matching
+302, malformed fail-closed at enforce time, settings save, login
+page outside gate) — 451 passing, up from 445.
+
 ## v0.31.0 — 2026-04-18
 
 PAT IP allowlist — per-token network scope.
