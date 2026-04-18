@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.35.0 — 2026-04-18
+
+Audit free-text search.
+
+- `/admin/audit?q=<substring>` runs a case-insensitive ILIKE across
+  `action`, `resource_id`, `actor_email`, AND the JSON-cast `detail`
+  column. The detail cast catches "magic strings" stored in event
+  payloads (a user's IP, a cookie fragment, a specific error token)
+  without needing to know which structured field holds it.
+- Threaded through `_audit_filter_stmt` so the same `q` param flows
+  through `/admin/audit.csv` and `/admin/audit/export.jsonl.gz`
+  automatically — every export obeys the same filter surface.
+- Template gains a wider `q` input alongside the existing structured
+  filter fields. `any_filter_active` includes `q` so the "clear"
+  button appears.
+- URL-encoding on `qs` pagination links so a `q=with spaces` round-
+  trips cleanly.
+- Combines (AND) with structured filters — a row must match every
+  non-empty filter AND the free-text term.
+
+5 new tests (matches action, actor_email, resource_id, JSON detail,
+combined with structured filter) — 464 passing, up from 459.
+
 ## v0.34.0 — 2026-04-18
 
 Auto-revoke idle admin sessions.
