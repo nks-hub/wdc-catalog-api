@@ -47,7 +47,10 @@
       {% else %}
       <div class="stat-row"><span>Last run</span><b><span class="muted">never</span></b></div>
       {% endif %}
-      <div class="stat-sub"><a class="btn btn-ghost btn-sm" href="/admin/retention">Policy →</a></div>
+      <div class="stat-sub">
+        <a class="btn btn-ghost btn-sm" href="/admin/retention">Policy →</a>
+        <a class="btn btn-ghost btn-sm" href="/admin/ops/scheduler?job=retention">History →</a>
+      </div>
     </div>
 
     <div class="stat-card">

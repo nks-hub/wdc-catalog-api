@@ -3616,4 +3616,80 @@ def admin_ops(
     )
     return templates.TemplateResponse(request, "ops.html", ctx)
 
+
+@router.get("/admin/ops/scheduler", response_class=HTMLResponse)
+def admin_scheduler_runs(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    job: str = "",
+    status_filter: str = "",  # "" | "ok" | "failed"
+    offset: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    from sqlalchemy import func as _func
+    from sqlalchemy import select as _sel
+
+    from .db import SchedulerRun
+
+    stmt = _sel(SchedulerRun)
+    if job:
+        stmt = stmt.where(SchedulerRun.job == job)
+    if status_filter == "ok":
+        stmt = stmt.where(SchedulerRun.error.is_(None))
+    elif status_filter == "failed":
+        stmt = stmt.where(SchedulerRun.error.is_not(None))
+
+    total = db.scalar(
+        _sel(_func.count()).select_from(stmt.subquery())
+    ) or 0
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+
+    rows = db.scalars(
+        stmt.order_by(SchedulerRun.started_at.desc(), SchedulerRun.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+
+    runs = [
+        {
+            "id": r.id,
+            "job": r.job,
+            "started_at": r.started_at.isoformat() if r.started_at else "",
+            "finished_at": r.finished_at.isoformat() if r.finished_at else "",
+            "duration_ms": r.duration_ms,
+            "summary": r.summary,
+            "error": r.error,
+            "ok": r.error is None,
+        }
+        for r in rows
+    ]
+
+    qs_parts = []
+    if job:
+        qs_parts.append(f"job={job}")
+    if status_filter:
+        qs_parts.append(f"status_filter={status_filter}")
+    qs = ("&".join(qs_parts) + "&") if qs_parts else ""
+
+    job_names = db.scalars(
+        _sel(SchedulerRun.job).distinct().order_by(SchedulerRun.job.asc())
+    ).all()
+
+    ctx = base_context(
+        request,
+        username,
+        runs=runs,
+        total=total,
+        offset=offset,
+        limit=limit,
+        job=job,
+        status_filter=status_filter,
+        qs=qs,
+        job_names=list(job_names),
+    )
+    return templates.TemplateResponse(request, "scheduler_runs.html", ctx)
+
+
 __all__ = ["router"]
