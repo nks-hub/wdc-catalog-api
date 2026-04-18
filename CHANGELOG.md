@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.21.0 — 2026-04-18
+
+`scheduler_runs` retention — closes the unbounded-growth debt from
+v0.18.0 + v0.19.0.
+
+- `GlobalPolicy.scheduler_run_retention_days` (default 90).
+  Auto-ALTER handles legacy DBs.
+- Nightly retention runner now sweeps `scheduler_runs` older than
+  the configured window via the existing `_batched_delete` helper.
+  Summary dict gains `scheduler_runs_purged`; the `retention.manual_run`
+  audit event detail picks it up automatically; the manual-run flash
+  string includes the count alongside audit_events_purged.
+- Settings UI: the v0.13.0 "Audit retention" fieldset is renamed
+  "Retention windows" and gains a second "Keep scheduler runs for
+  (days)" input beside audit_retention_days. Both changes flow
+  through the existing `settings.updated` audit diff — no new event
+  action.
+- `0 = never purge` escape hatch mirrors v0.13.0.
+
+3 new tests (sweep, zero-means-never, settings save + diff) — 393
+passing, up from 390.
+
 ## v0.20.0 — 2026-04-18
 
 Full-state backup ZIP export — DR-friendly point-in-time dumps.
