@@ -1133,16 +1133,34 @@ def admin_reset_password(
     "/admin/users/{user_id}/revoke-tokens", dependencies=[Depends(require_csrf)]
 )
 def admin_revoke_tokens(
+    request: Request,
     user_id: int,
     username: Annotated[str, Depends(current_user)],
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
+    from . import audit as _audit
     from .db import Account
 
     acct = db.get(Account, user_id)
     if acct is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-    acct.token_version = (acct.token_version or 1) + 1
+    previous = acct.token_version or 1
+    acct.token_version = previous + 1
+
+    actor = _admin_account(db, username)
+    _audit.emit(
+        db,
+        request=request,
+        actor=actor,
+        action="user.tokens_revoked",
+        resource_type="account",
+        resource_id=str(acct.id),
+        detail={
+            "target_email": acct.email,
+            "token_version_before": previous,
+            "token_version_after": acct.token_version,
+        },
+    )
     return _redirect(
         f"/admin/users/{user_id}", "success", "All outstanding tokens invalidated"
     )
