@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from . import audit, pats
@@ -26,6 +26,23 @@ class TokenCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     ttl_days: int | None = Field(default=None, ge=1, le=365)
     read_only: bool = Field(default=False)
+    ip_allowlist: list[str] | None = Field(default=None)
+
+    @field_validator("ip_allowlist", mode="before")
+    @classmethod
+    def validate_cidrs(cls, v: object) -> object:
+        import ipaddress
+
+        if v is None:
+            return v
+        if not isinstance(v, list):
+            raise ValueError("ip_allowlist must be a list of CIDR strings")
+        for entry in v:
+            try:
+                ipaddress.ip_network(entry, strict=False)
+            except ValueError:
+                raise ValueError(f"Invalid CIDR: {entry!r}")
+        return v
 
 
 class TokenCreateResponse(BaseModel):
@@ -66,6 +83,7 @@ def create_token(
         name=body.name,
         expires_at=expires_at,
         read_only=body.read_only,
+        ip_allowlist=body.ip_allowlist,
     )
     audit.emit(
         db,
@@ -79,6 +97,7 @@ def create_token(
             "prefix": row.token_prefix,
             "expires_at": row.expires_at.isoformat() if row.expires_at else None,
             "read_only": body.read_only,
+            "ip_allowlist_count": len(body.ip_allowlist) if body.ip_allowlist else 0,
         },
     )
     return TokenCreateResponse(

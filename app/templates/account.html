@@ -187,6 +187,10 @@
       <input type="checkbox" name="read_only" value="1">
       Read-only (cannot POST/PUT/PATCH/DELETE)
     </label>
+    <label>IP allowlist (optional, one CIDR per line)
+      <textarea name="ip_allowlist_raw" rows="3" placeholder="10.0.0.0/8&#10;203.0.113.42/32"></textarea>
+      <span class="hint">Blank = no restriction. Malformed entries at save time are silently skipped, but an all-malformed list fails-closed (401).</span>
+    </label>
     <button class="btn btn-primary">Create token</button>
   </form>
 
@@ -207,6 +211,9 @@
           {% elif t.expired %}<span class="pill pill-warn">expired</span>
           {% else %}<span class="pill pill-ok">active</span>{% endif %}
           {% if t.read_only %}<span class="pill pill-warn">read-only</span>{% endif %}
+          {% if t.ip_allowlist %}
+            <span class="pill pill-warn" title="{{ t.ip_allowlist|join(', ') }}">🌐 {{ t.ip_allowlist|length }} IP{{ '' if t.ip_allowlist|length == 1 else 's' }}</span>
+          {% endif %}
           {% if t.stale_days %}
             <span class="pill pill-warn" title="{% if t.last_used_ever %}Last used {{ t.stale_days }} days ago{% else %}Never used since creation {{ t.stale_days }} days ago{% endif %}">⚠ unused {{ t.stale_days }}d</span>
           {% endif %}

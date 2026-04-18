@@ -3335,6 +3335,7 @@ def _pat_view_rows(db: Session, account_id: int) -> list[dict]:
                 "expired": expired,
                 "stale_days": stale_days,
                 "read_only": bool(r.read_only),
+                "ip_allowlist": list(r.ip_allowlist) if r.ip_allowlist else [],
             }
         )
     return out
@@ -3454,6 +3455,7 @@ def admin_create_account_token(
     name: Annotated[str, Form()],
     ttl_days: Annotated[str, Form()] = "",
     read_only: Annotated[str, Form()] = "",
+    ip_allowlist_raw: Annotated[str, Form()] = "",
     db: Session = Depends(get_session),
 ) -> HTMLResponse:
     from datetime import datetime, timedelta, timezone
@@ -3473,9 +3475,16 @@ def admin_create_account_token(
         except ValueError:
             return _redirect("/admin/account", "error", "TTL must be a number")
 
+    cidrs = [
+        line.strip()
+        for line in ip_allowlist_raw.replace(",", "\n").splitlines()
+        if line.strip()
+    ] or None
+
     row, plaintext = _pats.issue(
         db, account_id=acct.id, name=name, expires_at=expires_at,
         read_only=bool(read_only),
+        ip_allowlist=cidrs,
     )
 
     from . import audit as _audit
@@ -3491,6 +3500,7 @@ def admin_create_account_token(
             "prefix": row.token_prefix,
             "expires_at": row.expires_at.isoformat() if row.expires_at else None,
             "read_only": bool(read_only),
+            "ip_allowlist_count": len(cidrs) if cidrs else 0,
         },
     )
 
