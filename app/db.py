@@ -93,17 +93,20 @@ class Base(DeclarativeBase):
 def count_query(db: "Session", stmt) -> int:
     """Portable COUNT helper for a filtered SELECT statement.
 
-    Avoids the ``select(func.count()).select_from(stmt.subquery())``
-    pattern which on SQLite materializes a temp table and on Postgres
-    can confuse the optimizer with JOINs. Strips ORDER BY / LIMIT /
-    OFFSET before counting since they don't affect the cardinality.
+    Wraps the filtered stmt in a subquery and counts its rows. Earlier
+    implementation used ``stmt.with_only_columns(func.count())`` which on
+    ``select(Model)`` variants STRIPS the FROM clause and emits plain
+    ``SELECT count(*) AS count_1`` (no table) → returns 1 regardless of
+    actual row count. Verified 2026-04-18: audit-log view showed
+    ``total=1`` while rendering 3 rows; the SQL was `SELECT count(*)`
+    without any FROM. Subquery form is slightly heavier but correct on
+    both SQLite and Postgres and preserves any joins/filters already in
+    the statement.
     """
-    from sqlalchemy import func  # local import to keep module top tidy
+    from sqlalchemy import func, select as _sel
 
-    count_stmt = (
-        stmt.with_only_columns(func.count()).order_by(None).limit(None).offset(None)
-    )
-    return db.scalar(count_stmt) or 0
+    base_stmt = stmt.order_by(None).limit(None).offset(None)
+    return db.scalar(_sel(func.count()).select_from(base_stmt.subquery())) or 0
 
 
 def _utc_now() -> datetime:
