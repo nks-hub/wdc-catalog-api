@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.10.0 — 2026-04-18
+
+**Admin session management — per-session revocation for the admin UI.**
+
+Previously, admin-UI session cookies were stateless (`itsdangerous`-signed);
+there was no way to enumerate active sessions or kill one without
+rotating the global signing secret (nukes everyone). v0.10.0 adds a
+session store with fingerprint-based lookup so each browser login is
+trackable and individually revocable.
+
+### Shipped
+
+- **`admin_sessions` table** — `id, user_id (FK users.id), fingerprint
+  (sha256 of the signed cookie, unique), ip, user_agent, created_at,
+  last_seen_at, revoked_at`. Auto-ALTER on startup; no migration needed.
+- **Session tracking** — `issue_session()` writes a row on login
+  (best-effort; DB failure never breaks the cookie handshake).
+  `current_user` dependency looks up the row on every admin request,
+  rejects if `revoked_at IS NOT NULL`, updates `last_seen_at`.
+  Legacy pre-v0.10 cookies with no row auto-create one on first hit —
+  zero-breakage rollout for sessions in flight.
+- **"Active sessions" section on `/admin/account`** — compact table
+  with IP, user-agent, created, last-seen. Current browser marked
+  with a `this browser` pill. Per-row "kill" button for the others,
+  plus "Kill all other sessions" bulk button when any non-current
+  sessions exist.
+- **Handlers** — `POST /admin/account/sessions/{id}/kill` and
+  `POST /admin/account/sessions/kill-others` — CSRF-gated,
+  scoped to the current user's rows, emit audit events
+  `session.killed` (detail: ip + ua) and `session.killed_others`
+  (detail: count).
+
+### Totals
+
+3 commits (schema + auth core → UI + kill handlers → release). 340
+tests passing, up from 334.
+
 ## v0.9.1 — 2026-04-18
 
 - **User activity timeline** — `/admin/users/{id}` now carries a
