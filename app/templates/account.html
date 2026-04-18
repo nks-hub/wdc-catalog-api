@@ -183,6 +183,10 @@
     <label>TTL days (blank = never)
       <input type="number" name="ttl_days" min="1" max="365">
     </label>
+    <label class="checkbox">
+      <input type="checkbox" name="read_only" value="1">
+      Read-only (cannot POST/PUT/PATCH/DELETE)
+    </label>
     <button class="btn btn-primary">Create token</button>
   </form>
 
@@ -202,6 +206,7 @@
           {% if t.revoked_at %}<span class="pill pill-suspended">revoked</span>
           {% elif t.expired %}<span class="pill pill-warn">expired</span>
           {% else %}<span class="pill pill-ok">active</span>{% endif %}
+          {% if t.read_only %}<span class="pill pill-warn">read-only</span>{% endif %}
           {% if t.stale_days %}
             <span class="pill pill-warn" title="{% if t.last_used_ever %}Last used {{ t.stale_days }} days ago{% else %}Never used since creation {{ t.stale_days }} days ago{% endif %}">⚠ unused {{ t.stale_days }}d</span>
           {% endif %}

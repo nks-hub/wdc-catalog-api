@@ -25,6 +25,7 @@ router = APIRouter(prefix="/api/v1/auth/tokens", tags=["accounts", "auth"])
 class TokenCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     ttl_days: int | None = Field(default=None, ge=1, le=365)
+    read_only: bool = Field(default=False)
 
 
 class TokenCreateResponse(BaseModel):
@@ -64,6 +65,7 @@ def create_token(
         account_id=account.id,
         name=body.name,
         expires_at=expires_at,
+        read_only=body.read_only,
     )
     audit.emit(
         db,
@@ -76,6 +78,7 @@ def create_token(
             "name": row.name,
             "prefix": row.token_prefix,
             "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+            "read_only": body.read_only,
         },
     )
     return TokenCreateResponse(

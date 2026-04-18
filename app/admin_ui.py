@@ -3334,6 +3334,7 @@ def _pat_view_rows(db: Session, account_id: int) -> list[dict]:
                 "expires_at": r.expires_at.isoformat() if r.expires_at else None,
                 "expired": expired,
                 "stale_days": stale_days,
+                "read_only": bool(r.read_only),
             }
         )
     return out
@@ -3452,6 +3453,7 @@ def admin_create_account_token(
     username: Annotated[str, Depends(current_user)],
     name: Annotated[str, Form()],
     ttl_days: Annotated[str, Form()] = "",
+    read_only: Annotated[str, Form()] = "",
     db: Session = Depends(get_session),
 ) -> HTMLResponse:
     from datetime import datetime, timedelta, timezone
@@ -3472,7 +3474,8 @@ def admin_create_account_token(
             return _redirect("/admin/account", "error", "TTL must be a number")
 
     row, plaintext = _pats.issue(
-        db, account_id=acct.id, name=name, expires_at=expires_at
+        db, account_id=acct.id, name=name, expires_at=expires_at,
+        read_only=bool(read_only),
     )
 
     from . import audit as _audit
@@ -3487,6 +3490,7 @@ def admin_create_account_token(
             "name": row.name,
             "prefix": row.token_prefix,
             "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+            "read_only": bool(read_only),
         },
     )
 
