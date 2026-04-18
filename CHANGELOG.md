@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.14.0 — 2026-04-18
+
+Global search (`/admin/search`).
+
+- New `GET /admin/search?q=<term>` — runs substring (ILIKE)
+  lookups across three categories and renders grouped results:
+  Users (match email), Apps (match id or display_name), Audit
+  events (match action, resource_id, or actor_email). Top 10 per
+  category. Deep-links into `/admin/users/{id}`,
+  `/admin/apps/{id}`, and a "see all audit events matching" link
+  into `/admin/audit?action=<q>`.
+- Topbar gains a compact search input (visible on ≥ 881 px;
+  hidden on the mobile drawer) that posts straight into the
+  results page. Focus widens the input from 180 → 260 px via a
+  CSS `width` transition.
+- Empty-query renders an explainer; no-match renders a proper
+  empty state with the query echoed.
+
+5 new tests — 360 passing, up from 355.
+
 ## v0.13.0 — 2026-04-18
 
 Audit-log retention — configurable per instance.
