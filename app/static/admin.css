@@ -517,11 +517,43 @@ body {
   .sidebar-mobile-toggle { display: flex; }
 }
 
+/* Typographic scale — rebuilt 2026-04-18 after UX audit flagged flat
+   hierarchy (h1≈h2≈card-title ≈body-bold, 1.7× ratio only). Now:
+   - h1 (page)       28px/700  -0.02em   → ~2× body
+   - h2 (section)    20px/650  -0.015em  → ~1.4× body
+   - h3 (card title) 14px/600  tracking  → subdued, gray
+   - body            14px/400
+   - KPI digit       48px/300  -0.03em   → "data", not "alert"
+   ≥2× jumps between tiers give the page a clear silhouette. */
 h1, h2, h3, h4 {
   margin: 0;
   line-height: 1.2;
-  letter-spacing: -0.015em;
   color: var(--text);
+}
+h1 {
+  font-size: 1.75rem;        /* 28px at 16px root, effectively scales */
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+h2 {
+  font-size: 1.25rem;        /* 20px */
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+h3 {
+  font-size: 0.95rem;        /* ~13px */
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+h4 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-3);
+  line-height: 1.4;
 }
 
 p { margin: 0 0 var(--space-4); }
@@ -835,19 +867,20 @@ main.container {
   grid-row: 1 / span 2;
 }
 .stat-hero-label {
-  font-size: 0.786rem;
-  font-weight: 600;
-  color: var(--text-3);
-  letter-spacing: 0.01em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-4);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
 }
 .stat-hero-kpi {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
-  font-size: 2.5rem;
-  font-weight: 700;
-  line-height: 1.05;
+  font-size: 3rem;            /* 48px — UX audit: "data" not "alert" */
+  font-weight: 300;
+  line-height: 1;
   color: var(--text);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 .stat-hero-sub {
   font-size: 0.786rem;
@@ -961,12 +994,14 @@ main.container {
 }
 
 .stat-card h3 {
-  font-size: 0.929rem;
-  font-weight: 600;
-  color: var(--text-3);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-4);
   margin: 0;
   padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--border);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
 }
 
 .stat-row {
