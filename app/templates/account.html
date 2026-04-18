@@ -101,6 +101,44 @@
   </form>
   {% endif %}
 
+  <h2>Active sessions</h2>
+  <p class="muted">Each browser that signs in gets its own session row. Kill a row to force that browser to log in again.</p>
+  {% if sessions %}
+  <table class="data compact">
+    <thead>
+      <tr><th>IP</th><th>Agent</th><th>Signed in</th><th>Last seen</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr>
+        <td class="nowrap"><code>{{ s.ip or '—' }}</code>{% if s.is_current %} <span class="pill pill-ok">this browser</span>{% endif %}</td>
+        <td class="muted" style="max-width: 32ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ s.user_agent or '—' }}</td>
+        <td class="nowrap">{{ s.created_at[:19] }}</td>
+        <td class="nowrap">{{ s.last_seen_at[:19] }}</td>
+        <td class="actions">
+          {% if not s.is_current %}
+          <form method="post" action="/admin/account/sessions/{{ s.id }}/kill" class="inline" onsubmit="return confirm('Kill this session? The other browser will be signed out.');">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="btn btn-sm btn-warn">kill</button>
+          </form>
+          {% else %}
+          <span class="muted">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if sessions | selectattr('is_current', 'equalto', false) | list | length %}
+  <form method="post" action="/admin/account/sessions/kill-others" class="inline" onsubmit="return confirm('Kill every other active session? Other browsers will be signed out.');" style="margin-top: var(--space-3);">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <button class="btn btn-warn">Kill all other sessions</button>
+  </form>
+  {% endif %}
+  {% else %}
+  <p class="muted">Just this session — no other active browsers.</p>
+  {% endif %}
+
   <h2>Personal access tokens</h2>
   <p class="muted">
     Long-lived API keys for CI pipelines + scripts that can't run the

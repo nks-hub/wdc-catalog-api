@@ -2635,6 +2635,80 @@ def _pat_view_rows(db: Session, account_id: int) -> list[dict]:
     ]
 
 
+@router.post(
+    "/admin/account/sessions/{session_id}/kill",
+    dependencies=[Depends(require_csrf)],
+)
+def admin_kill_session(
+    request: Request,
+    session_id: int,
+    username: Annotated[str, Depends(current_user)],
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select as _sel
+
+    from . import audit as _audit
+    from .db import AdminSession, User
+
+    user = db.scalar(_sel(User).where(User.username == username))
+    row = db.get(AdminSession, session_id)
+    if row is None or row.user_id != (user.id if user else -1):
+        return _redirect("/admin/account", "error", "Session not found")
+    if row.revoked_at is None:
+        row.revoked_at = datetime.now(timezone.utc)
+    acct = _admin_account(db, username)
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="session.killed",
+        resource_type="admin_session",
+        resource_id=str(session_id),
+        detail={"ip": row.ip, "user_agent": row.user_agent},
+    )
+    return _redirect("/admin/account", "success", "Session killed")
+
+
+@router.post(
+    "/admin/account/sessions/kill-others",
+    dependencies=[Depends(require_csrf)],
+)
+def admin_kill_other_sessions(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    db: Session = Depends(get_session),
+) -> RedirectResponse:
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select as _sel
+    from sqlalchemy import update as _upd
+
+    from . import audit as _audit
+    from .auth import SESSION_COOKIE, _fingerprint
+    from .db import AdminSession, User
+
+    user = db.scalar(_sel(User).where(User.username == username))
+    current_fp = _fingerprint(request.cookies.get(SESSION_COOKIE, ""))
+    q = _upd(AdminSession).where(
+        AdminSession.user_id == (user.id if user else -1),
+        AdminSession.revoked_at.is_(None),
+        AdminSession.fingerprint != current_fp,
+    ).values(revoked_at=datetime.now(timezone.utc))
+    killed = db.execute(q).rowcount
+    acct = _admin_account(db, username)
+    _audit.emit(
+        db,
+        request=request,
+        actor=acct,
+        action="session.killed_others",
+        resource_type="admin_session",
+        detail={"count": int(killed)},
+    )
+    return _redirect("/admin/account", "success", f"Killed {killed} other session(s)")
+
+
 @router.get("/admin/account", response_class=HTMLResponse)
 def admin_account(
     request: Request,
@@ -2658,6 +2732,7 @@ def admin_account(
         new_recovery_codes=None,
         totp_enabled=bool(acct.totp_enabled),
         totp_enabled_at=acct.totp_enabled_at.isoformat() if acct.totp_enabled_at else None,
+        sessions=_session_list(db, username, request),
         flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "account.html", ctx)
@@ -2815,6 +2890,36 @@ def _account_for_user(db: Session, username: str):
     return _admin_account(db, username)
 
 
+def _session_list(db: Session, username: str, request: Request) -> list[dict]:
+    """Return the current user's non-revoked AdminSession rows for the account page."""
+    from sqlalchemy import select as _sel
+
+    from .auth import SESSION_COOKIE, _fingerprint
+    from .db import AdminSession, User
+
+    user = db.scalar(_sel(User).where(User.username == username))
+    if user is None:
+        return []
+    current_fp = _fingerprint(request.cookies.get(SESSION_COOKIE, ""))
+    rows = db.scalars(
+        _sel(AdminSession)
+        .where(AdminSession.user_id == user.id)
+        .where(AdminSession.revoked_at.is_(None))
+        .order_by(AdminSession.last_seen_at.desc())
+    ).all()
+    return [
+        {
+            "id": r.id,
+            "ip": r.ip,
+            "user_agent": r.user_agent,
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+            "last_seen_at": r.last_seen_at.isoformat() if r.last_seen_at else "",
+            "is_current": r.fingerprint == current_fp,
+        }
+        for r in rows
+    ]
+
+
 def _render_account(
     request: Request,
     username: str,
@@ -2841,6 +2946,7 @@ def _render_account(
         new_recovery_codes=new_recovery_codes,
         totp_enabled=bool(acct.totp_enabled),
         totp_enabled_at=acct.totp_enabled_at.isoformat() if acct.totp_enabled_at else None,
+        sessions=_session_list(db, username, request),
         flash=flash,
     )
     response = templates.TemplateResponse(request, "account.html", ctx)
