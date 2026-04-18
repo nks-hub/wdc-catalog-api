@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.30.0 — 2026-04-18
+
+PAT read-only flag.
+
+- **`PersonalAccessToken.read_only`** — new Boolean column,
+  default False. Auto-ALTER handles legacy rows.
+- **`try_authenticate_pat`** now returns `(Account, PAT) | None`
+  so the caller can inspect the matched token's flags.
+- **`get_current_account`** stashes `pat_id` + `pat_read_only` on
+  `request.state` and rejects write-method (POST/PUT/PATCH/DELETE)
+  requests with HTTP 403 when the matched PAT is `read_only=True`.
+  Invalid/expired/revoked tokens still return 401 — the 401/403
+  split cleanly separates authentication from authorization.
+- **Admin UI** — mint form gains a "Read-only" checkbox; PAT list
+  row shows an amber `read-only` pill alongside status.
+- **JSON API** — `POST /api/v1/auth/tokens` body accepts
+  `read_only: bool` (defaults to False).
+- **Audit** — `pat.created` detail gains a `read_only` boolean.
+
+Scope is HTTP-method-based on purpose: simpler to reason about
+than per-endpoint scopes, harder to misconfigure. If a future
+release needs finer control, a scope string column can layer on
+top without breaking this contract.
+
+7 new tests (RW allows POST, RO allows GET, RO rejects write
+methods, invalid-still-401, admin UI mint with flag, account page
+pill) — 437 passing, up from 428.
+
 ## v0.29.0 — 2026-04-18
 
 PAT hygiene pill on `/admin/account`.
