@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.38.0 — 2026-04-18
+
+Scheduler-failure banner on every admin page.
+
+- When any `SchedulerRun(job=*)` within the last 48 h has a non-null
+  `error` AND is the most-recent row for its job (i.e. not
+  superseded by a later successful run), every admin page renders
+  a red `.banner-error` at the top with the job name, age
+  ("3h 14m ago"), truncated error message, and an "investigate →"
+  link deep-linking into `/admin/ops/scheduler?status_filter=failed`.
+- Picks the **newest unattended** failure so a broken retention job
+  isn't drowned out by a subsequent successful backup run — the
+  operator sees the first alert that still matters.
+- Survives the 48 h window silently — ancient failures don't keep
+  nagging forever.
+- Threaded via `base_context(...)`, so the banner shows on `/admin`,
+  `/admin/audit`, `/admin/ops`, etc., without per-handler plumbing.
+- New `.banner-error` CSS (red variant of the amber `.banner` with
+  flex layout for left-aligned message + right-aligned link).
+
+5 new tests (no-failures, recent-failure, old-failure-suppressed,
+success-supersedes-failure, banner-on-every-admin-page) — 474
+passing, up from 469.
+
 ## v0.37.0 — 2026-04-18
 
 Dashboard KPI delta chips.
