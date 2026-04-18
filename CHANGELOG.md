@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.40.0 — 2026-04-18
+
+Dashboard security signals card — companion to v0.39.0 ops card.
+
+- `/admin` landing page renders a `Security signals · last 24h`
+  card when ANY of the three signals (failed logins, RBAC denials,
+  password-change failures) is at warn-or-bad severity. Reuses the
+  `_security_signals_last_24h` helper shipped in v0.39.0 — same
+  thresholds, same three rows, same pills + view-deep-links.
+- **Quiet days keep the dashboard calm** — the entire card
+  short-circuits via a Jinja `{% if %}` when every signal is at ok
+  severity. No silent row of zeros to desensitize operators to
+  warning pills.
+- Small muted footer links to `/admin/ops` for the always-visible
+  full breakdown.
+
+4 new tests (calm-omits-card, warn-surfaces, bad-surfaces,
+drill-down-links) — 484 passing, up from 480.
+
 ## v0.39.0 — 2026-04-18
 
 Security-signals card on `/admin/ops` — last-24h threat indicators.
