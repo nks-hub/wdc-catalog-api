@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.19.0 — 2026-04-18
+
+Scheduler runs history page — browse the audit trail v0.18.0 started
+recording.
+
+- New `GET /admin/ops/scheduler` — paginated table of every
+  `SchedulerRun` row with job + status + duration columns. Job
+  dropdown sourced from distinct values so new job types surface
+  automatically. Status filter (`ok` / `failed` / any). Summary
+  column uses the same JSON syntax tinting as the audit log;
+  error column shows plain stack-trace text inside a `<details>`.
+- `/admin/ops` Retention scheduler card grows a "History →" link
+  that deep-links into `/admin/ops/scheduler?job=retention`.
+- Empty-state covers "no runs yet" + "filter didn't match"
+  separately (the retention job fires nightly — first run shows up
+  on day 2 of a fresh deploy).
+
+5 new tests (renders rows, empty state, job filter, status filter,
+ops page links) — 384 passing, up from 379.
+
 ## v0.18.0 — 2026-04-18
 
 Persistent retention last-run tracking — closes the `/admin/retention`
