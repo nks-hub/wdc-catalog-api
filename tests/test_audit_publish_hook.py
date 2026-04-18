@@ -23,6 +23,7 @@ def _make_account(db) -> Account:
     # alone could (and did, CI 2026-04-18) repeat when the session pool
     # recycled the Python object between two tests in the same process.
     import uuid as _uuid
+
     acc = Account(
         email=f"bus-test-{_uuid.uuid4().hex}@example.com",
         password_hash="x" * 64,
