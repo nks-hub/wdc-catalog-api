@@ -33,6 +33,7 @@
     <input type="text" name="resource_type" placeholder="resource type" value="{{ resource_type or '' }}">
     <input type="text" name="resource_id" placeholder="resource id" value="{{ resource_id or '' }}">
     <input type="number" name="actor_id" placeholder="actor id" value="{{ actor_id or '' }}">
+    <input type="text" name="q" placeholder="free-text (action, resource_id, actor_email, detail JSON)" value="{{ q or '' }}" style="min-width: 280px;">
     <button class="btn">Filter</button>
     {% if any_filter_active %}
       <a class="btn btn-ghost" href="/admin/audit">clear</a>

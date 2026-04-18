@@ -613,12 +613,21 @@ def _admin_account(db: Session, username: str):
     return acct
 
 
-def _audit_filter_stmt(stmt, *, action="", resource_type="", resource_id="", actor_id=None):
+def _audit_filter_stmt(
+    stmt, *, action="", resource_type="", resource_id="", actor_id=None, q="",
+):
     """Apply audit-log filter params to *stmt* and return the modified statement.
 
     Shared by admin_audit (HTML), admin_audit_csv, and admin_audit_export_jsonl
     so the three handlers can never drift from each other.
+
+    ``q`` is a free-text ILIKE substring match across ``action``,
+    ``resource_id``, ``actor_email``, and the JSON-cast ``detail``
+    column — useful for forensic search like "which row triggered this
+    IP lockout" where the structured filter fields don't help.
     """
+    from sqlalchemy import or_, cast, String as _Str
+
     from .db import AuditEvent
 
     if action:
@@ -629,6 +638,18 @@ def _audit_filter_stmt(stmt, *, action="", resource_type="", resource_id="", act
         stmt = stmt.where(AuditEvent.resource_id == resource_id)
     if actor_id:
         stmt = stmt.where(AuditEvent.actor_id == actor_id)
+    if q:
+        pattern = f"%{q.strip()}%"
+        stmt = stmt.where(
+            or_(
+                AuditEvent.action.ilike(pattern),
+                AuditEvent.resource_id.ilike(pattern),
+                AuditEvent.actor_email.ilike(pattern),
+                # Cast JSON to text for substring match. Works on both
+                # SQLite (TEXT affinity) and Postgres (::text cast).
+                cast(AuditEvent.detail, _Str).ilike(pattern),
+            )
+        )
     return stmt
 
 
@@ -1226,6 +1247,7 @@ def admin_audit(
     resource_type: str = "",
     resource_id: str = "",
     actor_id: int | None = None,
+    q: str = "",
     offset: int = 0,
     limit: int = 50,
     flash: Annotated[str | None, Cookie(alias="flash")] = None,
@@ -1241,6 +1263,7 @@ def admin_audit(
         resource_type=resource_type,
         resource_id=resource_id,
         actor_id=actor_id,
+        q=q,
     )
 
     total = count_query(db, stmt)
@@ -1277,6 +1300,9 @@ def admin_audit(
         qs_parts.append(f"resource_id={resource_id}")
     if actor_id:
         qs_parts.append(f"actor_id={actor_id}")
+    if q:
+        from urllib.parse import quote as _quote
+        qs_parts.append(f"q={_quote(q)}")
     qs = ("&".join(qs_parts) + "&") if qs_parts else ""
 
     # Per-account saved-filter sidebar. Each row renders as a link that
@@ -1322,7 +1348,7 @@ def admin_audit(
         for r in saved_rows
     ]
 
-    any_filter_active = bool(action or resource_type or resource_id or actor_id)
+    any_filter_active = bool(action or resource_type or resource_id or actor_id or q)
 
     ctx = base_context(
         request,
@@ -1335,6 +1361,7 @@ def admin_audit(
         resource_type=resource_type,
         resource_id=resource_id,
         actor_id=actor_id,
+        q=q,
         qs=qs,
         saved_queries=saved_queries,
         any_filter_active=any_filter_active,
@@ -2699,6 +2726,7 @@ def admin_audit_csv(
     resource_type: str = "",
     resource_id: str = "",
     actor_id: int | None = None,
+    q: str = "",
     limit: int = 10000,
     db: Session = Depends(get_session),
 ):
@@ -2724,6 +2752,7 @@ def admin_audit_csv(
         resource_type=resource_type,
         resource_id=resource_id,
         actor_id=actor_id,
+        q=q,
     )
 
     rows = db.scalars(
@@ -2791,6 +2820,7 @@ def admin_audit_export_jsonl(
     resource_type: str = "",
     resource_id: str = "",
     actor_id: int | None = None,
+    q: str = "",
     limit: int = 50000,
     db: Session = Depends(get_session),
 ):
@@ -2815,6 +2845,7 @@ def admin_audit_export_jsonl(
         resource_type=resource_type,
         resource_id=resource_id,
         actor_id=actor_id,
+        q=q,
     ).order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).limit(
         max(1, min(limit, 200000))
     )
