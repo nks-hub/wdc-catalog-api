@@ -135,6 +135,47 @@
     </div>
   </div>
 
+  {# Security signals card — only renders when at least one signal is
+     at warn or bad severity, so the dashboard stays calm on quiet days
+     instead of nagging with a row of zeros. #}
+  {% if security_signals and (
+       security_signals.login_failed_sev != "ok"
+       or security_signals.perm_denied_sev != "ok"
+       or security_signals.pw_change_failed_sev != "ok"
+     ) %}
+  <div class="stat-card stat-card-wide" style="margin-bottom: var(--space-4);">
+    <h3>Security signals · last 24h</h3>
+    <div class="stat-row">
+      <span>Failed logins <span class="muted">(password + TOTP)</span></span>
+      <b>
+        {% if security_signals.login_failed_sev == "bad" %}<span class="pill pill-suspended">{{ security_signals.login_failed }}</span>
+        {% elif security_signals.login_failed_sev == "warn" %}<span class="pill pill-warn">{{ security_signals.login_failed }}</span>
+        {% else %}{{ security_signals.login_failed }}{% endif %}
+        <a class="btn btn-ghost btn-sm" href="/admin/audit?q=login.failed" style="margin-left: var(--space-2);">view →</a>
+      </b>
+    </div>
+    <div class="stat-row">
+      <span>RBAC denials</span>
+      <b>
+        {% if security_signals.perm_denied_sev == "bad" %}<span class="pill pill-suspended">{{ security_signals.perm_denied }}</span>
+        {% elif security_signals.perm_denied_sev == "warn" %}<span class="pill pill-warn">{{ security_signals.perm_denied }}</span>
+        {% else %}{{ security_signals.perm_denied }}{% endif %}
+        <a class="btn btn-ghost btn-sm" href="/admin/audit?action=permission.denied" style="margin-left: var(--space-2);">view →</a>
+      </b>
+    </div>
+    <div class="stat-row">
+      <span>Password-change failures</span>
+      <b>
+        {% if security_signals.pw_change_failed_sev == "bad" %}<span class="pill pill-suspended">{{ security_signals.pw_change_failed }}</span>
+        {% elif security_signals.pw_change_failed_sev == "warn" %}<span class="pill pill-warn">{{ security_signals.pw_change_failed }}</span>
+        {% else %}{{ security_signals.pw_change_failed }}{% endif %}
+        <a class="btn btn-ghost btn-sm" href="/admin/audit?action=password.change_failed" style="margin-left: var(--space-2);">view →</a>
+      </b>
+    </div>
+    <div class="stat-sub muted">Full breakdown on <a href="/admin/ops">/admin/ops</a></div>
+  </div>
+  {% endif %}
+
   {% if stats.audit.top_actions %}
   <div class="stat-card stat-card-wide">
     <h3>Top actions · last 24h</h3>

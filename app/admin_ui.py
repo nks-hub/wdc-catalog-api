@@ -870,6 +870,7 @@ def admin_dashboard(
         webhook_health=webhook_health,
         audit_delta=audit_delta,
         webhook_delta=webhook_delta,
+        security_signals=_security_signals_last_24h(db),
         flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "dashboard.html", ctx)
