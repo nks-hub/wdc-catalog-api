@@ -348,6 +348,12 @@ class GlobalPolicy(Base):
     banner_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
     require_2fa_for_admins: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     audit_retention_days: Mapped[int] = mapped_column(Integer, default=365, nullable=False)
+    webhook_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    webhook_event_prefixes: Mapped[str] = mapped_column(
+        Text,
+        default="permission.denied,login.failed,session.killed,user.suspended,user.deleted,totp.login_failed",
+        nullable=False,
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utc_now, onupdate=_utc_now
     )

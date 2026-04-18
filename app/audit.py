@@ -54,23 +54,31 @@ def emit(
     db.add(event)
     db.flush()
 
+    payload = {
+        "id": event.id,
+        "created_at": event.created_at.isoformat() if event.created_at else None,
+        "actor_id": event.actor_id,
+        "actor_email": event.actor_email,
+        "action": event.action,
+        "resource_type": event.resource_type,
+        "resource_id": event.resource_id,
+        "ip": event.ip,
+        "detail": event.detail,
+    }
+
     try:
         from . import event_bus
 
-        payload = {
-            "id": event.id,
-            "created_at": event.created_at.isoformat() if event.created_at else None,
-            "actor_id": event.actor_id,
-            "actor_email": event.actor_email,
-            "action": event.action,
-            "resource_type": event.resource_type,
-            "resource_id": event.resource_id,
-            "ip": event.ip,
-            "detail": event.detail,
-        }
         event_bus.publish(payload)
     except Exception as exc:
         log.warning("event_bus publish failed: %s", exc)
+
+    try:
+        from . import webhooks as _webhooks
+
+        _webhooks.fire(payload, db=db)
+    except Exception as exc:
+        log.warning("webhooks.fire failed: %s", exc)
 
     return event
 
