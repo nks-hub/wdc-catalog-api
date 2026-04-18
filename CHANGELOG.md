@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.9.1 — 2026-04-18
+
+- **User activity timeline** — `/admin/users/{id}` now carries a
+  20-row audit feed of events involving that user (as actor or
+  as the account resource). Reuses the existing `.data.compact`
+  table + `.json-tint` detail rendering; "View full log" link
+  deep-links into `/admin/audit?actor_id={id}` for paginated
+  browsing. 1 new regression test (total 334 passing).
+
 ## v0.9.0 — 2026-04-18
 
 **Live audit tail via Server-Sent Events.**
