@@ -206,6 +206,16 @@ def base_context(request: Request, username: str | None, **extra) -> dict:
     theme = request.cookies.get("nks_wdc_theme")
     if theme not in ("light", "dark"):
         theme = ""  # empty = fall through to prefers-color-scheme
+    # SSO feature flag — template gates the "Sign in with NKS SSO"
+    # button on this so local-only deployments (no Authentik) don't
+    # show a button that 404s.
+    try:
+        from . import sso as _sso
+
+        sso_enabled = _sso.sso_enabled()
+    except Exception:  # noqa: BLE001 — template must not fail on import
+        sso_enabled = False
+
     ctx = {
         "request": request,
         "username": username,
@@ -215,6 +225,7 @@ def base_context(request: Request, username: str | None, **extra) -> dict:
         "banner": _current_banner(),
         "scheduler_failure": _scheduler_failure_banner(),
         "theme": theme,
+        "sso_enabled": sso_enabled,
     }
     ctx.update(extra)
     return ctx

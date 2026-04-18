@@ -121,6 +121,7 @@ SECURITY_ACTION_ALLOWLIST = frozenset({
     "login.failed",
     "login.locked_out",
     "login.lockout_armed",
+    "login.sso",
     "totp.login_failed",
     "permission.denied",
     "password.change_failed",

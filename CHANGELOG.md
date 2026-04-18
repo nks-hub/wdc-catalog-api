@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.49.0 — 2026-04-18
+
+SSO via Authentik + brand logo refresh.
+
+- New `/auth/sso/login` + `/auth/sso/callback` routes. OIDC code flow
+  with PKCE (S256) against sso.nks-hub.cz. Scopes: `openid email
+  profile groups` (space-separated per Authentik convention). Signed
+  state cookie is the CSRF equivalent; routes bypass the local CSRF
+  middleware.
+- Auto-provisions local `User` on first SSO login. Group mapping:
+  Authentik `admin`/`superadmin`/`superadmin-webs`/`authentik admins`
+  → role `admin`; otherwise → `readonly`. `NKS_WDC_SSO_ADMIN_GROUPS`
+  env overrides.
+- SSO skips local 2FA enforcement (upstream MFA-backed).
+- Login page: green "Sign in with NKS SSO" button + divider + local
+  password form; SVG logomark replaced with brand PNG
+  (`/static/logo-icon.png`, 48×48, shared with the Electron frontend).
+- Audit: new `login.sso` action with `{email, groups, issuer,
+  created, role}` detail, riding `nks_wdc_security_events_total` via
+  `SECURITY_ACTION_ALLOWLIST`.
+- Config: `NKS_WDC_SSO_CLIENT_ID`, `NKS_WDC_SSO_CLIENT_SECRET`,
+  `NKS_WDC_SSO_AUTHORITY` (default `https://sso.nks-hub.cz`),
+  `NKS_WDC_SSO_APP_SLUG` (default `wdc-catalog`),
+  `NKS_WDC_SSO_ADMIN_GROUPS`. All unset → feature auto-disabled,
+  `/auth/sso/*` routes return 404.
+
 ## v0.48.2 — 2026-04-18
 
 Auto-ALTER hotfix — unblocks prod schema drift.

@@ -279,4 +279,132 @@ def logout() -> RedirectResponse:
     return response
 
 
+# --- SSO (Authentik) ---------------------------------------------------
+#
+# OIDC authorization-code flow with PKCE. Enabled only when SSO env
+# vars are set; see app/sso.py. The state cookie is the CSRF
+# equivalent so these routes do NOT require ``require_csrf`` — doing so
+# would break a cross-site redirect from the IdP.
+
+
+@router.get("/auth/sso/login")
+def auth_sso_login(request: Request) -> RedirectResponse:
+    from . import sso as _sso
+
+    if not _sso.sso_enabled():
+        # Feature flag off — return 404 rather than 501 so a probe
+        # can't enumerate the endpoint's existence.
+        from fastapi import HTTPException
+
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not Found")
+
+    response = RedirectResponse("about:blank", status_code=status.HTTP_302_FOUND)
+    url = _sso.build_authorize_url(request, response, return_to="/admin")
+    response.headers["Location"] = url
+    return response
+
+
+@router.get("/auth/sso/callback")
+def auth_sso_callback(
+    request: Request,
+    code: str = "",
+    state: str = "",
+    error: str = "",
+    sso_state: Annotated[str | None, Cookie(alias="nks_wdc_sso_state")] = None,
+    db: Session = Depends(get_session),
+):
+    """IdP redirect handler — exchange code, upsert local User, mint
+    session, redirect to /admin. Local TOTP is bypassed (SSO is
+    MFA-backed upstream)."""
+    from fastapi import HTTPException
+
+    import bcrypt as _bcrypt
+    import re as _re
+    import secrets as _secrets
+
+    from . import audit as _audit
+    from . import sso as _sso
+
+    if not _sso.sso_enabled():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not Found")
+
+    if error or not code or not state:
+        # Authentik reported an error (consent denied, invalid request,
+        # etc.) — redirect back to login with a generic flash rather
+        # than leaking IdP-side detail to the user.
+        return RedirectResponse(
+            "/login?error=sso_failed", status_code=status.HTTP_303_SEE_OTHER
+        )
+
+    try:
+        claims, return_to = _sso.exchange_code(request, code, state, sso_state)
+    except _sso.SSOError:
+        return RedirectResponse(
+            "/login?error=sso_failed", status_code=status.HTTP_303_SEE_OTHER
+        )
+
+    # Map email → local username (lowercase, sanitized local-part).
+    local = claims.email.split("@", 1)[0]
+    username = _re.sub(r"[^a-zA-Z0-9_.-]+", "", local).lower() or "sso-user"
+
+    # Upsert User. SSO users get an unusable bcrypt hash so local
+    # password login is disabled for them.
+    user = db.scalar(select(User).where(User.username == username))
+    created = False
+    if user is None:
+        unusable = _bcrypt.hashpw(
+            _secrets.token_urlsafe(32).encode(), _bcrypt.gensalt(rounds=4)
+        ).decode("ascii")
+        user = User(username=username, password_hash=unusable)
+        db.add(user)
+        db.flush()
+        created = True
+
+    # Mirror admin role on the paired Account so the admin-UI's
+    # existing role gates work. If the paired account doesn't exist
+    # yet, it'll be provisioned on first admin hit — we set the role
+    # there, via the Account.role field.
+    acct = _paired_account(db, username)
+    role = "admin" if _sso.is_admin_group(claims.groups) else "readonly"
+    if acct is not None and acct.role != role:
+        acct.role = role
+
+    # Audit — new action ``login.sso`` (on the security allowlist so
+    # the Prometheus counter picks it up).
+    try:
+        _audit.emit(
+            db,
+            request=request,
+            actor=None,
+            action="login.sso",
+            resource_type="user",
+            resource_id=str(user.id),
+            detail={
+                "email": claims.email,
+                "groups": claims.groups,
+                "issuer": _sso.authority(),
+                "created": created,
+                "role": role,
+            },
+        )
+    except Exception:  # noqa: BLE001 — audit failure must not block login
+        pass
+
+    db.commit()
+
+    token = issue_session(user.username, request=request, db=db)
+    safe_return = return_to if return_to.startswith("/admin") else "/admin"
+    response = RedirectResponse(safe_return, status_code=status.HTTP_303_SEE_OTHER)
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=token,
+        max_age=SESSION_MAX_AGE,
+        httponly=True,
+        samesite="strict",
+        secure=cookie_secure(),
+    )
+    _sso.clear_state_cookie(response, secure=request.url.scheme == "https")
+    return response
+
+
 __all__ = ["router"]
