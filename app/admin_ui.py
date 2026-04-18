@@ -2093,6 +2093,7 @@ def admin_settings(
             "default_role": row.default_role,
             "banner_message": row.banner_message,
             "require_2fa_for_admins": row.require_2fa_for_admins,
+            "admin_ip_allowlist": row.admin_ip_allowlist or [],
             "audit_retention_days": row.audit_retention_days,
             "scheduler_run_retention_days": row.scheduler_run_retention_days,
             "webhook_delivery_retention_days": row.webhook_delivery_retention_days,
@@ -2131,6 +2132,7 @@ def admin_save_settings(
     backup_directory: Annotated[str, Form()] = "",
     backup_enabled: Annotated[str, Form()] = "",
     backup_retention_count: Annotated[int, Form()] = 7,
+    admin_ip_allowlist_raw: Annotated[str, Form()] = "",
     db: Session = Depends(get_session),
 ) -> RedirectResponse:
     from . import audit as _audit
@@ -2166,6 +2168,7 @@ def admin_save_settings(
         "backup_directory": row.backup_directory,
         "backup_enabled": row.backup_enabled,
         "backup_retention_count": row.backup_retention_count,
+        "admin_ip_allowlist": row.admin_ip_allowlist,
     }
 
     row.snapshot_keep_last_n = max(1, min(int(snapshot_keep_last_n), 500))
@@ -2188,6 +2191,13 @@ def admin_save_settings(
     row.backup_directory = backup_directory.strip() or None
     row.backup_enabled = bool(backup_enabled)
     row.backup_retention_count = max(0, min(int(backup_retention_count), 365))
+
+    # Parse admin IP allowlist — newline/comma separated CIDRs.
+    import re as _re
+    _raw_cidrs = _re.split(r"[\n,]+", admin_ip_allowlist_raw)
+    cidrs = [c.strip() for c in _raw_cidrs if c.strip()]
+    row.admin_ip_allowlist = cidrs or None
+
     row.updated_by_email = f"{username}@admin.local"
 
     after = {
@@ -2206,6 +2216,7 @@ def admin_save_settings(
         "backup_directory": row.backup_directory,
         "backup_enabled": row.backup_enabled,
         "backup_retention_count": row.backup_retention_count,
+        "admin_ip_allowlist": row.admin_ip_allowlist,
     }
     changed = {k: {"from": before[k], "to": after[k]} for k in after if before[k] != after[k]}
     if changed:

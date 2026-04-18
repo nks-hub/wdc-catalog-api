@@ -349,6 +349,7 @@ class GlobalPolicy(Base):
     default_role: Mapped[str] = mapped_column(String(16), default="user")
     banner_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
     require_2fa_for_admins: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    admin_ip_allowlist: Mapped[list | None] = mapped_column(JSON, nullable=True)
     audit_retention_days: Mapped[int] = mapped_column(Integer, default=365, nullable=False)
     scheduler_run_retention_days: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
     webhook_delivery_retention_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)

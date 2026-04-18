@@ -278,6 +278,45 @@ def current_user(
     except Exception as exc:  # noqa: BLE001
         log.warning("session row lookup/write failed: %s", exc)
 
+    # Global admin IP allowlist (v0.32.0)
+    # When configured, the request.client.host must be inside at least
+    # one CIDR. Same 302-to-/login response as "no session cookie" so
+    # we don't leak the existence of the allowlist to scanners.
+    try:
+        from .db import GlobalPolicy as _GlobalPolicy
+
+        policy = db.get(_GlobalPolicy, 1)
+        allowlist = policy.admin_ip_allowlist if policy else None
+        if allowlist:
+            import ipaddress
+
+            client_host = request.client.host if request.client else None
+            ok = False
+            if client_host:
+                try:
+                    client_addr = ipaddress.ip_address(client_host)
+                    for cidr in allowlist:
+                        try:
+                            if client_addr in ipaddress.ip_network(cidr, strict=False):
+                                ok = True
+                                break
+                        except ValueError:
+                            continue
+                except ValueError:
+                    ok = False
+            if not ok:
+                raise HTTPException(
+                    status_code=status.HTTP_302_FOUND,
+                    detail="Not authenticated",
+                    headers={"Location": "/login"},
+                )
+    except HTTPException:
+        raise
+    except Exception:  # noqa: BLE001
+        # Fail-open on unexpected DB / parse errors — breaking the gate
+        # wide open is better than locking operators out.
+        pass
+
     return username
 
 
