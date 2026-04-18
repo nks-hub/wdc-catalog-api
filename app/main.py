@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import AsyncIterator
 
 from fastapi import (
+    Depends,
     FastAPI,
     Request,
 )
@@ -322,7 +323,12 @@ from .api_auth_ui import router as auth_ui_router  # noqa: E402
 app.include_router(auth_ui_router)
 
 
-# /admin/* HTML routes live in ``app.admin_ui`` � mounted below.
-from .admin_ui import router as admin_ui_router  # noqa: E402
+# /admin/* HTML routes live in ``app.admin_ui`` — mounted below.
+# The 2FA-enforcement gate is wired here as a router-level dependency so
+# every admin route is covered without touching individual handlers.
+from .admin_ui import current_user_with_2fa_gate, router as admin_ui_router  # noqa: E402
 
-app.include_router(admin_ui_router)
+app.include_router(
+    admin_ui_router,
+    dependencies=[Depends(current_user_with_2fa_gate)],
+)

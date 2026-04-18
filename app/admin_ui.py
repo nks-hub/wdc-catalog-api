@@ -557,6 +557,55 @@ def _admin_account(db: Session, username: str):
     return acct
 
 
+# Routes the user can reach even while the 2FA-enforcement gate is
+# active — without these we'd deadlock a freshly-enrolled admin who
+# hasn't paired an authenticator yet.
+_TOTP_GATE_ALLOWLIST_PREFIXES = (
+    "/admin/account/totp/",   # setup + confirm + disable POST paths
+    "/admin/theme",           # theme toggle is pure cosmetics
+    "/static/",               # JS + CSS
+    "/logout",                # always let the user escape
+)
+_TOTP_GATE_ALLOWLIST_EXACT = {
+    "/admin/account",         # the setup form lives on this page
+}
+
+
+def current_user_with_2fa_gate(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    db: Session = Depends(get_session),
+) -> str:
+    """Wraps ``current_user`` with a policy check.
+
+    When ``GlobalPolicy.require_2fa_for_admins`` is True and the
+    authenticated admin has no TOTP configured, every request that is
+    not on the setup allowlist is bounced to the account page so the
+    admin is forced to pair an authenticator before continuing.
+    """
+    path = request.url.path
+    if path in _TOTP_GATE_ALLOWLIST_EXACT:
+        return username
+    if any(path.startswith(p) for p in _TOTP_GATE_ALLOWLIST_PREFIXES):
+        return username
+
+    from .db import GlobalPolicy
+
+    policy = db.get(GlobalPolicy, 1)
+    if policy is None or not policy.require_2fa_for_admins:
+        return username
+
+    acct = _admin_account(db, username)
+    if acct.totp_enabled and acct.totp_secret:
+        return username
+
+    raise HTTPException(
+        status_code=status.HTTP_302_FOUND,
+        detail="2FA required",
+        headers={"Location": "/admin/account?flash=totp-required"},
+    )
+
+
 @router.get("/admin", response_class=HTMLResponse)
 def admin_dashboard(
     request: Request,
@@ -2718,10 +2767,11 @@ def admin_account(
 ) -> HTMLResponse:
     from sqlalchemy import select as _sel
 
-    from .db import User
+    from .db import GlobalPolicy, User
 
     user = db.scalar(_sel(User).where(User.username == username))
     acct = _admin_account(db, username)
+    policy = db.get(GlobalPolicy, 1)
     ctx = base_context(
         request,
         username,
@@ -2734,6 +2784,7 @@ def admin_account(
         totp_enabled_at=acct.totp_enabled_at.isoformat() if acct.totp_enabled_at else None,
         sessions=_session_list(db, username, request),
         flash=_pop_flash(flash),
+        totp_gate_active=bool(policy and policy.require_2fa_for_admins),
     )
     response = templates.TemplateResponse(request, "account.html", ctx)
     _clear_flash(response)
@@ -2932,10 +2983,11 @@ def _render_account(
 ) -> HTMLResponse:
     from sqlalchemy import select as _sel
 
-    from .db import User
+    from .db import GlobalPolicy, User
 
     user = db.scalar(_sel(User).where(User.username == username))
     acct = _admin_account(db, username)
+    policy = db.get(GlobalPolicy, 1)
     ctx = base_context(
         request,
         username,
@@ -2948,6 +3000,7 @@ def _render_account(
         totp_enabled_at=acct.totp_enabled_at.isoformat() if acct.totp_enabled_at else None,
         sessions=_session_list(db, username, request),
         flash=flash,
+        totp_gate_active=bool(policy and policy.require_2fa_for_admins),
     )
     response = templates.TemplateResponse(request, "account.html", ctx)
     if flash is None:

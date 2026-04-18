@@ -24,6 +24,13 @@
     <button class="btn btn-primary">Update password</button>
   </form>
 
+  {% if totp_gate_active and not totp_enabled %}
+  <div class="flash flash-error" style="margin-bottom: var(--space-4);">
+    <strong>Two-factor authentication is required by instance policy.</strong>
+    Set up an authenticator below before continuing to other pages.
+  </div>
+  {% endif %}
+
   <h2>Two-factor authentication</h2>
   <p class="muted">
     Time-based one-time password (TOTP, RFC 6238) — pairs with Google
