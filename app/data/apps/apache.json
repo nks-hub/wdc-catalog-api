@@ -11,12 +11,33 @@
       "major_minor": "2.4",
       "channel": "stable",
       "downloads": [
-        { "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-apache-2.4.66/httpd-2.4.66-windows-x64.zip",
-          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "nks-hub" },
-        { "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-apache-2.4.66/httpd-2.4.66-linux-x64.tar.xz",
-          "os": "linux", "arch": "x64", "archive_type": "tar.xz", "source": "nks-hub" },
-        { "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-apache-2.4.66/httpd-2.4.66-macos-arm64.tar.xz",
-          "os": "macos", "arch": "arm64", "archive_type": "tar.xz", "source": "nks-hub" }
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-apache-2.4.66/httpd-2.4.66-windows-x64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "nks-hub",
+          "sha_256": "c7b7d9361862e57c1919ecd07e26e3491c667c16fe53a29d775ebec5a30b0d16",
+          "size_bytes": 2451
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-apache-2.4.66/httpd-2.4.66-linux-x64.tar.xz",
+          "os": "linux",
+          "arch": "x64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub",
+          "sha_256": "92fafec9dbabedcc14f6586c3ec82300da3bcb7ab523c13f9368099c32c93f13",
+          "size_bytes": 5487792
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-apache-2.4.66/httpd-2.4.66-macos-arm64.tar.xz",
+          "os": "macos",
+          "arch": "arm64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub",
+          "sha_256": "90593221ae9091c000d619d0cb053b20127b85515926acc876b00f258d34bcbf",
+          "size_bytes": 5273720
+        }
       ]
     },
     {
@@ -30,7 +51,9 @@
           "arch": "x64",
           "archive_type": "zip",
           "source": "apachelounge",
-          "headers": { "User-Agent": "NKS-WebDevConsole/1.0 (compatible)" }
+          "headers": {
+            "User-Agent": "NKS-WebDevConsole/1.0 (compatible)"
+          }
         }
       ]
     },
@@ -45,7 +68,9 @@
           "arch": "x64",
           "archive_type": "zip",
           "source": "apachelounge",
-          "headers": { "User-Agent": "NKS-WebDevConsole/1.0 (compatible)" }
+          "headers": {
+            "User-Agent": "NKS-WebDevConsole/1.0 (compatible)"
+          }
         }
       ]
     }

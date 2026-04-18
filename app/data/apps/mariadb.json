@@ -16,14 +16,18 @@
           "os": "windows",
           "arch": "x64",
           "archive_type": "msi",
-          "source": "nks-hub"
+          "source": "nks-hub",
+          "sha_256": "6cd895978d37e26563c22a57885f2fdb9474df1bd362629477be2782bd9249d2",
+          "size_bytes": 78110720
         },
         {
           "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mariadb-11.4.4/mariadb-11.4.4-linux-x64.tar.gz",
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.gz",
-          "source": "nks-hub"
+          "source": "nks-hub",
+          "sha_256": "c9f26fd8c37a97458310fb577d6cc3bce44cf048c0e6ce014ee6ae157ebc1697",
+          "size_bytes": 351422593
         }
       ]
     },
@@ -37,14 +41,18 @@
           "arch": "x64",
           "archive_type": "msi",
           "source": "nks-hub",
-          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mariadb-12.3.1/mariadb-12.3.1-windows-x64.msi"
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mariadb-12.3.1/mariadb-12.3.1-windows-x64.msi",
+          "sha_256": "48d4798283fb3e05f664e937b2971f81d738b320ed651d4baa82c119c7e8a72f",
+          "size_bytes": 92319744
         },
         {
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.gz",
           "source": "nks-hub",
-          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mariadb-12.3.1/mariadb-12.3.1-linux-x64.tar.gz"
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mariadb-12.3.1/mariadb-12.3.1-linux-x64.tar.gz",
+          "sha_256": "7a5bb527b7821c570b7aec6a20e3c0266b3d4bd5ca7cbde32e043b52a6a27433",
+          "size_bytes": 456566647
         }
       ]
     },
@@ -58,14 +66,18 @@
           "arch": "x64",
           "archive_type": "msi",
           "source": "nks-hub",
-          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mariadb-11.8.3/mariadb-11.8.3-windows-x64.msi"
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mariadb-11.8.3/mariadb-11.8.3-windows-x64.msi",
+          "sha_256": "c5ac3c428c1fdcf7226934e2ddd423c2201e8ca32480130e03cb760d24e6fc3b",
+          "size_bytes": 84676608
         },
         {
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.gz",
           "source": "nks-hub",
-          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mariadb-11.8.3/mariadb-11.8.3-linux-x64.tar.gz"
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mariadb-11.8.3/mariadb-11.8.3-linux-x64.tar.gz",
+          "sha_256": "d0609e994092fd32ba0d474ab39996b897c1c261ae95c97b9d3781caf63c7a4c",
+          "size_bytes": 425012398
         }
       ]
     }

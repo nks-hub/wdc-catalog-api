@@ -11,12 +11,33 @@
       "major_minor": "1.27",
       "channel": "stable",
       "downloads": [
-        { "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-nginx-1.27.3/nginx-1.27.3-windows-x64.zip",
-          "os": "windows", "arch": "x64", "archive_type": "zip", "source": "nks-hub" },
-        { "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-nginx-1.27.3/nginx-1.27.3-linux-x64.tar.xz",
-          "os": "linux", "arch": "x64", "archive_type": "tar.xz", "source": "nks-hub" },
-        { "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-nginx-1.27.3/nginx-1.27.3-macos-arm64.tar.xz",
-          "os": "macos", "arch": "arm64", "archive_type": "tar.xz", "source": "nks-hub" }
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-nginx-1.27.3/nginx-1.27.3-windows-x64.zip",
+          "os": "windows",
+          "arch": "x64",
+          "archive_type": "zip",
+          "source": "nks-hub",
+          "sha_256": "c8d851ab2673b986fe82b9bb2e681ef0cc675a25d69381aa00b63a1663510d6e",
+          "size_bytes": 2105913
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-nginx-1.27.3/nginx-1.27.3-linux-x64.tar.xz",
+          "os": "linux",
+          "arch": "x64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub",
+          "sha_256": "fa00c0635b6eb0f8b84d72e54c1f85c469b45d94c855912a520d6d1ad209558e",
+          "size_bytes": 1771956
+        },
+        {
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-nginx-1.27.3/nginx-1.27.3-macos-arm64.tar.xz",
+          "os": "macos",
+          "arch": "arm64",
+          "archive_type": "tar.xz",
+          "source": "nks-hub",
+          "sha_256": "296843a9a1db4292980946f2a495df3adaf3c08c8b5fecf8550c173be6223e5c",
+          "size_bytes": 386772
+        }
       ]
     },
     {

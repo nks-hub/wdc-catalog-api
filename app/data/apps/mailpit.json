@@ -16,21 +16,27 @@
           "os": "windows",
           "arch": "x64",
           "archive_type": "zip",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "f12366e1effde05fe5e43410944770524174ff3a314aa7a1a1ac0ae4ed412304",
+          "size_bytes": 11101728
         },
         {
           "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mailpit-1.29.6/mailpit-1.29.6-linux-x64.tar.gz",
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.gz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "b2983f5b5b863ada48665856e84a577c1072277f3ed70aa5abaa72ed79bee15f",
+          "size_bytes": 10985108
         },
         {
           "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-mailpit-1.29.6/mailpit-1.29.6-macos-arm64.tar.gz",
           "os": "macos",
           "arch": "arm64",
           "archive_type": "tar.gz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "db60b30b02b310475347cb32d42d1666660d725c91af6b2b297ab84f3e718cac",
+          "size_bytes": 10386332
         }
       ]
     }

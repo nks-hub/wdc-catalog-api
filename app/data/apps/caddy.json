@@ -16,21 +16,27 @@
           "os": "windows",
           "arch": "x64",
           "archive_type": "zip",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "9fd1ef9be5d9b05852b66ccc25f96f23d8651bcab20779861a745bdffa273722",
+          "size_bytes": 16167725
         },
         {
           "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-caddy-2.10.2/caddy-2.10.2-linux-x64.tar.gz",
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.gz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "5c218bc34c9197369263da7e9317a83acdbd80ef45d94dca5eff76e727c67cdd",
+          "size_bytes": 15875694
         },
         {
           "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-caddy-2.10.2/caddy-2.10.2-macos-arm64.tar.gz",
           "os": "macos",
           "arch": "arm64",
           "archive_type": "tar.gz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "cc9ad20742ea7bfee5dd1d435d42ab7fcf8592294f9ec43bf08fd21cbe448bc4",
+          "size_bytes": 15143224
         }
       ]
     }

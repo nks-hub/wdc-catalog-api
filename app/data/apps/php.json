@@ -23,14 +23,18 @@
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "67a547b13168c99e017ac74184a0d2b1104b3257e7645eb2877bddfbfa751322",
+          "size_bytes": 95056692
         },
         {
           "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.5.5/php-8.5.5-macos-arm64.tar.xz",
           "os": "macos",
           "arch": "arm64",
           "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "c833aac6c8a72d3f39007044116173e22c753b805304ba607004a324309bf73f",
+          "size_bytes": 19720428
         }
       ]
     },
@@ -51,14 +55,18 @@
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "2e20c25e43a7eccb59cc4921668fd30e0d5eb598ef9682d0fb4733221b553611",
+          "size_bytes": 88845768
         },
         {
           "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.4.20/php-8.4.20-macos-arm64.tar.xz",
           "os": "macos",
           "arch": "arm64",
           "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "f2927f7f84400a2b625b500760da9caff8e0c5a7b4a30aa36663722f2c9d4b80",
+          "size_bytes": 17703536
         }
       ]
     },
@@ -79,14 +87,18 @@
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "0cd9b7162dab487d2d4eefe3cdf21917f1f4cd6435659c89c553f58dcc33e1a2",
+          "size_bytes": 79247456
         },
         {
           "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.3.25/php-8.3.25-macos-arm64.tar.xz",
           "os": "macos",
           "arch": "arm64",
           "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "af23d941c2ecf6667d43b20779ebc0d717d4819ea5046473c2c82e8968c83667",
+          "size_bytes": 15639468
         }
       ]
     },
@@ -107,14 +119,18 @@
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "a9cc699c57baaf6a0581b08e1af9332b28a619ab923f67c37463b7bc109e573f",
+          "size_bytes": 77964584
         },
         {
           "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.2.30/php-8.2.30-macos-arm64.tar.xz",
           "os": "macos",
           "arch": "arm64",
           "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "277355d321e95814648747ed7f6125d621f02f36ce221ee9b92cdafead2f2b8e",
+          "size_bytes": 15331188
         }
       ]
     },
@@ -135,14 +151,18 @@
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "771bde36e4685ecd1ca42d6ec0ea076fe4f023336d56e759b82d1d5e5c70e158",
+          "size_bytes": 73844360
         },
         {
           "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-php-8.1.33/php-8.1.33-macos-arm64.tar.xz",
           "os": "macos",
           "arch": "arm64",
           "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "724c763ca965fdc095c0f422edd417346be8304d8990d632c68f979cdbe114a3",
+          "size_bytes": 14894808
         }
       ]
     },
@@ -163,7 +183,9 @@
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "d1774d20aa2d3edd563f891f10a6cd9b3612bde75b5268164853735fc050773b",
+          "size_bytes": 51239324
         }
       ]
     },
@@ -184,7 +206,9 @@
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "499157012b5e952671a9605950c5039ab38bb76e8c108a83713e40adaf3a2c1f",
+          "size_bytes": 49774768
         }
       ]
     },
@@ -205,7 +229,9 @@
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "3dc04271ab2d44a17b3f27f8feecff44e29cf86d503fe3616ff9bcb1bcf3f003",
+          "size_bytes": 58593988
         }
       ]
     },
@@ -226,7 +252,9 @@
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "7eb61c572a55bc026a1ecdbccb0becbb7b0e350fd3fb9a4399ffd18055e09435",
+          "size_bytes": 56927560
         }
       ]
     },
@@ -247,7 +275,9 @@
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.xz",
-          "source": "nks-hub-binaries"
+          "source": "nks-hub-binaries",
+          "sha_256": "d3cb4989046067e147bdb73040ca1c1cc438f82006533a400b6ef16793c1718a",
+          "size_bytes": 54096748
         }
       ]
     },
