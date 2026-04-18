@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.49.1 — 2026-04-18
+
+Hotfix for v0.49.0 SSO.
+
+- **Auth fix:** switched Authentik token exchange from body-param
+  client credentials to HTTP Basic Auth. Authentik rejects
+  `client_secret_post` on confidential clients with a misleading
+  `invalid_client` 400 — must use `client_secret_basic`.
+- **Logo:** use real WDC app icon from Electron build
+  (`frontend/build/icon.png`, 563 KB, rounded 12px) instead of the
+  low-quality Gemini extract.
+
 ## v0.49.0 — 2026-04-18
 
 SSO via Authentik + brand logo refresh.

@@ -228,7 +228,12 @@ def exchange_code(
     if not secrets.compare_digest(stored_state, state_param):
         raise SSOError("state mismatch")
 
-    # POST to token endpoint with Basic auth + PKCE verifier
+    # POST to token endpoint with Basic auth + PKCE verifier.
+    # Authentik confidential clients require HTTP Basic Auth
+    # (`client_secret_basic`), NOT body-param credentials — sending
+    # client_id/client_secret in the form body triggers HTTP 400
+    # `invalid_client` with the misleading "no client authentication
+    # included" message (verified against sso.nks-hub.cz 2026-04-18).
     try:
         with httpx.Client(timeout=15.0, verify=True) as client:
             resp = client.post(
@@ -238,9 +243,8 @@ def exchange_code(
                     "code": code,
                     "redirect_uri": redirect_uri(request),
                     "code_verifier": verifier,
-                    "client_id": client_id(),
-                    "client_secret": _client_secret(),
                 },
+                auth=(client_id(), _client_secret()),
             )
     except httpx.HTTPError as exc:  # network, tls, etc.
         raise SSOError(f"token endpoint unreachable: {exc}") from exc
