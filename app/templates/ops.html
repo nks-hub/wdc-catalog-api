@@ -68,5 +68,18 @@
       <div class="stat-row"><span>Readyz</span><b><a href="/readyz" target="_blank" rel="noopener">/readyz</a></b></div>
     </div>
   </div>
+
+  <div class="stat-grid stat-grid-3" style="margin-top: var(--space-4);">
+    <div class="stat-card stat-card-wide">
+      <h3>Backup</h3>
+      <div class="stat-row">
+        <span>Full JSON + audit snapshot</span>
+        <b><a class="btn btn-primary btn-sm" href="/admin/backup/export.zip" download>Download ZIP</a></b>
+      </div>
+      <div class="stat-sub muted">
+        Contains apps, releases, downloads, accounts (no secrets), users, invites_consumed, scheduler_runs, settings, audit.jsonl.gz, manifest.json (with per-file SHA-256).
+      </div>
+    </div>
+  </div>
 </section>
 {% endblock %}
