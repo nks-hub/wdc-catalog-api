@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Ops — NKS WDC{% endblock %}
+{% block content %}
+<section class="section">
+  <h1>Ops diagnostics</h1>
+  <p class="muted">Read-only instance health. Numbers are live at page-render; refresh to re-sample.</p>
+
+  <div class="stat-grid stat-grid-3">
+    <div class="stat-card">
+      <h3>Process</h3>
+      <div class="stat-row"><span>Version</span><b>{{ version }}</b></div>
+      <div class="stat-row"><span>Uptime</span><b>{{ uptime }}</b></div>
+      <div class="stat-row"><span>DB backend</span><b>{{ db_backend }}</b></div>
+      <div class="stat-row"><span>DB size</span><b>{{ db_size_human }}</b></div>
+    </div>
+
+    <div class="stat-card">
+      <h3>Accounts + sessions</h3>
+      <div class="stat-row"><span>Accounts</span><b>{{ accounts_total }}</b></div>
+      <div class="stat-row"><span>Admin UI users</span><b>{{ admin_users }}</b></div>
+      <div class="stat-row"><span>Active sessions</span><b>{{ active_sessions }}</b></div>
+    </div>
+
+    <div class="stat-card">
+      <h3>Audit</h3>
+      <div class="stat-row"><span>Total events</span><b>{{ events_total }}</b></div>
+      <div class="stat-row"><span>Last 24h</span><b>{{ events_24h }}</b></div>
+      <div class="stat-sub">
+        <a class="btn btn-ghost btn-sm" href="/admin/audit">View log →</a>
+        <a class="btn btn-ghost btn-sm" href="/admin/audit/export.jsonl.gz" download>Export JSONL.gz →</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="stat-grid stat-grid-3" style="margin-top: var(--space-4);">
+    <div class="stat-card">
+      <h3>Retention scheduler</h3>
+      <div class="stat-row"><span>Enabled</span>
+        <b>{% if scheduler_on %}<span class="pill pill-ok">yes</span>{% else %}<span class="pill pill-warn">no</span>{% endif %}</b>
+      </div>
+      <div class="stat-row"><span>Cron</span><b><code>{{ retention_cron }}</code></b></div>
+      <div class="stat-sub"><a class="btn btn-ghost btn-sm" href="/admin/retention">Policy →</a></div>
+    </div>
+
+    <div class="stat-card">
+      <h3>Webhooks</h3>
+      <div class="stat-row"><span>Configured</span>
+        <b>{% if webhook_enabled %}<span class="pill pill-ok">yes</span>{% else %}<span class="pill pill-warn">no</span>{% endif %}</b>
+      </div>
+      <div class="stat-sub"><a class="btn btn-ghost btn-sm" href="/admin/settings">Configure →</a></div>
+    </div>
+
+    <div class="stat-card">
+      <h3>Observability</h3>
+      <div class="stat-row"><span>Prometheus</span><b><a href="/metrics" target="_blank" rel="noopener">/metrics</a></b></div>
+      <div class="stat-row"><span>Healthz</span><b><a href="/healthz" target="_blank" rel="noopener">/healthz</a></b></div>
+      <div class="stat-row"><span>Readyz</span><b><a href="/readyz" target="_blank" rel="noopener">/readyz</a></b></div>
+    </div>
+  </div>
+</section>
+{% endblock %}

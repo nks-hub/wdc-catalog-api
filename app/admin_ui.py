@@ -7,6 +7,7 @@ writer can't inject messages into rendered pages.
 
 from __future__ import annotations
 
+import time
 from typing import Annotated
 
 from fastapi import (
@@ -24,7 +25,7 @@ from sqlalchemy.orm import Session
 from .auth import current_user
 from .cookies import cookie_secure
 from .csrf import require_csrf
-from .db import get_session
+from .db import _engine, get_session
 from .generators import GENERATORS, run_generator
 from .service import (
     add_download,
@@ -39,6 +40,29 @@ from .service import (
     update_app,
 )
 from .templating import base_context, templates
+
+_PROCESS_START = time.time()  # captured on first import — used for uptime
+
+
+def _format_uptime(secs: float) -> str:
+    d, rem = divmod(int(secs), 86400)
+    h, rem = divmod(rem, 3600)
+    m, _s = divmod(rem, 60)
+    if d:
+        return f"{d}d {h}h {m}m"
+    if h:
+        return f"{h}h {m}m"
+    if m:
+        return f"{m}m {_s}s"
+    return f"{int(secs)}s"
+
+
+def _human_bytes(n: int) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024:
+            return f"{n:.1f} {unit}" if unit != "B" else f"{n} {unit}"
+        n /= 1024
+    return f"{n:.1f} PB"
 
 
 router = APIRouter(include_in_schema=False)
@@ -3475,5 +3499,79 @@ def admin_totp_disable(
 
     return _redirect("/admin/account", "success", "2FA disabled.")
 
+
+@router.get("/admin/ops", response_class=HTMLResponse)
+def admin_ops(
+    request: Request,
+    username: Annotated[str, Depends(current_user)],
+    db: Session = Depends(get_session),
+) -> HTMLResponse:
+    import os as _os
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import select as _sel, func
+
+    from .db import Account, AdminSession, AuditEvent, User, GlobalPolicy
+    from . import __version__
+
+    # --- version + uptime ---
+    uptime_s = max(0.0, time.time() - _PROCESS_START)
+    uptime_str = _format_uptime(uptime_s)
+
+    # --- sessions ---
+    active_sessions = db.scalar(
+        _sel(func.count()).select_from(AdminSession).where(
+            AdminSession.revoked_at.is_(None)
+        )
+    ) or 0
+
+    # --- accounts ---
+    accounts_total = db.scalar(_sel(func.count()).select_from(Account)) or 0
+    admin_users = db.scalar(_sel(func.count()).select_from(User)) or 0
+
+    # --- audit ---
+    events_total = db.scalar(_sel(func.count()).select_from(AuditEvent)) or 0
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
+    events_24h = db.scalar(
+        _sel(func.count()).select_from(AuditEvent).where(
+            AuditEvent.created_at >= cutoff
+        )
+    ) or 0
+
+    # --- DB size (sqlite only; postgres shows "—") ---
+    db_backend = "sqlite" if "sqlite" in str(_engine.url) else "postgres"
+    db_size_bytes: int | None = None
+    if db_backend == "sqlite":
+        db_file = str(_engine.url).replace("sqlite:///", "", 1)
+        try:
+            db_size_bytes = _os.path.getsize(db_file)
+        except OSError:
+            db_size_bytes = None
+
+    # --- scheduler ---
+    scheduler_on = _os.environ.get("NKS_WDC_DISABLE_SCHEDULER") != "1"
+    retention_cron = _os.environ.get("NKS_WDC_RETENTION_CRON", "0 3 * * *")
+
+    # --- webhooks ---
+    policy = db.get(GlobalPolicy, 1)
+    webhook_enabled = bool(policy and (policy.webhook_url or "").strip())
+
+    ctx = base_context(
+        request,
+        username,
+        version=__version__,
+        uptime=uptime_str,
+        active_sessions=active_sessions,
+        accounts_total=accounts_total,
+        admin_users=admin_users,
+        events_total=events_total,
+        events_24h=events_24h,
+        db_backend=db_backend,
+        db_size_bytes=db_size_bytes,
+        db_size_human=_human_bytes(db_size_bytes) if db_size_bytes is not None else "—",
+        scheduler_on=scheduler_on,
+        retention_cron=retention_cron,
+        webhook_enabled=webhook_enabled,
+    )
+    return templates.TemplateResponse(request, "ops.html", ctx)
 
 __all__ = ["router"]
