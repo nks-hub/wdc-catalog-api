@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.34.0 — 2026-04-18
+
+Auto-revoke idle admin sessions.
+
+- **`GlobalPolicy.admin_session_idle_days`** — default 0 (disabled).
+  Auto-ALTER on startup handles legacy rows.
+- **Nightly retention sweep** — an `UPDATE admin_sessions SET
+  revoked_at=now WHERE last_seen_at < cutoff AND revoked_at IS NULL`
+  runs inside `_do_retention` after the webhook-deliveries sweep.
+  When an admin forgets to log out from a coffee-shop laptop, the
+  session dies on its own at the next 03:00 UTC sweep.
+- **Summary dict** gains `admin_sessions_auto_revoked`; the manual-
+  run flash + `retention.manual_run` audit event detail + the
+  `SchedulerRun(job="retention")` row all carry the count.
+- **Settings UI** — new "Auto-revoke idle admin sessions after
+  (days)" input in the Access fieldset alongside the v0.32.0
+  admin_ip_allowlist textarea.
+- **Default 0 = disabled** — explicit opt-in so legacy deployments
+  don't log admins out immediately after upgrade.
+- **Revoked sessions stay revoked** — the sweep only flips
+  `revoked_at` on rows where it's currently NULL.
+
+Complements the v0.10.0 manual session-kill: operators don't need
+to chase down stale sessions by hand.
+
+4 new tests (sweep revokes stale, zero disables, already-revoked
+untouched, settings save diff) — 459 passing, up from 455.
+
 ## v0.33.0 — 2026-04-18
 
 PAT last-used source tracking.
