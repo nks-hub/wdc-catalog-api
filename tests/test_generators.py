@@ -8,6 +8,8 @@ reachable (unreliable in CI).
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from app.generators import (
     GENERATORS,
@@ -15,6 +17,7 @@ from app.generators import (
     available_generators,
     run_generator,
     generate_mysql,
+    generate_composer,
     _mysql_fallback,
 )
 
@@ -33,6 +36,7 @@ class TestGeneratorRegistry:
             "mysql",
             "mkcert",
             "node",
+            "composer",
         }
         assert set(GENERATORS.keys()) == expected
 
@@ -227,6 +231,63 @@ class TestApacheGenerator:
             assert isinstance(rel, GenRelease)
             assert rel.version
             assert "." in rel.version
+
+
+class TestComposerGenerator:
+    _SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
+
+    def test_composer_returns_list(self):
+        result = generate_composer(limit=2)
+        assert isinstance(result, list)
+        for rel in result:
+            assert isinstance(rel, GenRelease)
+
+    def test_composer_semver(self):
+        result = generate_composer(limit=3)
+        for rel in result:
+            assert self._SEMVER.match(rel.version), (
+                f"Version {rel.version!r} does not match semver X.Y.Z"
+            )
+
+    def test_composer_limit_respected(self):
+        result = generate_composer(limit=2)
+        assert len(result) <= 2
+        result_one = generate_composer(limit=1)
+        assert len(result_one) <= 1
+
+    def test_composer_all_three_os(self):
+        result = generate_composer(limit=1)
+        if not result:
+            pytest.skip("composer upstream unreachable")
+        os_set = {dl.os for dl in result[0].downloads}
+        assert os_set == {"windows", "linux", "macos"}
+
+    def test_composer_phar_url_pattern(self):
+        result = generate_composer(limit=1)
+        if not result:
+            pytest.skip("composer upstream unreachable")
+        for dl in result[0].downloads:
+            assert "getcomposer.org/download/" in dl.url
+            assert dl.url.endswith("composer.phar")
+            assert dl.archive_type == "phar"
+            assert dl.source == "getcomposer.org"
+
+    def test_composer_channel_stable(self):
+        result = generate_composer(limit=3)
+        for rel in result:
+            assert rel.channel == "stable"
+
+    def test_composer_no_v_prefix(self):
+        result = generate_composer(limit=3)
+        for rel in result:
+            assert not rel.version.startswith("v"), (
+                f"Version {rel.version!r} should not start with 'v'"
+            )
+
+    def test_composer_returns_list_on_network_failure(self):
+        # Even if the network is unreachable, run_generator must return a list.
+        result = run_generator("composer", limit=1)
+        assert isinstance(result, list)
 
 
 class TestGenReleaseStructure:

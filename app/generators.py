@@ -614,6 +614,42 @@ def generate_node(limit: int = 5) -> list[GenRelease]:
     return releases
 
 
+# ── composer (getcomposer.org / GitHub) ────────────────────────────────
+#
+# composer.phar is a PHP archive that runs on every platform identically —
+# there are no per-OS or per-arch builds.  We use the GitHub releases API
+# (composer/composer) to enumerate tagged versions and derive the canonical
+# download URL from getcomposer.org.  A SHA-256 sidecar is available at
+# <url>.sha256sum but is not fetched here (the catalog stores the URL, not
+# the checksum).  We emit three GenDownload entries per release — one for
+# each supported OS — all pointing to the same .phar URL, so the catalog
+# can surface the tool regardless of which OS filter the UI applies.
+
+
+def generate_composer(limit: int = 5) -> list[GenRelease]:
+    releases: list[GenRelease] = []
+    for rel in _github_releases("composer/composer", limit=limit):
+        tag = rel.get("tag_name", "").lstrip("v")
+        if not tag:
+            continue
+        phar_url = f"https://getcomposer.org/download/{tag}/composer.phar"
+        downloads: list[GenDownload] = [
+            GenDownload(phar_url, "windows", "x64", "phar", "getcomposer.org"),
+            GenDownload(phar_url, "linux", "x64", "phar", "getcomposer.org"),
+            GenDownload(phar_url, "macos", "x64", "phar", "getcomposer.org"),
+        ]
+        releases.append(
+            GenRelease(
+                version=tag,
+                major_minor=_major_minor(tag),
+                channel="stable",
+                released_at=(rel.get("published_at") or "")[:10] or None,
+                downloads=downloads,
+            )
+        )
+    return releases
+
+
 # ── mkcert ─────────────────────────────────────────────────────────────
 #
 # FiloSottile/mkcert publishes its releases on GitHub with one single
@@ -685,6 +721,7 @@ GENERATORS = {
     "mysql": generate_mysql,
     "mkcert": generate_mkcert,
     "node": generate_node,
+    "composer": generate_composer,
 }
 
 
