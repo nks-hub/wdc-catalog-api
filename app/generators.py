@@ -614,6 +614,63 @@ def generate_node(limit: int = 5) -> list[GenRelease]:
     return releases
 
 
+# ── mkcert ─────────────────────────────────────────────────────────────
+#
+# FiloSottile/mkcert publishes its releases on GitHub with one single
+# statically-linked binary per OS/arch triplet (no tarball, no archive).
+# As of v1.4.4 the asset naming pattern is:
+#   mkcert-v1.4.4-linux-amd64
+#   mkcert-v1.4.4-linux-arm64
+#   mkcert-v1.4.4-darwin-amd64
+#   mkcert-v1.4.4-darwin-arm64
+#   mkcert-v1.4.4-windows-amd64.exe
+#   mkcert-v1.4.4-windows-arm64.exe
+#
+# WDC's ssl plugin wraps mkcert transparently; adding a generator here
+# lets `refresh` pull upstream tags so the catalog can surface newer
+# v1.5.x releases once FiloSottile cuts them (binaries-repo mirror via
+# build-mkcert.yml PR #17 already covers the same 5 triplets).
+
+
+def generate_mkcert(limit: int = 5) -> list[GenRelease]:
+    releases: list[GenRelease] = []
+    for rel in _github_releases("FiloSottile/mkcert", limit=limit):
+        tag = rel.get("tag_name", "").lstrip("v")
+        if not tag:
+            continue
+        downloads: list[GenDownload] = []
+        for asset in rel.get("assets", []):
+            name: str = asset.get("name", "")
+            url: str = asset.get("browser_download_url", "")
+            if not url:
+                continue
+            # mkcert ships bare binaries — no archive, no extension on
+            # Unix. archive_type "bin" mirrors how generate_cloudflared
+            # tags its own bare cloudflared binaries.
+            if name.endswith("-linux-amd64"):
+                downloads.append(GenDownload(url, "linux", "x64", "bin", "github"))
+            elif name.endswith("-linux-arm64"):
+                downloads.append(GenDownload(url, "linux", "arm64", "bin", "github"))
+            elif name.endswith("-darwin-amd64"):
+                downloads.append(GenDownload(url, "macos", "x64", "bin", "github"))
+            elif name.endswith("-darwin-arm64"):
+                downloads.append(GenDownload(url, "macos", "arm64", "bin", "github"))
+            elif name.endswith("-windows-amd64.exe"):
+                downloads.append(GenDownload(url, "windows", "x64", "exe", "github"))
+            elif name.endswith("-windows-arm64.exe"):
+                downloads.append(GenDownload(url, "windows", "arm64", "exe", "github"))
+        if downloads:
+            releases.append(
+                GenRelease(
+                    version=tag,
+                    major_minor=_major_minor(tag),
+                    released_at=(rel.get("published_at") or "")[:10] or None,
+                    downloads=downloads,
+                )
+            )
+    return releases
+
+
 # ── Registry ────────────────────────────────────────────────────────────
 
 GENERATORS = {
@@ -626,6 +683,7 @@ GENERATORS = {
     "nginx": generate_nginx,
     "mariadb": generate_mariadb,
     "mysql": generate_mysql,
+    "mkcert": generate_mkcert,
     "node": generate_node,
 }
 

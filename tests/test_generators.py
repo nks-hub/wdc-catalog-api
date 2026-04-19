@@ -31,6 +31,7 @@ class TestGeneratorRegistry:
             "nginx",
             "mariadb",
             "mysql",
+            "mkcert",
             "node",
         }
         assert set(GENERATORS.keys()) == expected
