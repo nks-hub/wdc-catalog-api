@@ -8,6 +8,7 @@ admin panel relies on.
 from __future__ import annotations
 
 import base64
+import urllib.parse
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, Form, Request, status
@@ -291,7 +292,15 @@ def logout() -> RedirectResponse:
 
 
 @router.get("/auth/sso/login")
-def auth_sso_login(request: Request) -> RedirectResponse:
+def auth_sso_login(request: Request, redirect_uri: str = "") -> RedirectResponse:
+    """Kick off the SSO flow.
+
+    An optional ``redirect_uri`` query parameter is accepted ONLY when it
+    matches the WDC desktop deep-link (``wdc://auth-callback``). Anything
+    else is ignored and the default ``/admin`` return target is used —
+    this prevents the endpoint from being abused as an open redirector
+    into arbitrary schemes.
+    """
     from . import sso as _sso
 
     if not _sso.sso_enabled():
@@ -301,8 +310,16 @@ def auth_sso_login(request: Request) -> RedirectResponse:
 
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not Found")
 
+    # F83: strict allowlist for external redirect targets. The WDC
+    # desktop app registers wdc:// as a custom protocol and passes a
+    # redirect_uri of exactly this string so catalog-api can hand the
+    # session token back to the running desktop window at callback time.
+    return_to = (
+        redirect_uri if redirect_uri == "wdc://auth-callback" else "/admin"
+    )
+
     response = RedirectResponse("about:blank", status_code=status.HTTP_302_FOUND)
-    url = _sso.build_authorize_url(request, response, return_to="/admin")
+    url = _sso.build_authorize_url(request, response, return_to=return_to)
     response.headers["Location"] = url
     return response
 
@@ -396,6 +413,17 @@ def auth_sso_callback(
     db.commit()
 
     token = issue_session(user.username, request=request, db=db)
+
+    # F83: desktop app callback — hand the session token back via the
+    # wdc:// deep-link instead of setting the browser cookie. The
+    # running WDC instance catches the URL, stores the token in its
+    # own keyring, and uses it for subsequent catalog-api calls.
+    if return_to == "wdc://auth-callback":
+        deep_link = f"wdc://auth-callback?token={urllib.parse.quote(token, safe='')}"
+        response = RedirectResponse(deep_link, status_code=status.HTTP_303_SEE_OTHER)
+        _sso.clear_state_cookie(response, secure=request.url.scheme == "https")
+        return response
+
     safe_return = return_to if return_to.startswith("/admin") else "/admin"
     response = RedirectResponse(safe_return, status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(
