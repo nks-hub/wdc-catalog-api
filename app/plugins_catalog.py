@@ -30,13 +30,10 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from .generators import DEFAULT_UA, GenDownload, GenRelease
 
-
 log = logging.getLogger(__name__)
 
 HTTP_TIMEOUT = float(os.environ.get("NKS_WDC_PLUGINS_HTTP_TIMEOUT", "10"))
-PLUGINS_REPO = os.environ.get(
-    "NKS_WDC_PLUGINS_REPO", "nks-hub/webdev-console-plugins"
-)
+PLUGINS_REPO = os.environ.get("NKS_WDC_PLUGINS_REPO", "nks-hub/webdev-console-plugins")
 
 router = APIRouter(prefix="/api/v1/plugins", tags=["plugins-catalog"])
 
@@ -44,9 +41,7 @@ router = APIRouter(prefix="/api/v1/plugins", tags=["plugins-catalog"])
 # (created by the release.yml workflow). The trailing `.zip` plus the
 # `NKS.WebDevConsole.Plugin.` prefix are stripped to yield the plugin id
 # in canonical lowercase form, e.g. `nks.wdc.apache` ← `...Plugin.Apache.zip`.
-_ASSET_RE = re.compile(
-    r"^NKS\.WebDevConsole\.Plugin\.(?P<name>[A-Za-z0-9]+)\.zip$"
-)
+_ASSET_RE = re.compile(r"^NKS\.WebDevConsole\.Plugin\.(?P<name>[A-Za-z0-9]+)\.zip$")
 
 
 def _github_releases(repo: str, limit: int = 20) -> list[dict[str, Any]]:
