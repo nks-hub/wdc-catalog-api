@@ -314,9 +314,7 @@ def auth_sso_login(request: Request, redirect_uri: str = "") -> RedirectResponse
     # desktop app registers wdc:// as a custom protocol and passes a
     # redirect_uri of exactly this string so catalog-api can hand the
     # session token back to the running desktop window at callback time.
-    return_to = (
-        redirect_uri if redirect_uri == "wdc://auth-callback" else "/admin"
-    )
+    return_to = redirect_uri if redirect_uri == "wdc://auth-callback" else "/admin"
 
     response = RedirectResponse("about:blank", status_code=status.HTTP_302_FOUND)
     url = _sso.build_authorize_url(request, response, return_to=return_to)
