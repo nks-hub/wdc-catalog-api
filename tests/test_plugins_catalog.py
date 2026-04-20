@@ -164,3 +164,72 @@ class TestPluginsCatalogEndpoints:
         with TestClient(app) as c:
             r = c.get("/api/v1/plugins/catalog")
         assert "public" in r.headers.get("cache-control", "")
+
+
+# --- in-process TTL cache -----------------------------------------------
+
+
+class TestGithubReleasesCache:
+    def test_within_ttl_hits_upstream_once(self, monkeypatch):
+        # Clear any leftover entry from other tests, then count httpx.get
+        # invocations. The second call with identical args should be
+        # served from the cache.
+        plugins_catalog._cache.clear()
+        calls = {"n": 0}
+
+        class _FakeResp:
+            def raise_for_status(self):  # noqa: D401
+                pass
+
+            def json(self):
+                return [{"tag_name": "v1.0.0", "assets": []}]
+
+        def _fake_get(url, headers=None, timeout=None):  # noqa: ARG001
+            calls["n"] += 1
+            return _FakeResp()
+
+        monkeypatch.setattr(plugins_catalog.httpx, "get", _fake_get)
+        monkeypatch.setattr(plugins_catalog, "CACHE_TTL_SECONDS", 60.0)
+
+        plugins_catalog._github_releases("fake/repo", limit=5)
+        plugins_catalog._github_releases("fake/repo", limit=5)
+        plugins_catalog._github_releases("fake/repo", limit=5)
+        assert calls["n"] == 1
+
+    def test_ttl_zero_disables_cache(self, monkeypatch):
+        plugins_catalog._cache.clear()
+        calls = {"n": 0}
+
+        class _FakeResp:
+            def raise_for_status(self):  # noqa: D401
+                pass
+
+            def json(self):
+                return []
+
+        def _fake_get(url, headers=None, timeout=None):  # noqa: ARG001
+            calls["n"] += 1
+            return _FakeResp()
+
+        monkeypatch.setattr(plugins_catalog.httpx, "get", _fake_get)
+        monkeypatch.setattr(plugins_catalog, "CACHE_TTL_SECONDS", 0.0)
+
+        plugins_catalog._github_releases("fake/repo")
+        plugins_catalog._github_releases("fake/repo")
+        assert calls["n"] == 2
+
+    def test_upstream_failure_not_cached(self, monkeypatch):
+        # A transient 500/network error should NOT occupy the cache for
+        # a full TTL — otherwise one flaky fetch silently blinds the
+        # endpoint for a minute even though GitHub is back.
+        plugins_catalog._cache.clear()
+
+        def _fake_get(url, headers=None, timeout=None):  # noqa: ARG001
+            raise RuntimeError("simulated network failure")
+
+        monkeypatch.setattr(plugins_catalog.httpx, "get", _fake_get)
+        monkeypatch.setattr(plugins_catalog, "CACHE_TTL_SECONDS", 60.0)
+
+        result = plugins_catalog._github_releases("fake/repo")
+        assert result == []
+        assert plugins_catalog._cache == {}

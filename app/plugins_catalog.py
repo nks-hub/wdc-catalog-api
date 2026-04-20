@@ -22,7 +22,9 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 from dataclasses import asdict
+from threading import Lock
 from typing import Any
 
 import httpx
@@ -34,6 +36,15 @@ log = logging.getLogger(__name__)
 
 HTTP_TIMEOUT = float(os.environ.get("NKS_WDC_PLUGINS_HTTP_TIMEOUT", "10"))
 PLUGINS_REPO = os.environ.get("NKS_WDC_PLUGINS_REPO", "nks-hub/webdev-console-plugins")
+# In-process TTL for the GitHub releases fetch. Without this every HTTP
+# hit to /api/v1/plugins/catalog (and the per-plugin variant) re-queried
+# GitHub, which burns the 60-req/h anonymous rate limit on a single
+# uvicorn worker under any real load. The Cache-Control header on the
+# HTTP response only helps CDN/browser layers, not internal re-fetches.
+CACHE_TTL_SECONDS = float(os.environ.get("NKS_WDC_PLUGINS_CACHE_TTL", "60"))
+
+_cache_lock = Lock()
+_cache: dict[tuple[str, int], tuple[float, list[dict[str, Any]]]] = {}
 
 router = APIRouter(prefix="/api/v1/plugins", tags=["plugins-catalog"])
 
@@ -50,7 +61,19 @@ def _github_releases(repo: str, limit: int = 20) -> list[dict[str, Any]]:
     Shares the DEFAULT_UA + timeout conventions with generators._github_releases
     but is duplicated here to avoid circular imports and to keep plugin
     catalog concerns independent of the binaries generator module.
+
+    Results are memoised in-process for ``CACHE_TTL_SECONDS`` (default 60s)
+    keyed by ``(repo, limit)`` so the endpoint does not re-hit GitHub on
+    every single request. Set ``CACHE_TTL_SECONDS=0`` to disable.
     """
+    key = (repo, limit)
+    now = time.monotonic()
+    if CACHE_TTL_SECONDS > 0:
+        with _cache_lock:
+            entry = _cache.get(key)
+            if entry is not None and (now - entry[0]) < CACHE_TTL_SECONDS:
+                return entry[1]
+
     url = f"https://api.github.com/repos/{repo}/releases?per_page={limit}"
     headers = {
         "Accept": "application/vnd.github+json",
@@ -60,10 +83,17 @@ def _github_releases(repo: str, limit: int = 20) -> list[dict[str, Any]]:
     try:
         r = httpx.get(url, headers=headers, timeout=HTTP_TIMEOUT)
         r.raise_for_status()
-        return r.json()
+        data = r.json()
     except Exception as exc:  # noqa: BLE001
         log.warning("GitHub plugins-repo fetch failed for %s: %s", repo, exc)
+        # Don't poison the cache with empty lists — upstream transient
+        # failures would otherwise paper over real data for a full TTL.
         return []
+
+    if CACHE_TTL_SECONDS > 0:
+        with _cache_lock:
+            _cache[key] = (now, data)
+    return data
 
 
 def _asset_plugin_id(filename: str) -> str | None:
