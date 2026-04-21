@@ -115,9 +115,12 @@
 </section>
 
 <style>
-/* F91.19: standalone compare-page styles. Inline because base.css is
-   conservative — adding these globally would bleed into admin-wide
-   styling we don't want to disturb. */
+/* F91.19→F91.19b: styles retuned for the warm-paper light theme that
+   admin.css actually ships. Previously used dark-mode fallback colors
+   that rendered dark-gray boxes against cream background — unreadable.
+   Every surface/text/border here pulls from the documented design
+   tokens in admin.css so Dark-mode prefers-color-scheme override works
+   automatically too. */
 .diff-heads {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -126,126 +129,199 @@
   margin: 16px 0 20px;
 }
 .diff-head {
-  padding: 10px 12px;
+  padding: 10px 14px;
   border-radius: 6px;
-  border: 1px solid var(--border, #2d3748);
-  background: var(--bg-soft, #1a202c);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  font-size: 0.88rem;
 }
-.diff-head-a { border-left: 3px solid #f56565; }
-.diff-head-b { border-left: 3px solid #48bb78; }
+.diff-head code { color: var(--accent); font-weight: 600; }
+.diff-head .muted { color: var(--text-3); }
+.diff-head-a {
+  border-left: 4px solid var(--danger);
+  background: var(--danger-bg);
+}
+.diff-head-b {
+  border-left: 4px solid var(--success);
+  background: var(--success-bg);
+}
 .diff-head-label {
   font-weight: 700;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  opacity: 0.75;
+  color: var(--text);
   margin-right: 4px;
 }
+.diff-head-a .diff-head-label { color: var(--danger); }
+.diff-head-b .diff-head-label { color: var(--success); }
 .diff-head-arrow {
-  font-size: 1.4rem;
+  font-size: 1.6rem;
   font-weight: 700;
-  opacity: 0.6;
+  color: var(--text-3);
   text-align: center;
 }
 
 .diff-identical {
   padding: 14px 16px;
   border-radius: 6px;
-  border: 1px solid #48bb78;
-  background: rgba(72, 187, 120, 0.08);
+  border: 1px solid var(--success-border);
+  background: var(--success-bg);
+  color: var(--success);
   margin: 16px 0;
 }
 
 .diff-summary {
-  margin: 16px 0 12px;
-  font-size: 0.92rem;
+  margin: 20px 0 12px;
+  font-size: 0.95rem;
+  color: var(--text);
 }
 
 .diff-tag {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
+  padding: 3px 9px;
+  border-radius: 4px;
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-right: 4px;
+  border: 1px solid transparent;
 }
-.diff-tag-add, .diff-tag-copy { background: rgba(72, 187, 120, 0.2); color: #48bb78; }
-.diff-tag-remove { background: rgba(245, 101, 101, 0.2); color: #f56565; }
-.diff-tag-replace { background: rgba(237, 137, 54, 0.2); color: #ed8936; }
-.diff-tag-move { background: rgba(66, 153, 225, 0.2); color: #4299e1; }
-.diff-tag-test { background: rgba(160, 174, 192, 0.2); color: #a0aec0; }
+.diff-tag-add, .diff-tag-copy {
+  background: var(--success-bg);
+  color: var(--success);
+  border-color: var(--success-border);
+}
+.diff-tag-remove {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+.diff-tag-replace {
+  background: var(--warning-bg);
+  color: var(--warning);
+  border-color: var(--warning-border);
+}
+.diff-tag-move {
+  background: var(--info-bg);
+  color: var(--info);
+  border-color: var(--info-border);
+}
+.diff-tag-test {
+  background: var(--surface-2);
+  color: var(--text-3);
+  border-color: var(--border);
+}
 
 .diff-table {
   width: 100%;
   border-collapse: collapse;
   margin: 8px 0;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
 }
 .diff-table th {
   text-align: left;
-  padding: 8px 10px;
-  border-bottom: 2px solid var(--border, #2d3748);
-  font-size: 0.78rem;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  color: var(--text-3);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  opacity: 0.7;
+  font-weight: 700;
 }
 .diff-table td {
-  padding: 10px;
-  border-bottom: 1px solid var(--border, #2d3748);
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
   vertical-align: top;
+  color: var(--text);
 }
-.diff-row-add { background: rgba(72, 187, 120, 0.04); }
-.diff-row-remove { background: rgba(245, 101, 101, 0.04); }
-.diff-row-replace { background: rgba(237, 137, 54, 0.04); }
+.diff-table tr:last-child td { border-bottom: none; }
+.diff-row-add { background: var(--success-bg); }
+.diff-row-remove { background: var(--danger-bg); }
+.diff-row-replace { background: var(--warning-bg); }
 .diff-op-cell { white-space: nowrap; width: 1%; }
 .diff-path-cell { font-family: 'JetBrains Mono', Consolas, monospace; }
 .diff-crumb {
   display: inline-block;
-  padding: 1px 6px;
+  padding: 2px 8px;
   margin: 1px 0;
-  background: rgba(160, 174, 192, 0.15);
-  border-radius: 3px;
-  font-size: 0.82rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 .diff-crumb-sep {
-  color: var(--muted, #718096);
-  padding: 0 2px;
+  color: var(--text-4);
+  padding: 0 4px;
+  font-weight: 600;
 }
 .diff-path-raw {
   font-size: 0.72rem;
-  opacity: 0.55;
-  margin-top: 3px;
+  color: var(--text-4);
+  margin-top: 4px;
 }
 .diff-value-cell {
   max-width: 600px;
 }
 .diff-value {
   margin: 0;
-  padding: 6px 8px;
-  background: rgba(0, 0, 0, 0.25);
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 4px;
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   max-height: 220px;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
+  font-family: 'JetBrains Mono', Consolas, monospace;
 }
 .diff-from {
   font-size: 0.82rem;
+  color: var(--text-3);
   margin-bottom: 4px;
 }
+.diff-from code { color: var(--text); background: var(--surface-2); padding: 1px 6px; border-radius: 3px; }
 
 .diff-raw-fallback {
-  margin-top: 20px;
-  opacity: 0.8;
+  margin-top: 24px;
+  color: var(--text-3);
 }
-.diff-raw-fallback summary { cursor: pointer; }
+.diff-raw-fallback summary { cursor: pointer; font-size: 0.88rem; }
+.diff-raw-fallback pre.detail {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+/* Dark mode — admin.css inverts --surface/--bg via prefers-color-scheme,
+   so all the tokens above already work there. The only thing we fix is
+   the tinted row backgrounds that are *too bright* on dark: dial them
+   back so the row stripe is a hint, not a glare. */
+@media (prefers-color-scheme: dark) {
+  .diff-row-add { background: rgba(21, 128, 61, 0.12); }
+  .diff-row-remove { background: rgba(220, 38, 38, 0.12); }
+  .diff-row-replace { background: rgba(180, 83, 9, 0.12); }
+  .diff-head-a { background: rgba(220, 38, 38, 0.12); }
+  .diff-head-b { background: rgba(21, 128, 61, 0.12); }
+  .diff-identical { background: rgba(21, 128, 61, 0.12); }
+}
 </style>
 {% endblock %}
