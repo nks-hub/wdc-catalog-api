@@ -27,16 +27,225 @@
 
   {% if error %}
     <div class="callout">{{ error }}</div>
-  {% elif diff_text is not none %}
-    <h2>Diff A → B</h2>
-    {% if diff_text == '[]' %}
-      <p class="muted">Snapshots are identical — zero operations needed to transform A into B.</p>
+  {% elif diff_ops is not none %}
+    {# F91.19: structured A→B summary — snapshot metadata side-by-side
+       so the reader sees which row is "before" and which is "after"
+       at a glance, without clicking each one. #}
+    {% if a_meta and b_meta %}
+    <div class="diff-heads">
+      <div class="diff-head diff-head-a">
+        <span class="diff-head-label">A · before</span>
+        <a href="/admin/devices/{{ device_id }}/snapshots/{{ a_meta.id }}"><code>#{{ a_meta.id }}</code></a>
+        <span class="pill">{{ a_meta.kind }}</span>
+        {% if a_meta.label %}<span class="muted">{{ a_meta.label }}</span>{% endif %}
+        <span class="muted">{{ a_meta.created_at[:19] }}</span>
+        <span class="muted">· {{ a_meta.size_bytes }} B</span>
+      </div>
+      <div class="diff-head-arrow">→</div>
+      <div class="diff-head diff-head-b">
+        <span class="diff-head-label">B · after</span>
+        <a href="/admin/devices/{{ device_id }}/snapshots/{{ b_meta.id }}"><code>#{{ b_meta.id }}</code></a>
+        <span class="pill">{{ b_meta.kind }}</span>
+        {% if b_meta.label %}<span class="muted">{{ b_meta.label }}</span>{% endif %}
+        <span class="muted">{{ b_meta.created_at[:19] }}</span>
+        <span class="muted">· {{ b_meta.size_bytes }} B</span>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if op_count == 0 %}
+      <div class="diff-identical">
+        <strong>✓ Snapshots are identical</strong>
+        — zero operations needed to transform A into B.
+      </div>
     {% else %}
-    <details open>
-      <summary>RFC 6902 JSON Patch ({{ op_count }} operation{% if op_count != 1 %}s{% endif %})</summary>
-      <pre class="detail selectable">{{ diff_text }}</pre>
-    </details>
+      <div class="diff-summary">
+        <strong>{{ op_count }}</strong> change{% if op_count != 1 %}s{% endif %}:
+        {% for op, count in op_summary.items() %}
+          <span class="diff-tag diff-tag-{{ op }}">{{ op }} × {{ count }}</span>
+        {% endfor %}
+      </div>
+
+      <table class="diff-table">
+        <thead>
+          <tr><th>Op</th><th>Path</th><th>Value / From</th></tr>
+        </thead>
+        <tbody>
+          {% for row in diff_ops %}
+          <tr class="diff-row diff-row-{{ row.op }}">
+            <td class="diff-op-cell">
+              <span class="diff-tag diff-tag-{{ row.op }}">{{ row.op }}</span>
+            </td>
+            <td class="diff-path-cell">
+              {% if row.path_parts %}
+                {% for p in row.path_parts %}<span class="diff-crumb">{{ p }}</span>{% if not loop.last %}<span class="diff-crumb-sep">/</span>{% endif %}{% endfor %}
+              {% else %}
+                <span class="diff-crumb">root</span>
+              {% endif %}
+              <div class="diff-path-raw"><code>{{ row.path or '/' }}</code></div>
+            </td>
+            <td class="diff-value-cell">
+              {% if row.from_path %}
+                <div class="diff-from"><span class="muted">from:</span> <code>{{ row.from_path }}</code></div>
+              {% endif %}
+              {% if row.value_text is not none %}
+                {% if row.value_text|length > 300 %}
+                  <details>
+                    <summary class="muted">value ({{ row.value_text|length }} chars)</summary>
+                    <pre class="diff-value selectable">{{ row.value_text }}</pre>
+                  </details>
+                {% else %}
+                  <pre class="diff-value selectable">{{ row.value_text }}</pre>
+                {% endif %}
+              {% elif row.op == "remove" %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <details class="diff-raw-fallback">
+        <summary class="muted">Raw JSON Patch (RFC 6902) · {{ op_count }} op{% if op_count != 1 %}s{% endif %}</summary>
+        <pre class="detail selectable">{{ diff_text }}</pre>
+      </details>
     {% endif %}
   {% endif %}
 </section>
+
+<style>
+/* F91.19: standalone compare-page styles. Inline because base.css is
+   conservative — adding these globally would bleed into admin-wide
+   styling we don't want to disturb. */
+.diff-heads {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  align-items: center;
+  margin: 16px 0 20px;
+}
+.diff-head {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #2d3748);
+  background: var(--bg-soft, #1a202c);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.diff-head-a { border-left: 3px solid #f56565; }
+.diff-head-b { border-left: 3px solid #48bb78; }
+.diff-head-label {
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.75;
+  margin-right: 4px;
+}
+.diff-head-arrow {
+  font-size: 1.4rem;
+  font-weight: 700;
+  opacity: 0.6;
+  text-align: center;
+}
+
+.diff-identical {
+  padding: 14px 16px;
+  border-radius: 6px;
+  border: 1px solid #48bb78;
+  background: rgba(72, 187, 120, 0.08);
+  margin: 16px 0;
+}
+
+.diff-summary {
+  margin: 16px 0 12px;
+  font-size: 0.92rem;
+}
+
+.diff-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 4px;
+}
+.diff-tag-add, .diff-tag-copy { background: rgba(72, 187, 120, 0.2); color: #48bb78; }
+.diff-tag-remove { background: rgba(245, 101, 101, 0.2); color: #f56565; }
+.diff-tag-replace { background: rgba(237, 137, 54, 0.2); color: #ed8936; }
+.diff-tag-move { background: rgba(66, 153, 225, 0.2); color: #4299e1; }
+.diff-tag-test { background: rgba(160, 174, 192, 0.2); color: #a0aec0; }
+
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 0.9rem;
+}
+.diff-table th {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 2px solid var(--border, #2d3748);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+}
+.diff-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border, #2d3748);
+  vertical-align: top;
+}
+.diff-row-add { background: rgba(72, 187, 120, 0.04); }
+.diff-row-remove { background: rgba(245, 101, 101, 0.04); }
+.diff-row-replace { background: rgba(237, 137, 54, 0.04); }
+.diff-op-cell { white-space: nowrap; width: 1%; }
+.diff-path-cell { font-family: 'JetBrains Mono', Consolas, monospace; }
+.diff-crumb {
+  display: inline-block;
+  padding: 1px 6px;
+  margin: 1px 0;
+  background: rgba(160, 174, 192, 0.15);
+  border-radius: 3px;
+  font-size: 0.82rem;
+}
+.diff-crumb-sep {
+  color: var(--muted, #718096);
+  padding: 0 2px;
+}
+.diff-path-raw {
+  font-size: 0.72rem;
+  opacity: 0.55;
+  margin-top: 3px;
+}
+.diff-value-cell {
+  max-width: 600px;
+}
+.diff-value {
+  margin: 0;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 4px;
+  font-size: 0.82rem;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.diff-from {
+  font-size: 0.82rem;
+  margin-bottom: 4px;
+}
+
+.diff-raw-fallback {
+  margin-top: 20px;
+  opacity: 0.8;
+}
+.diff-raw-fallback summary { cursor: pointer; }
+</style>
 {% endblock %}

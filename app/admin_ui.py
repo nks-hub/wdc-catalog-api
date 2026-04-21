@@ -2780,8 +2780,16 @@ def admin_snapshot_compare(
     acct = _admin_account(db, username)
     dev_id = normalize_device_id(device_id)
 
+    # F91.18: admin bypass — admins compare snapshots on any device.
+    # Non-admins remain scoped to their own Account.
+    from .db import DeviceConfig as _DC
+    dev_row = db.get(_DC, dev_id)
+    query_account_id = (
+        dev_row.user_id if (acct.role == "admin" and dev_row) else acct.id
+    )
+
     rows, _ = _snap.list_snapshots(
-        db, device_id=dev_id, account_id=acct.id, offset=0, limit=200
+        db, device_id=dev_id, account_id=query_account_id, offset=0, limit=200
     )
     choices = [
         {
@@ -2793,8 +2801,18 @@ def admin_snapshot_compare(
         for s in rows
     ]
 
+    # F91.19: structured diff rendering. The template used to dump the raw
+    # JSON Patch array into a <pre> block — readable for engineers but
+    # useless for a quick "what changed" scan. We now hand the patch as a
+    # list of typed rows (op / path_parts / value / from) so the template
+    # can color-code add/remove/replace + break the path into breadcrumb
+    # chips. Raw JSON is still available as a collapsible fallback.
     diff_text = None
+    diff_ops = None
+    op_summary: dict[str, int] = {}
     op_count = 0
+    a_meta = None
+    b_meta = None
     error = None
     if a and b:
         if a == b:
@@ -2807,8 +2825,8 @@ def admin_snapshot_compare(
                 or snap_b is None
                 or snap_a.device_id != dev_id
                 or snap_b.device_id != dev_id
-                or snap_a.account_id != acct.id
-                or snap_b.account_id != acct.id
+                or snap_a.account_id != query_account_id
+                or snap_b.account_id != query_account_id
             ):
                 error = "Snapshot not found on this device."
             else:
@@ -2818,6 +2836,47 @@ def admin_snapshot_compare(
                     diff_text = _json.dumps(
                         patch, indent=2, sort_keys=True, ensure_ascii=False
                     )
+                    # Structured view — each op gets decomposed so the
+                    # template can render a row per change without any JS.
+                    diff_ops = []
+                    for op in patch:
+                        op_type = op.get("op", "?")
+                        op_summary[op_type] = op_summary.get(op_type, 0) + 1
+                        raw_path = op.get("path", "") or ""
+                        parts = [
+                            p for p in raw_path.lstrip("/").split("/") if p != ""
+                        ]
+                        value_text = None
+                        if "value" in op:
+                            try:
+                                value_text = _json.dumps(
+                                    op["value"], indent=2, ensure_ascii=False,
+                                )
+                            except (TypeError, ValueError):
+                                value_text = str(op["value"])
+                        diff_ops.append({
+                            "op": op_type,
+                            "path": raw_path,
+                            "path_parts": parts,
+                            "value_text": value_text,
+                            "from_path": op.get("from"),
+                        })
+                    a_meta = {
+                        "id": snap_a.id,
+                        "kind": snap_a.kind,
+                        "label": snap_a.label,
+                        "created_at": snap_a.created_at.isoformat()
+                        if snap_a.created_at else "",
+                        "size_bytes": snap_a.size_bytes,
+                    }
+                    b_meta = {
+                        "id": snap_b.id,
+                        "kind": snap_b.kind,
+                        "label": snap_b.label,
+                        "created_at": snap_b.created_at.isoformat()
+                        if snap_b.created_at else "",
+                        "size_bytes": snap_b.size_bytes,
+                    }
                 except PermissionError:
                     error = "Can't diff — one of the snapshots is passphrase-encrypted."
                 except Exception as exc:  # noqa: BLE001
@@ -2831,6 +2890,10 @@ def admin_snapshot_compare(
         a_id=a,
         b_id=b,
         diff_text=diff_text,
+        diff_ops=diff_ops,
+        op_summary=op_summary,
+        a_meta=a_meta,
+        b_meta=b_meta,
         op_count=op_count,
         error=error,
         flash=_pop_flash(flash),
