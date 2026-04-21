@@ -76,12 +76,20 @@ def _read_pending(cookie: str | None) -> str | None:
 def _paired_account(db: Session, username: str) -> Account | None:
     """Return the Account row that backs this admin-UI username.
 
-    The admin panel uses ``User`` for session identity and pairs each
-    with an ``Account`` at ``{username}@admin.local``. We only need to
-    *read* that row for 2FA status here — provisioning happens inside
-    admin_ui._admin_account on first authenticated page visit.
+    F91.17: mirrors ``admin_ui._admin_account`` lookup order. Prefers the
+    SSO-provisioned real-email row over the legacy ``{username}@admin.local``
+    placeholder so both admin-panel and WDC-desktop flows land on the
+    same Account.
     """
-    return db.scalar(select(Account).where(Account.email == f"{username}@admin.local"))
+    legacy_email = f"{username}@admin.local"
+    acct = db.scalar(
+        select(Account)
+        .where(Account.email.like(f"{username}@%"))
+        .where(Account.email != legacy_email)
+    )
+    if acct is not None:
+        return acct
+    return db.scalar(select(Account).where(Account.email == legacy_email))
 
 
 # --- routes -------------------------------------------------------------

@@ -637,26 +637,49 @@ def admin_auto_generate(
 def _admin_account(db: Session, username: str):
     """Resolve the admin's Account row (not just User) for role-gated ops.
 
-    The session cookie carries the User.username (admin-UI bootstrap
-    identity). For catalog/users/audit work we need a matching Account
-    with a role — we auto-provision one on first admin login so the
-    "admin" bootstrap user has an upgrade path into the role system.
+    F91.17: unify admin-UI identity with WDC SSO identity. Previously
+    this always paired the User to a placeholder Account at
+    ``{username}@admin.local``, even when the SSO callback had already
+    provisioned a real-email Account (e.g. ``lury@lury.cz``). The split
+    produced two Account rows for the same human and hid WDC-desktop
+    device pushes from the admin panel.
+
+    Lookup order now:
+      1. Non-legacy Account whose email starts with ``{username}@`` and
+         isn't ``@admin.local`` — that's the SSO-provisioned, real-email
+         row. Preferred: it owns DeviceConfig pushes + is stable across
+         sessions.
+      2. Legacy ``{username}@admin.local`` — preserved for the bootstrap
+         ``admin`` user who has no SSO email, and for any historical
+         row not yet migrated to SSO.
+      3. Create ``{username}@admin.local`` on first call.
     """
     from sqlalchemy import select as _sel
 
     from .db import Account
     from .auth import hash_password
 
-    email = f"{username}@admin.local"
-    acct = db.scalar(_sel(Account).where(Account.email == email))
-    if acct is None:
-        acct = Account(
-            email=email,
-            password_hash=hash_password("unused-session-only"),
-            role="owner",
-        )
-        db.add(acct)
-        db.flush()
+    legacy_email = f"{username}@admin.local"
+    # 1) SSO-provisioned real-email account (stable identity)
+    acct = db.scalar(
+        _sel(Account)
+        .where(Account.email.like(f"{username}@%"))
+        .where(Account.email != legacy_email)
+    )
+    if acct is not None:
+        return acct
+    # 2) legacy @admin.local row, if present
+    acct = db.scalar(_sel(Account).where(Account.email == legacy_email))
+    if acct is not None:
+        return acct
+    # 3) provision legacy row for bootstrap users that never went through SSO
+    acct = Account(
+        email=legacy_email,
+        password_hash=hash_password("unused-session-only"),
+        role="owner",
+    )
+    db.add(acct)
+    db.flush()
     return acct
 
 
