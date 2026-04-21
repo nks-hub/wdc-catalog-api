@@ -3515,7 +3515,12 @@ def admin_device_detail(
     acct = _admin_account(db, username)
     dev_id = normalize_device_id(device_id)
     dev = db.get(DeviceConfig, dev_id)
-    if dev is None or dev.user_id != acct.id:
+    # F91.18: admins can inspect ANY device; non-admins stay scoped to
+    # their own. Previously the strict `user_id != acct.id` gate 404'd
+    # when an admin browsed a device pushed by a different WDC user.
+    if dev is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
+    if acct.role != "admin" and dev.user_id != acct.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
 
     now_utc = datetime.now(timezone.utc)
@@ -3524,9 +3529,18 @@ def admin_device_detail(
         last_seen = last_seen.replace(tzinfo=timezone.utc)
     online = bool(last_seen and (now_utc - last_seen).total_seconds() < 300)
 
+    # F91.18: pull from the actual owning account when admin-viewing
+    # someone else's device, so snapshot listings + HEAD lookup work.
+    query_account_id = dev.user_id if acct.role == "admin" else acct.id
     head = _snap.get_head(db, dev_id)
     _, snap_total = _snap.list_snapshots(
-        db, device_id=dev_id, account_id=acct.id, offset=0, limit=1
+        db, device_id=dev_id, account_id=query_account_id, offset=0, limit=1
+    )
+    # F91.18: grab the 10 most recent snapshots so the device detail
+    # page can show an inline history strip instead of forcing a click
+    # through to /snapshots just to know what's there.
+    recent_snaps, _ = _snap.list_snapshots(
+        db, device_id=dev_id, account_id=query_account_id, offset=0, limit=10
     )
 
     payload_pretty = (
@@ -3534,6 +3548,12 @@ def admin_device_detail(
         if dev.payload
         else None
     )
+
+    # F91.18: resolve owning Account's email so the template can surface
+    # "Owner: lury@lury.cz" — useful when admin is browsing another
+    # user's device.
+    from .db import Account as _Account
+    owner = db.get(_Account, dev.user_id) if dev.user_id else None
 
     ctx = base_context(
         request,
@@ -3547,6 +3567,7 @@ def admin_device_detail(
             "last_seen_at": dev.last_seen_at.isoformat() if dev.last_seen_at else None,
             "updated_at": dev.updated_at.isoformat() if dev.updated_at else None,
             "online": online,
+            "owner_email": owner.email if owner else None,
         },
         payload_pretty=payload_pretty,
         head=(
@@ -3558,6 +3579,18 @@ def admin_device_detail(
             else None
         ),
         snapshot_count=snap_total,
+        # F91.18: inline recent-snapshots list on the device detail page.
+        recent_snapshots=[
+            {
+                "id": s.id,
+                "kind": s.kind,
+                "label": s.label,
+                "created_at": s.created_at.isoformat() if s.created_at else "",
+                "size_bytes": s.size_bytes,
+                "is_head": bool(head and s.id == head.id),
+            }
+            for s in recent_snaps
+        ],
         flash=_pop_flash(flash),
     )
     response = templates.TemplateResponse(request, "device_detail.html", ctx)

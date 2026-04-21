@@ -14,6 +14,8 @@
   </header>
 
   <div class="meta">
+    {# F91.18: owner's email — critical for cross-tenant admin view #}
+    {% if device.owner_email %}<div><strong>Owner:</strong> <a href="/admin/users?q={{ device.owner_email }}">{{ device.owner_email }}</a></div>{% endif %}
     <div><strong>Last seen:</strong> {{ device.last_seen_at or '—' }}</div>
     <div><strong>Updated:</strong> {{ device.updated_at or '—' }}</div>
     <div><strong>Site count:</strong> {{ device.site_count or 0 }}</div>
@@ -31,12 +33,47 @@
 
   {% if payload_pretty %}
   <h2>Current config payload</h2>
-  <details>
+  <details open>
     <summary>JSON ({{ payload_pretty|length }} chars)</summary>
     <pre class="detail selectable">{{ payload_pretty }}</pre>
   </details>
   {% else %}
   <p class="muted">No payload stored for this device yet.</p>
+  {% endif %}
+
+  {# F91.18: inline snapshot history — 10 most recent. Lets admins
+     spot-check what's stored without drilling through /snapshots. #}
+  {% if recent_snapshots %}
+  <h2 style="margin-top: 24px;">
+    Recent snapshots
+    <span class="muted" style="font-size: 0.8em;">({{ snapshot_count }} total)</span>
+    <a class="btn btn-sm" href="/admin/devices/{{ device.device_id }}/snapshots/compare">Compare</a>
+    {% if snapshot_count > 10 %}
+      <a class="btn btn-sm" href="/admin/devices/{{ device.device_id }}/snapshots">view all →</a>
+    {% endif %}
+  </h2>
+  <table class="data">
+    <thead>
+      <tr><th>ID</th><th>When</th><th>Kind</th><th>Label</th><th>Size</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for s in recent_snapshots %}
+      <tr {% if s.is_head %}class="row-head"{% endif %}>
+        <td>
+          <a href="/admin/devices/{{ device.device_id }}/snapshots/{{ s.id }}">#{{ s.id }}</a>
+          {% if s.is_head %}<span class="pill pill-ok">HEAD</span>{% endif %}
+        </td>
+        <td class="nowrap">{{ s.created_at }}</td>
+        <td><span class="pill">{{ s.kind }}</span></td>
+        <td>{{ s.label or '—' }}</td>
+        <td>{{ s.size_bytes }}</td>
+        <td>
+          <a class="btn btn-sm" href="/admin/devices/{{ device.device_id }}/snapshots/{{ s.id }}">preview</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
   {% endif %}
 </section>
 {% endblock %}
