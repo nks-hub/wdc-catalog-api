@@ -206,6 +206,15 @@ def build_authorize_url(
         "code_challenge": _pkce_challenge(verifier),
         "code_challenge_method": "S256",
     }
+    # F91.13: force Authentik to prompt for credentials when the final
+    # destination is the desktop app. Default Authentik behaviour silently
+    # approves when a valid session cookie exists on sso.nks-hub.cz — that
+    # is correct for a same-browser admin panel flow but confusing for a
+    # native desktop client: the user clicks "Sign in" in WDC, never sees
+    # an Authentik login page, and assumes SSO is fake. Prompting per-flow
+    # makes the desktop sign-in ritual explicit + defensible.
+    if return_to == "wdc://auth-callback":
+        params["prompt"] = "login"
     return f"{authorize_url()}?{urllib.parse.urlencode(params)}"
 
 

@@ -412,20 +412,47 @@ def auth_sso_callback(
 
     token = issue_session(user.username, request=request, db=db)
 
-    # F83/F91.9: desktop app callback — WDC stores the token and calls
-    # back into `/api/v1/auth/me` + `/api/v1/devices`, both of which
-    # require a JWT bound to an Account row (not the itsdangerous session
-    # cookie value which only identifies a User). So we provision the
-    # paired Account (identical idempotent helper as admin_ui uses) and
-    # mint a JWT for it — then ship THAT in the deep-link rather than
-    # the session token. The browser cookie is intentionally not set:
-    # this callback terminates in the native app, not the admin panel.
+    # F83/F91.9/F91.13: desktop app callback — WDC stores the token and
+    # calls /api/v1/auth/me + /api/v1/devices, both of which require a
+    # JWT bound to an Account row. We provision the Account keyed by the
+    # REAL SSO email (claims.email) — not the synthetic
+    # `{username}@admin.local` the admin UI uses — so `/auth/me` returns
+    # the user's actual identity and the UI can show
+    # "Signed in as user@nks-hub.cz" instead of "user@admin.local".
+    # Catalog is a redirector around Authentik; the Account is a thin
+    # local projection of the SSO identity for /devices + /auth/me.
     if return_to == "wdc://auth-callback":
-        from .admin_ui import _admin_account as _mk_admin_account
+        import datetime as _dt
+        from .auth import hash_password as _hash_pw
         from .devices import create_token as _mint_jwt
 
-        acct = _mk_admin_account(db, user.username)
-        db.commit()  # ensure Account row is persisted before we sign a JWT against its id
+        sso_email = (claims.email or "").strip().lower()
+        if not sso_email:
+            # OIDC must include the `email` claim for any identity to be
+            # usable. Fall through to the generic /login error flow rather
+            # than mint a bogus JWT.
+            return RedirectResponse(
+                "/login?error=sso_failed", status_code=status.HTTP_303_SEE_OTHER
+            )
+
+        acct = db.scalar(select(Account).where(Account.email == sso_email))
+        if acct is None:
+            acct = Account(
+                email=sso_email,
+                password_hash=_hash_pw(_secrets.token_urlsafe(32)),
+                role=("admin" if _sso.is_admin_group(claims.groups) else "user"),
+            )
+            db.add(acct)
+            db.flush()
+        else:
+            desired_role = (
+                "admin" if _sso.is_admin_group(claims.groups) else acct.role
+            )
+            if desired_role and acct.role != desired_role:
+                acct.role = desired_role
+        acct.last_login_at = _dt.datetime.now(_dt.timezone.utc)
+        db.commit()
+
         wdc_jwt = _mint_jwt(
             acct.id,
             acct.email,
