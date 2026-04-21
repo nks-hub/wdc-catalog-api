@@ -423,44 +423,63 @@ def auth_sso_callback(
     # local projection of the SSO identity for /devices + /auth/me.
     if return_to == "wdc://auth-callback":
         import datetime as _dt
+        import logging as _logging
         from .auth import hash_password as _hash_pw
         from .devices import create_token as _mint_jwt
 
+        _log_wdc = _logging.getLogger("app.sso.wdc")
+
         sso_email = (claims.email or "").strip().lower()
+        _log_wdc.info(
+            "WDC SSO callback: claims.email=%r groups=%r return_to=%r",
+            claims.email, claims.groups, return_to,
+        )
         if not sso_email:
-            # OIDC must include the `email` claim for any identity to be
-            # usable. Fall through to the generic /login error flow rather
-            # than mint a bogus JWT.
+            _log_wdc.warning("WDC SSO: missing email claim — rejecting")
             return RedirectResponse(
                 "/login?error=sso_failed", status_code=status.HTTP_303_SEE_OTHER
             )
 
-        acct = db.scalar(select(Account).where(Account.email == sso_email))
-        if acct is None:
-            acct = Account(
-                email=sso_email,
-                password_hash=_hash_pw(_secrets.token_urlsafe(32)),
-                role=("admin" if _sso.is_admin_group(claims.groups) else "user"),
-            )
-            db.add(acct)
-            db.flush()
-        else:
-            desired_role = (
-                "admin" if _sso.is_admin_group(claims.groups) else acct.role
-            )
-            if desired_role and acct.role != desired_role:
-                acct.role = desired_role
-        acct.last_login_at = _dt.datetime.now(_dt.timezone.utc)
-        db.commit()
+        try:
+            acct = db.scalar(select(Account).where(Account.email == sso_email))
+            if acct is None:
+                acct = Account(
+                    email=sso_email,
+                    password_hash=_hash_pw(_secrets.token_urlsafe(32)),
+                    role=("admin" if _sso.is_admin_group(claims.groups) else "user"),
+                )
+                db.add(acct)
+                db.flush()
+                _log_wdc.info("WDC SSO: provisioned new Account id=%s email=%s", acct.id, acct.email)
+            else:
+                desired_role = (
+                    "admin" if _sso.is_admin_group(claims.groups) else acct.role
+                )
+                if desired_role and acct.role != desired_role:
+                    acct.role = desired_role
+                _log_wdc.info("WDC SSO: reusing Account id=%s email=%s role=%s", acct.id, acct.email, acct.role)
+            acct.last_login_at = _dt.datetime.now(_dt.timezone.utc)
+            db.commit()
 
-        wdc_jwt = _mint_jwt(
-            acct.id,
-            acct.email,
-            token_version=getattr(acct, "token_version", 1) or 1,
-        )
+            wdc_jwt = _mint_jwt(
+                acct.id,
+                acct.email,
+                token_version=getattr(acct, "token_version", 1) or 1,
+            )
+            _log_wdc.info("WDC SSO: minted JWT len=%d for account_id=%s", len(wdc_jwt), acct.id)
+        except Exception as e:
+            # Any DB / JWT failure would otherwise bubble as a 500 and WDC
+            # sees no wdc:// redirect at all. Logging + fallback keeps the
+            # failure visible instead of silent.
+            _log_wdc.exception("WDC SSO: provision/mint failed: %s", e)
+            return RedirectResponse(
+                "/login?error=sso_failed", status_code=status.HTTP_303_SEE_OTHER
+            )
+
         deep_link = (
             f"wdc://auth-callback?token={urllib.parse.quote(wdc_jwt, safe='')}"
         )
+        _log_wdc.info("WDC SSO: redirecting to deep-link (token in URL, len=%d)", len(wdc_jwt))
         response = RedirectResponse(deep_link, status_code=status.HTTP_303_SEE_OTHER)
         _sso.clear_state_cookie(response, secure=request.url.scheme == "https")
         return response
