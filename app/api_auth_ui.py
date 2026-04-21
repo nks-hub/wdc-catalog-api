@@ -412,12 +412,28 @@ def auth_sso_callback(
 
     token = issue_session(user.username, request=request, db=db)
 
-    # F83: desktop app callback — hand the session token back via the
-    # wdc:// deep-link instead of setting the browser cookie. The
-    # running WDC instance catches the URL, stores the token in its
-    # own keyring, and uses it for subsequent catalog-api calls.
+    # F83/F91.9: desktop app callback — WDC stores the token and calls
+    # back into `/api/v1/auth/me` + `/api/v1/devices`, both of which
+    # require a JWT bound to an Account row (not the itsdangerous session
+    # cookie value which only identifies a User). So we provision the
+    # paired Account (identical idempotent helper as admin_ui uses) and
+    # mint a JWT for it — then ship THAT in the deep-link rather than
+    # the session token. The browser cookie is intentionally not set:
+    # this callback terminates in the native app, not the admin panel.
     if return_to == "wdc://auth-callback":
-        deep_link = f"wdc://auth-callback?token={urllib.parse.quote(token, safe='')}"
+        from .admin_ui import _admin_account as _mk_admin_account
+        from .devices import create_token as _mint_jwt
+
+        acct = _mk_admin_account(db, user.username)
+        db.commit()  # ensure Account row is persisted before we sign a JWT against its id
+        wdc_jwt = _mint_jwt(
+            acct.id,
+            acct.email,
+            token_version=getattr(acct, "token_version", 1) or 1,
+        )
+        deep_link = (
+            f"wdc://auth-callback?token={urllib.parse.quote(wdc_jwt, safe='')}"
+        )
         response = RedirectResponse(deep_link, status_code=status.HTTP_303_SEE_OTHER)
         _sso.clear_state_cookie(response, secure=request.url.scheme == "https")
         return response
