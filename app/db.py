@@ -694,6 +694,41 @@ class SnapshotExport(Base):
     notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
 
+class SyncSnapshot(Base):
+    """Lightweight per-push snapshot of device config for rollback.
+
+    Stores the raw payload as gzip-compressed JSON (BLOB). Rotation to
+    keep=10 per device is enforced by the push handler. Designed for the
+    daemon sync flow; the richer ``DeviceSnapshot`` table handles the
+    versioned-snapshot feature set.
+    """
+
+    __tablename__ = "sync_snapshots"
+    __table_args__ = (
+        Index(
+            "ix_sync_snapshots_account_device_created",
+            "account_id",
+            "device_id",
+            "created_at",
+        ),
+        {"sqlite_autoincrement": False},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    account_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("accounts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utc_now, nullable=False
+    )
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_gzip: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+
+
 class AccountEncryptionKey(Base):
     """Envelope-encryption metadata — DEK wrapped by account KEK."""
 

@@ -57,6 +57,22 @@ def api_upsert_config(
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "Device is linked to another account"
         )
+
+    # Snapshot the PREVIOUS payload before overwriting so the client can
+    # roll back. Skipped on first push (no prior content).
+    if row is not None and row.payload:
+        from .api_sync_snapshots import create_sync_snapshot as _snap_prev
+
+        try:
+            _snap_prev(
+                db,
+                device_id=device_id,
+                account_id=account.id,
+                payload=row.payload,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("sync snapshot skipped for device=%s: %s", device_id, exc)
+
     if row is None:
         row = DeviceConfig(device_id=device_id, payload=body.payload)
         db.add(row)

@@ -224,11 +224,13 @@ async def _limit_payload_size(request: Request, call_next):
 from .api_catalog import router as catalog_router  # noqa: E402
 from .api_health import router as health_router  # noqa: E402
 from .api_sync import router as sync_router  # noqa: E402
+from .api_sync_snapshots import router as sync_snapshots_router  # noqa: E402
 from .plugins_catalog import router as plugins_catalog_router  # noqa: E402
 
 app.include_router(health_router)
 app.include_router(catalog_router)
 app.include_router(sync_router)
+app.include_router(sync_snapshots_router)
 app.include_router(plugins_catalog_router)
 
 # Mount the accounts + devices router (JWT-authenticated endpoints)
