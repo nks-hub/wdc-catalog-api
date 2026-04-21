@@ -3,16 +3,20 @@
 {% block content %}
 <section class="section">
   <h1>Devices ({{ total }})</h1>
-  <p class="muted">Device list scoped to the logged-in admin's account. For cross-account inspection, use the API.</p>
+  <p class="muted">
+    Admins see all accounts' devices; regular users see only their own.
+    WDC desktop pushes land here automatically after the first sync.
+  </p>
 
   <table class="data">
     <thead>
-      <tr><th>Device ID</th><th>Name</th><th>OS</th><th>Last seen</th><th>Online</th><th>Sites</th><th>Snapshots</th></tr>
+      <tr><th>Device ID</th><th>Owner</th><th>Name</th><th>OS</th><th>Last seen</th><th>Online</th><th>Sites</th><th>Snapshots</th></tr>
     </thead>
     <tbody>
       {% for d in devices %}
       <tr>
         <td><a href="/admin/devices/{{ d.device_id }}"><code>{{ d.device_id }}</code></a></td>
+        <td>{{ d.owner_email or '—' }}</td>
         <td>{{ d.name or '—' }}</td>
         <td>{{ d.os or '—' }}{% if d.arch %} / {{ d.arch }}{% endif %}</td>
         <td class="nowrap">{{ d.last_seen_at or '—' }}</td>
@@ -27,7 +31,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="7">
+        <td colspan="8">
           <div class="empty-state">
             <div class="empty-icon">📟</div>
             <h3>No devices yet</h3>

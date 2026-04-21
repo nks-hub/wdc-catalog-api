@@ -2054,7 +2054,14 @@ def admin_devices_list(
     from .db import DeviceConfig, count_query
 
     acct = _admin_account(db, username)
-    stmt = _sel(DeviceConfig).where(DeviceConfig.user_id == acct.id)
+    # F91.16: admins see every account's devices — multi-tenant view so
+    # WDC desktop pushes (which land under the SSO email's Account row,
+    # e.g. lury@lury.cz) are visible alongside the admin-panel's paired
+    # Account (lury@admin.local). Non-admins stay scoped to their own row.
+    if acct.role == "admin":
+        stmt = _sel(DeviceConfig)
+    else:
+        stmt = _sel(DeviceConfig).where(DeviceConfig.user_id == acct.id)
     total = count_query(db, stmt)
     rows = db.scalars(
         stmt.order_by(DeviceConfig.last_seen_at.desc().nullslast()).limit(200)
@@ -2069,6 +2076,16 @@ def admin_devices_list(
             dt = dt.replace(tzinfo=timezone.utc)
         return (now_utc - dt).total_seconds() < 300
 
+    # F91.16: load owning Account emails so the admin multi-tenant view
+    # can label each row with its user. Done in one query per page load
+    # (not per device) to keep the list endpoint responsive.
+    from .db import Account as _Account
+    user_ids = {d.user_id for d in rows if d.user_id is not None}
+    owners: dict[int, str] = {}
+    if user_ids:
+        for a in db.scalars(_sel(_Account).where(_Account.id.in_(user_ids))).all():
+            owners[a.id] = a.email
+
     devices = [
         {
             "device_id": d.device_id,
@@ -2078,6 +2095,9 @@ def admin_devices_list(
             "last_seen_at": d.last_seen_at.isoformat() if d.last_seen_at else None,
             "site_count": d.site_count,
             "online": _online(d.last_seen_at),
+            # Extra field for admin-view rendering; template can ignore it
+            # when it's not set (non-admin flow where only own devices show).
+            "owner_email": owners.get(d.user_id),
         }
         for d in rows
     ]
