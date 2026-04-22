@@ -79,6 +79,35 @@ def _github_releases(repo: str, limit: int = 10) -> list[dict]:
         return []
 
 
+def _probe_wdc_binaries_asset(
+    app: str, version: str, platform: str, ext: str
+) -> str | None:
+    """Return a download URL for a platform-specific asset we built in
+    nks-hub/webdev-console-binaries, or None if the release/asset is missing.
+
+    MariaDB + MySQL upstream don't publish macOS/arm64 tarballs. Our
+    binaries repo has dedicated workflows that build from source on a
+    macos-14 runner and attach the tarball to the matching release tag
+    (e.g. `binaries-mariadb-11.4.10/mariadb-11.4.10-macos-arm64.tar.gz`).
+    Use a HEAD probe so absent assets silently drop out of the catalog —
+    matches how _MYSQL_CDN and the MariaDB winx64 probes behave.
+    """
+    asset = f"{app}-{version}-{platform}.{ext}"
+    url = (
+        "https://github.com/nks-hub/webdev-console-binaries/"
+        f"releases/download/binaries-{app}-{version}/{asset}"
+    )
+    try:
+        head = httpx.head(
+            url, timeout=httpx.Timeout(5.0, connect=5.0), follow_redirects=True
+        )
+        if head.status_code < 400:
+            return url
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
 def _major_minor(version: str) -> str:
     parts = version.split(".")
     return ".".join(parts[:2]) if len(parts) >= 2 else version
@@ -369,11 +398,30 @@ def generate_mariadb(limit: int = 5) -> list[GenRelease]:
         except Exception:  # noqa: BLE001
             continue
 
+        downloads = [GenDownload(url, "windows", "x64", "zip", "mariadb.org")]
+        # nks-hub/webdev-console-binaries publishes a macOS arm64 source-
+        # build when upstream doesn't (archive.mariadb.org has no
+        # bintar-osx_arm64 for 11.x+). Probe it so Apple Silicon users
+        # get a binary in the catalog.
+        macos_url = _probe_wdc_binaries_asset(
+            "mariadb", version, "macos-arm64", "tar.gz"
+        )
+        if macos_url:
+            downloads.append(
+                GenDownload(
+                    macos_url,
+                    "macos",
+                    "arm64",
+                    "tar.gz",
+                    "nks-hub/webdev-console-binaries",
+                )
+            )
+
         releases.append(
             GenRelease(
                 version=version,
                 major_minor=_major_minor(version),
-                downloads=[GenDownload(url, "windows", "x64", "zip", "mariadb.org")],
+                downloads=downloads,
             )
         )
 
@@ -478,11 +526,28 @@ def generate_mysql(limit: int = 5) -> list[GenRelease]:
         except Exception:  # noqa: BLE001
             continue
 
+        downloads = [GenDownload(url, "windows", "x64", "zip", "dev.mysql.com")]
+        # nks-hub/webdev-console-binaries source-builds MySQL for macOS
+        # arm64 (Oracle ships DMG only, no arm64 zip consumable by the
+        # daemon's binary downloader). Probe for the tarball so Apple
+        # Silicon users see MySQL in the catalog.
+        macos_url = _probe_wdc_binaries_asset("mysql", version, "macos-arm64", "tar.gz")
+        if macos_url:
+            downloads.append(
+                GenDownload(
+                    macos_url,
+                    "macos",
+                    "arm64",
+                    "tar.gz",
+                    "nks-hub/webdev-console-binaries",
+                )
+            )
+
         releases.append(
             GenRelease(
                 version=version,
                 major_minor=mm,
-                downloads=[GenDownload(url, "windows", "x64", "zip", "dev.mysql.com")],
+                downloads=downloads,
             )
         )
 
