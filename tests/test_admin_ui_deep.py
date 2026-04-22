@@ -164,7 +164,14 @@ def test_snapshot_compare_renders_form_and_diff(deep_client: TestClient) -> None
         f"/admin/devices/{device_id}/snapshots/compare?a={a_id}&b={b_id}"
     )
     assert r.status_code == 200, r.text[:200]
-    assert "Diff A &rarr; B" in r.text or "Diff A → B" in r.text
+    # F91.19 renamed the diff header from "Diff A → B" to labelled side-by-side
+    # "A · before" / "B · after" blocks. Accept either shape so the assertion
+    # survives future copy tweaks without drifting from intent.
+    assert (
+        "Diff A &rarr; B" in r.text
+        or "Diff A → B" in r.text
+        or ("A · before" in r.text and "B · after" in r.text)
+    )
 
 
 def test_device_detail_shows_payload_and_delete_button(
