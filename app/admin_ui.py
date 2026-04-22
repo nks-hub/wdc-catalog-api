@@ -2103,6 +2103,7 @@ def admin_devices_list(
     # can label each row with its user. Done in one query per page load
     # (not per device) to keep the list endpoint responsive.
     from .db import Account as _Account
+
     user_ids = {d.user_id for d in rows if d.user_id is not None}
     owners: dict[int, str] = {}
     if user_ids:
@@ -2783,6 +2784,7 @@ def admin_snapshot_compare(
     # F91.18: admin bypass — admins compare snapshots on any device.
     # Non-admins remain scoped to their own Account.
     from .db import DeviceConfig as _DC
+
     dev_row = db.get(_DC, dev_id)
     query_account_id = (
         dev_row.user_id if (acct.role == "admin" and dev_row) else acct.id
@@ -2843,30 +2845,33 @@ def admin_snapshot_compare(
                         op_type = op.get("op", "?")
                         op_summary[op_type] = op_summary.get(op_type, 0) + 1
                         raw_path = op.get("path", "") or ""
-                        parts = [
-                            p for p in raw_path.lstrip("/").split("/") if p != ""
-                        ]
+                        parts = [p for p in raw_path.lstrip("/").split("/") if p != ""]
                         value_text = None
                         if "value" in op:
                             try:
                                 value_text = _json.dumps(
-                                    op["value"], indent=2, ensure_ascii=False,
+                                    op["value"],
+                                    indent=2,
+                                    ensure_ascii=False,
                                 )
                             except (TypeError, ValueError):
                                 value_text = str(op["value"])
-                        diff_ops.append({
-                            "op": op_type,
-                            "path": raw_path,
-                            "path_parts": parts,
-                            "value_text": value_text,
-                            "from_path": op.get("from"),
-                        })
+                        diff_ops.append(
+                            {
+                                "op": op_type,
+                                "path": raw_path,
+                                "path_parts": parts,
+                                "value_text": value_text,
+                                "from_path": op.get("from"),
+                            }
+                        )
                     a_meta = {
                         "id": snap_a.id,
                         "kind": snap_a.kind,
                         "label": snap_a.label,
                         "created_at": snap_a.created_at.isoformat()
-                        if snap_a.created_at else "",
+                        if snap_a.created_at
+                        else "",
                         "size_bytes": snap_a.size_bytes,
                     }
                     b_meta = {
@@ -2874,7 +2879,8 @@ def admin_snapshot_compare(
                         "kind": snap_b.kind,
                         "label": snap_b.label,
                         "created_at": snap_b.created_at.isoformat()
-                        if snap_b.created_at else "",
+                        if snap_b.created_at
+                        else "",
                         "size_bytes": snap_b.size_bytes,
                     }
                 except PermissionError:
@@ -3616,6 +3622,7 @@ def admin_device_detail(
     # "Owner: lury@lury.cz" — useful when admin is browsing another
     # user's device.
     from .db import Account as _Account
+
     owner = db.get(_Account, dev.user_id) if dev.user_id else None
 
     ctx = base_context(

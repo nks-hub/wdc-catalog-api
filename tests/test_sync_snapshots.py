@@ -83,9 +83,7 @@ class TestListSnapshots:
         _push(client, tok, dev2, {"src": "dev2", "x": 1})
         _push(client, tok, dev2, {"src": "dev2", "x": 2})
 
-        r = client.get(
-            f"/api/v1/sync/snapshots?device_id={dev1}", headers=_auth(tok)
-        )
+        r = client.get(f"/api/v1/sync/snapshots?device_id={dev1}", headers=_auth(tok))
         assert r.status_code == 200
         snaps = r.json()["snapshots"]
         assert all(s["device_id"] == dev1 for s in snaps)
@@ -143,9 +141,7 @@ class TestRestoreSnapshot:
         r_list = client.get("/api/v1/sync/snapshots", headers=_auth(tok))
         snap_id = r_list.json()["snapshots"][0]["id"]
 
-        r = client.post(
-            f"/api/v1/sync/snapshots/{snap_id}/restore", headers=_auth(tok)
-        )
+        r = client.post(f"/api/v1/sync/snapshots/{snap_id}/restore", headers=_auth(tok))
         assert r.status_code == 200
         body = r.json()
         # Must match ConfigSyncEntry shape (same as GET /sync/config/{device_id})
@@ -233,9 +229,7 @@ class TestAutoSnapshot:
         for i in range(12):
             _push(client, tok, dev, {"v": i})
 
-        r = client.get(
-            f"/api/v1/sync/snapshots?device_id={dev}", headers=_auth(tok)
-        )
+        r = client.get(f"/api/v1/sync/snapshots?device_id={dev}", headers=_auth(tok))
         snaps = r.json()["snapshots"]
         assert len(snaps) <= 10
 
@@ -246,9 +240,7 @@ class TestAutoSnapshot:
         for i in range(4):
             _push(client, tok, dev, {"v": i})
 
-        r = client.get(
-            f"/api/v1/sync/snapshots?device_id={dev}", headers=_auth(tok)
-        )
+        r = client.get(f"/api/v1/sync/snapshots?device_id={dev}", headers=_auth(tok))
         snaps = r.json()["snapshots"]
         # created_at should be descending
         times = [s["created_at"] for s in snaps]

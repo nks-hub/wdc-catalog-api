@@ -51,9 +51,7 @@ class SyncSnapshotListResponse(BaseModel):
 # ── Helpers ────────────────────────────────────────────────────────────
 
 
-def _require_snapshot(
-    snapshot_id: int, account: Account, db: Session
-) -> SyncSnapshot:
+def _require_snapshot(snapshot_id: int, account: Account, db: Session) -> SyncSnapshot:
     """Load a SyncSnapshot, enforcing ownership. Returns 404 for wrong account."""
     row = db.get(SyncSnapshot, snapshot_id)
     if row is None or row.account_id != account.id:
@@ -176,7 +174,9 @@ def restore_sync_snapshot(
     )
 
 
-@router.delete("/api/v1/sync/snapshots/{snapshot_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/api/v1/sync/snapshots/{snapshot_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 def delete_sync_snapshot(
     snapshot_id: int,
     account: Account = Depends(get_current_account),
