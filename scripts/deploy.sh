@@ -29,7 +29,8 @@ set -euo pipefail
 ssh_cmd() { ssh -i "${DEPLOY_SSH_KEY}" "${DEPLOY_USER}@${DEPLOY_HOST}" "$@"; }
 scp_up() { scp -i "${DEPLOY_SSH_KEY}" "$1" "${DEPLOY_USER}@${DEPLOY_HOST}:$2"; }
 
-version=$(python -c "exec(open('app/__init__.py').read()); print(__version__)")
+PY_CMD="$(command -v python3 || command -v python)"
+version=$("${PY_CMD}" -c "exec(open('app/__init__.py').read()); print(__version__)")
 tag=$(git rev-parse --short HEAD)
 tarball="/tmp/wdc-catalog-${tag}.tar.gz"
 
