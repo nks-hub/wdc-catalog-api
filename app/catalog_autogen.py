@@ -79,9 +79,7 @@ def run_catalog_autogen(limit_per_app: int = 10) -> list[AutogenOutcome]:
                 inserted = apply_generated_releases(db, app_id, combined)
                 db.commit()
             outcomes.append(
-                AutogenOutcome(
-                    app_id=app_id, scraped=len(combined), inserted=inserted
-                )
+                AutogenOutcome(app_id=app_id, scraped=len(combined), inserted=inserted)
             )
             log.info(
                 "catalog autogen: %s primary=%d binaries-repo=%d inserted=%d",

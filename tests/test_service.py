@@ -87,6 +87,7 @@ class TestApplyGeneratedReleases:
 
     def _make_app(self, prefix: str):
         import uuid
+
         create_all()
         app_id = f"{prefix}-{uuid.uuid4().hex[:6]}"
         with session_factory() as db:
@@ -97,19 +98,36 @@ class TestApplyGeneratedReleases:
     def test_merges_new_platform_download_into_existing_release(self):
         app_id = self._make_app("merge")
         # Seed: release 1.0.0 with Windows download only
-        seed = [GenRelease(version="1.0.0", major_minor="1.0", downloads=[
-            GenDownload(url="https://example/x.zip", os="windows", arch="x64"),
-        ])]
+        seed = [
+            GenRelease(
+                version="1.0.0",
+                major_minor="1.0",
+                downloads=[
+                    GenDownload(url="https://example/x.zip", os="windows", arch="x64"),
+                ],
+            )
+        ]
         with session_factory() as db:
             inserted = apply_generated_releases(db, app_id, seed)
             db.commit()
         assert inserted == 1
 
         # Regen: same version but now also has macos/arm64 download
-        regen = [GenRelease(version="1.0.0", major_minor="1.0", downloads=[
-            GenDownload(url="https://example/x.zip", os="windows", arch="x64"),
-            GenDownload(url="https://example/x.tar.gz", os="macos", arch="arm64", archive_type="tar.gz"),
-        ])]
+        regen = [
+            GenRelease(
+                version="1.0.0",
+                major_minor="1.0",
+                downloads=[
+                    GenDownload(url="https://example/x.zip", os="windows", arch="x64"),
+                    GenDownload(
+                        url="https://example/x.tar.gz",
+                        os="macos",
+                        arch="arm64",
+                        archive_type="tar.gz",
+                    ),
+                ],
+            )
+        ]
         with session_factory() as db:
             inserted = apply_generated_releases(db, app_id, regen)
             db.commit()
@@ -125,19 +143,40 @@ class TestApplyGeneratedReleases:
 
     def test_does_not_overwrite_existing_download_url(self):
         app_id = self._make_app("nooverwrite")
-        seed = [GenRelease(version="2.0.0", major_minor="2.0", downloads=[
-            GenDownload(url="https://admin-edited/custom.zip", os="windows", arch="x64"),
-        ])]
+        seed = [
+            GenRelease(
+                version="2.0.0",
+                major_minor="2.0",
+                downloads=[
+                    GenDownload(
+                        url="https://admin-edited/custom.zip", os="windows", arch="x64"
+                    ),
+                ],
+            )
+        ]
         with session_factory() as db:
             apply_generated_releases(db, app_id, seed)
             db.commit()
 
         # Regen with a *different* URL for the same (windows, x64) pair —
         # should NOT change the admin-edited URL, only add new pairs.
-        regen = [GenRelease(version="2.0.0", major_minor="2.0", downloads=[
-            GenDownload(url="https://auto-scrape/new.zip", os="windows", arch="x64"),
-            GenDownload(url="https://auto-scrape/linux.tar.gz", os="linux", arch="x64", archive_type="tar.gz"),
-        ])]
+        regen = [
+            GenRelease(
+                version="2.0.0",
+                major_minor="2.0",
+                downloads=[
+                    GenDownload(
+                        url="https://auto-scrape/new.zip", os="windows", arch="x64"
+                    ),
+                    GenDownload(
+                        url="https://auto-scrape/linux.tar.gz",
+                        os="linux",
+                        arch="x64",
+                        archive_type="tar.gz",
+                    ),
+                ],
+            )
+        ]
         with session_factory() as db:
             apply_generated_releases(db, app_id, regen)
             db.commit()
@@ -145,7 +184,11 @@ class TestApplyGeneratedReleases:
         with session_factory() as db:
             app = get_app(db, app_id)
             rel = next(r for r in app.releases if r.version == "2.0.0")
-            win_dl = next(d for d in rel.downloads if (d.os, d.arch) == ("windows", "x64"))
+            win_dl = next(
+                d for d in rel.downloads if (d.os, d.arch) == ("windows", "x64")
+            )
             assert win_dl.url == "https://admin-edited/custom.zip"  # preserved
-            linux_dl = next(d for d in rel.downloads if (d.os, d.arch) == ("linux", "x64"))
+            linux_dl = next(
+                d for d in rel.downloads if (d.os, d.arch) == ("linux", "x64")
+            )
             assert linux_dl.url == "https://auto-scrape/linux.tar.gz"  # added

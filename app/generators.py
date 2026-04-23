@@ -176,7 +176,7 @@ def _generate_from_binaries_repo(app: str, limit: int = 100) -> list[GenRelease]
             tag: str = rel.get("tag_name", "")
             if not tag.startswith(tag_prefix):
                 continue
-            version = tag[len(tag_prefix):]
+            version = tag[len(tag_prefix) :]
             downloads: list[GenDownload] = []
             for asset in rel.get("assets", []):
                 triple = _extract_triple_from_asset_name(asset.get("name", ""))
