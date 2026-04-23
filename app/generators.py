@@ -79,6 +79,25 @@ def _github_releases(repo: str, limit: int = 10) -> list[dict]:
         return []
 
 
+def _github_json(path: str) -> list[dict]:
+    """Raw GET against api.github.com returning parsed JSON.
+
+    Thin wrapper for endpoints ``_github_releases`` doesn't cover (custom
+    query strings, pagination). Raises on non-2xx so callers can
+    distinguish "empty list" from "GitHub errored"; use ``try/except`` on
+    the call site if a best-effort fallback is acceptable.
+    """
+    url = f"https://api.github.com{path}"
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": DEFAULT_UA,
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    r = httpx.get(url, headers=headers, timeout=HTTP_TIMEOUT)
+    r.raise_for_status()
+    return r.json()
+
+
 def _probe_wdc_binaries_asset(
     app: str, version: str, platform: str, ext: str
 ) -> str | None:
@@ -106,6 +125,85 @@ def _probe_wdc_binaries_asset(
     except Exception:  # noqa: BLE001
         pass
     return None
+
+
+# Platform triple parser for `<app>-<version>-<os>-<arch>.<ext>` asset names
+# in the binaries repo. Recognises every (os, arch) pair our build
+# workflows produce plus the archive formats consumed by the daemon's
+# BinaryDownloader. Unknown patterns → None so we silently skip anything
+# non-canonical (source zips, checksums, sig files).
+_BINARIES_ASSET_PATTERN = re.compile(
+    r"^[a-z]+-(?P<version>[^-]+)-(?P<os>windows|linux|macos)-(?P<arch>x64|x86|arm64|arm)\.(?P<ext>zip|tar\.gz|tar\.xz|msi|bin|exe)$"
+)
+
+
+def _extract_triple_from_asset_name(name: str) -> tuple[str, str, str] | None:
+    m = _BINARIES_ASSET_PATTERN.match(name)
+    if not m:
+        return None
+    return m.group("os"), m.group("arch"), m.group("ext")
+
+
+def _generate_from_binaries_repo(app: str, limit: int = 100) -> list[GenRelease]:
+    """Enumerate every ``binaries-<app>-<version>`` release in
+    nks-hub/webdev-console-binaries and convert each matching asset into
+    a GenDownload.
+
+    Used as an additive fallback source for apps whose upstream scraper
+    misses versions we've built ourselves (e.g. MySQL 9.6.0 landed in
+    the binaries repo before Oracle's 9.7 bumped the scraped page, so
+    the catalog never saw it). The caller is expected to merge the
+    returned releases into whatever the primary scraper already
+    produced; ``apply_generated_releases`` handles the merge.
+    """
+    releases: list[GenRelease] = []
+    # /releases returns 30 per page; pagination is optional because each
+    # app has fewer than 30 release tags today. Walk pages until exhausted
+    # anyway so this keeps working when MariaDB/MySQL get more builds.
+    page = 1
+    tag_prefix = f"binaries-{app}-"
+    while len(releases) < limit:
+        try:
+            data = _github_json(
+                f"/repos/nks-hub/webdev-console-binaries/releases?per_page=100&page={page}"
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("binaries repo scrape failed for %s: %s", app, exc)
+            break
+        if not isinstance(data, list) or not data:
+            break
+        for rel in data:
+            tag: str = rel.get("tag_name", "")
+            if not tag.startswith(tag_prefix):
+                continue
+            version = tag[len(tag_prefix):]
+            downloads: list[GenDownload] = []
+            for asset in rel.get("assets", []):
+                triple = _extract_triple_from_asset_name(asset.get("name", ""))
+                if triple is None:
+                    continue
+                os_tag, arch_tag, ext = triple
+                downloads.append(
+                    GenDownload(
+                        url=asset.get("browser_download_url", ""),
+                        os=os_tag,
+                        arch=arch_tag,
+                        archive_type=ext,
+                        source="nks-hub/webdev-console-binaries",
+                    )
+                )
+            if downloads:
+                releases.append(
+                    GenRelease(
+                        version=version,
+                        major_minor=_major_minor(version),
+                        downloads=downloads,
+                    )
+                )
+        if len(data) < 100:
+            break
+        page += 1
+    return releases
 
 
 def _major_minor(version: str) -> str:
@@ -425,6 +523,12 @@ def generate_mariadb(limit: int = 5) -> list[GenRelease]:
             )
         )
 
+    # Additive: older MariaDB versions still in nks-hub/webdev-console-binaries
+    # (e.g. 11.4.4, 11.8.3) drop out of archive.mariadb.org's top-N listing
+    # as newer patch releases land, so the primary scrape misses them.
+    # Merge the binaries-repo tarballs back in so existing DB entries get
+    # their macos-arm64 asset even after they fall off upstream.
+    releases.extend(_generate_from_binaries_repo("mariadb", limit=limit))
     return releases
 
 
@@ -552,7 +656,13 @@ def generate_mysql(limit: int = 5) -> list[GenRelease]:
         )
 
     if not releases:
-        return _mysql_fallback(limit)
+        releases = _mysql_fallback(limit)
+
+    # Additive: versions we've source-built in nks-hub/webdev-console-binaries
+    # that the upstream scraper didn't surface (e.g. 9.6.0 when dev.mysql.com
+    # has already moved on to 9.7). apply_generated_releases merges these
+    # by (os, arch) so there's no clash with already-present downloads.
+    releases.extend(_generate_from_binaries_repo("mysql", limit=limit))
     return releases
 
 

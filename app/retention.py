@@ -408,6 +408,32 @@ def start_scheduler() -> None:
         _scheduled_backup, backup_trigger, id="backup-daily", replace_existing=True
     )
 
+    # Catalog auto-regenerator — runs every generator once/day so new
+    # platform binaries (e.g. a fresh macos-arm64 tarball in the nks-hub
+    # binaries repo) land in the served catalog without the admin having
+    # to click "Auto-generate" per app. Offset from backup (04:15 UTC)
+    # so a failed scrape never blocks the earlier backup/retention sweep.
+    if os.environ.get("NKS_WDC_DISABLE_CATALOG_AUTOGEN") != "1":
+        from .catalog_autogen import _scheduled_catalog_autogen
+
+        autogen_cron = os.environ.get("NKS_WDC_CATALOG_AUTOGEN_CRON", "15 4 * * *")
+        try:
+            autogen_trigger = CronTrigger.from_crontab(autogen_cron, timezone="UTC")
+        except Exception as exc:
+            log.warning(
+                "Invalid NKS_WDC_CATALOG_AUTOGEN_CRON=%s: %s — defaulting daily 04:15",
+                autogen_cron,
+                exc,
+            )
+            autogen_trigger = CronTrigger.from_crontab("15 4 * * *", timezone="UTC")
+        sched.add_job(
+            _scheduled_catalog_autogen,
+            autogen_trigger,
+            id="catalog-autogen-daily",
+            replace_existing=True,
+        )
+        log.info("catalog autogen scheduler registered (cron=%s)", autogen_cron)
+
     sched.start()
     _scheduler = sched
     log.info("retention scheduler started (cron=%s)", cron)
