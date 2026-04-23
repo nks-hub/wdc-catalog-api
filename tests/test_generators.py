@@ -147,22 +147,40 @@ class TestPHPGenerator:
 
 class TestMariaDBGenerator:
     def test_generate_mariadb_returns_list(self):
+        """generate_mariadb merges 3 sources: archive.mariadb.org (win zip),
+        the per-version binaries-repo macOS probe, and a final
+        _generate_from_binaries_repo pass that re-adds older versions
+        that fell off upstream. Every release's downloads must carry at
+        least ONE recognised source string — either `mariadb.org` (win
+        zip) or `nks-hub/webdev-console-binaries` (macos-arm64 tarball)."""
         from app.generators import generate_mariadb
 
         result = generate_mariadb(limit=2)
         assert isinstance(result, list)
         for rel in result:
             assert isinstance(rel, GenRelease)
-            assert "mariadb.org" in rel.downloads[0].source if rel.downloads else True
+            if rel.downloads:
+                sources = {dl.source for dl in rel.downloads}
+                assert sources & {
+                    "mariadb.org",
+                    "nks-hub/webdev-console-binaries",
+                }, f"unexpected sources {sources}"
 
-    def test_generate_mariadb_downloads_are_zip(self):
+    def test_generate_mariadb_windows_download_is_zip(self):
+        """The upstream archive.mariadb.org path always returns a Windows
+        zip — when that download exists in the merged output, its metadata
+        must match (os=windows, arch=x64, archive_type=zip). macOS entries
+        from the binaries-repo pass are tar.gz and are intentionally
+        skipped here — they're exercised elsewhere."""
         from app.generators import generate_mariadb
 
         result = generate_mariadb(limit=1)
         for rel in result:
             for dl in rel.downloads:
-                assert dl.archive_type == "zip"
-                assert dl.os == "windows"
+                if dl.source == "mariadb.org":
+                    assert dl.archive_type == "zip"
+                    assert dl.os == "windows"
+                    assert dl.arch == "x64"
 
 
 class TestMailpitGenerator:
