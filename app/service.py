@@ -256,10 +256,16 @@ def apply_generated_releases(
     *,
     replace: bool = False,
 ) -> int:
-    """Persist scraped releases. Skips versions that already exist on
-    the app unless `replace=True` (which wipes ALL releases first).
+    """Persist scraped releases. For versions that already exist, merge any
+    NEW (os, arch) download entries into the existing release so that a
+    later-added platform binary (e.g. macos-arm64 source build in
+    webdev-console-binaries) shows up on the next auto-generate without
+    requiring the admin to manually delete + re-insert the whole release.
+    ``replace=True`` wipes ALL releases first (for a clean regen).
 
-    Returns the number of NEW releases inserted.
+    Returns the number of NEW releases inserted (excluding downloads added
+    to pre-existing releases — those don't bump the counter but still
+    invalidate the catalog cache so clients see the fresh platform set).
     """
     app = get_app(db, app_id)
     if not app:
@@ -269,21 +275,44 @@ def apply_generated_releases(
         db.execute(delete(Release).where(Release.app_id == app.id))
         db.commit()
 
-    existing = {r.version for r in app.releases}
+    existing_by_version = {r.version: r for r in app.releases}
     inserted = 0
+    downloads_added = 0
     for gen in releases:
-        if gen.version in existing:
+        rel = existing_by_version.get(gen.version)
+        if rel is None:
+            rel = Release(
+                app_id=app.id,
+                version=gen.version,
+                major_minor=gen.major_minor or _major_minor(gen.version),
+                channel=gen.channel,
+                released_at=gen.released_at,
+            )
+            db.add(rel)
+            db.flush()  # need rel.id for downloads
+            for gd in gen.downloads:
+                db.add(
+                    Download(
+                        release_id=rel.id,
+                        url=gd.url,
+                        os=gd.os,
+                        arch=gd.arch,
+                        archive_type=gd.archive_type,
+                        source=gd.source,
+                        headers=gd.headers,
+                    )
+                )
+            inserted += 1
             continue
-        rel = Release(
-            app_id=app.id,
-            version=gen.version,
-            major_minor=gen.major_minor or _major_minor(gen.version),
-            channel=gen.channel,
-            released_at=gen.released_at,
-        )
-        db.add(rel)
-        db.flush()  # need rel.id for downloads
+
+        # Merge: add downloads whose (os, arch) pair isn't already on the
+        # existing release. URL changes are NOT synced — if the admin has
+        # hand-edited a URL we don't want a scrape to silently overwrite
+        # it. Only additive.
+        existing_pairs = {(d.os, d.arch) for d in rel.downloads}
         for gd in gen.downloads:
+            if (gd.os, gd.arch) in existing_pairs:
+                continue
             db.add(
                 Download(
                     release_id=rel.id,
@@ -295,9 +324,10 @@ def apply_generated_releases(
                     headers=gd.headers,
                 )
             )
-        inserted += 1
+            downloads_added += 1
+
     db.commit()
-    if inserted or replace:
+    if inserted or downloads_added or replace:
         _invalidate_catalog_cache()
     return inserted
 
