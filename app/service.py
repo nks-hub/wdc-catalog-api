@@ -276,11 +276,28 @@ def apply_generated_releases(
         db.commit()
 
     existing_by_version = {r.version: r for r in app.releases}
+    # Map release → running set of (os, arch, archive_type) triples the
+    # caller has already committed or queued in this session. Persists
+    # across generator passes so primary-scrape + binaries-repo fallback
+    # can both claim the same platform tuple without tripping the
+    # downloads table's UNIQUE constraint. Seeded from rel.downloads on
+    # first touch, then incremented as we db.add() fresh Downloads.
+    triples_per_rel: dict[int | None, set[tuple[str, str, str]]] = {}
+
+    def _seen_triples(rel: Release) -> set[tuple[str, str, str]]:
+        key = rel.id
+        bucket = triples_per_rel.get(key)
+        if bucket is None:
+            bucket = {(d.os, d.arch, d.archive_type) for d in rel.downloads}
+            triples_per_rel[key] = bucket
+        return bucket
+
     inserted = 0
     downloads_added = 0
     for gen in releases:
         rel = existing_by_version.get(gen.version)
-        if rel is None:
+        new_release = rel is None
+        if new_release:
             rel = Release(
                 app_id=app.id,
                 version=gen.version,
@@ -290,42 +307,15 @@ def apply_generated_releases(
             )
             db.add(rel)
             db.flush()  # need rel.id for downloads
-            # Dedupe within this single scraper's downloads too — two
-            # generator passes (upstream scrape + binaries-repo fallback)
-            # can both return the same (os, arch, archive_type) triple
-            # and would otherwise trip the UNIQUE constraint.
-            seen_triples: set[tuple[str, str, str]] = set()
-            for gd in gen.downloads:
-                triple = (gd.os, gd.arch, gd.archive_type)
-                if triple in seen_triples:
-                    continue
-                seen_triples.add(triple)
-                db.add(
-                    Download(
-                        release_id=rel.id,
-                        url=gd.url,
-                        os=gd.os,
-                        arch=gd.arch,
-                        archive_type=gd.archive_type,
-                        source=gd.source,
-                        headers=gd.headers,
-                    )
-                )
-            existing_by_version[gen.version] = rel  # subsequent scraper passes hit merge branch
+            existing_by_version[gen.version] = rel
             inserted += 1
-            continue
 
-        # Merge: add downloads whose (os, arch, archive_type) triple isn't
-        # already on the existing release. Matches the downloads table's
-        # UNIQUE constraint so we never try to INSERT a duplicate. URL
-        # changes are NOT synced — if the admin has hand-edited a URL we
-        # don't want a scrape to silently overwrite it. Only additive.
-        existing_triples = {(d.os, d.arch, d.archive_type) for d in rel.downloads}
+        seen = _seen_triples(rel)
         for gd in gen.downloads:
             triple = (gd.os, gd.arch, gd.archive_type)
-            if triple in existing_triples:
+            if triple in seen:
                 continue
-            existing_triples.add(triple)  # block duplicate within this batch
+            seen.add(triple)
             db.add(
                 Download(
                     release_id=rel.id,
@@ -337,7 +327,8 @@ def apply_generated_releases(
                     headers=gd.headers,
                 )
             )
-            downloads_added += 1
+            if not new_release:
+                downloads_added += 1
 
     db.commit()
     if inserted or downloads_added or replace:
