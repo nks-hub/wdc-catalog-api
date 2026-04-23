@@ -602,7 +602,16 @@ def admin_auto_generate(
         return _redirect(
             f"/admin/apps/{app_id}", "error", f"No generator for '{app_id}'"
         )
-    releases = run_generator(app_id, limit=limit)
+    # Mirror the two-pass strategy used by the daily catalog_autogen job:
+    # primary upstream scrape + nks-hub/webdev-console-binaries fallback,
+    # merged via apply_generated_releases. Keeps manual admin clicks
+    # consistent with the scheduled run — no "worked on cron, blank on
+    # button" surprise.
+    from .generators import _generate_from_binaries_repo
+
+    primary = run_generator(app_id, limit=limit)
+    fallback = _generate_from_binaries_repo(app_id, limit=100)
+    releases = primary + fallback
     inserted = apply_generated_releases(db, app_id, releases)
 
     acct = _admin_account(db, username)

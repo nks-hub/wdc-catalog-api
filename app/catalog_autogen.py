@@ -23,7 +23,7 @@ import os
 from dataclasses import dataclass
 
 from .db import session_factory
-from .generators import GENERATORS, run_generator
+from .generators import GENERATORS, _generate_from_binaries_repo, run_generator
 from .service import apply_generated_releases
 
 log = logging.getLogger(__name__)
@@ -38,28 +38,56 @@ class AutogenOutcome:
 
 
 def run_catalog_autogen(limit_per_app: int = 10) -> list[AutogenOutcome]:
-    """Regenerate every app with a registered generator.
+    """Regenerate every app with a registered generator, then layer in
+    everything we've built ourselves in ``nks-hub/webdev-console-binaries``.
+
+    Two-pass strategy:
+      1. Primary upstream scraper (GENERATORS[app_id]) — fresh versions
+         from the canonical source (archive.mariadb.org, apachelounge,
+         php.net, etc.).
+      2. Binaries-repo fallback — every ``binaries-<app>-<version>`` tag
+         we've published, so versions we've source-built but that fell
+         off the upstream top-N listing still land in the catalog with
+         all their platform assets (macos-arm64, linux-x64, windows-x64).
+
+    ``apply_generated_releases`` merges by ``(os, arch, archive_type)`` so
+    the second pass never duplicates existing downloads.
 
     ``limit_per_app`` caps how many releases each generator walks — higher
     catches older versions that gained a macos/arm64 source-build after
     the fact, lower keeps runtime bounded for rate-limited upstreams.
-    The default of 10 is a pragmatic middle; bump via
-    ``NKS_WDC_CATALOG_AUTOGEN_LIMIT`` if the admin wants deeper sweeps.
+    Tune via ``NKS_WDC_CATALOG_AUTOGEN_LIMIT``.
     """
     outcomes: list[AutogenOutcome] = []
-    for app_id in list(GENERATORS.keys()):
+    # Union of GENERATORS + any app already present in the DB — covers
+    # apps like redis/apache that have a binaries-repo release but whose
+    # primary generator we skip, plus apps the admin added manually.
+    all_apps = set(GENERATORS.keys())
+    for app_id in sorted(all_apps):
         try:
-            releases = run_generator(app_id, limit=limit_per_app)
+            primary: list = []
+            try:
+                primary = run_generator(app_id, limit=limit_per_app)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("catalog autogen primary %s failed: %s", app_id, exc)
+            # Fallback is always consulted so a broken upstream (rate
+            # limit, DNS flap, HTML layout change) can't hide our own
+            # published binaries from the catalog.
+            fallback = _generate_from_binaries_repo(app_id, limit=100)
+            combined = primary + fallback
             with session_factory() as db:
-                inserted = apply_generated_releases(db, app_id, releases)
+                inserted = apply_generated_releases(db, app_id, combined)
                 db.commit()
             outcomes.append(
-                AutogenOutcome(app_id=app_id, scraped=len(releases), inserted=inserted)
+                AutogenOutcome(
+                    app_id=app_id, scraped=len(combined), inserted=inserted
+                )
             )
             log.info(
-                "catalog autogen: %s scraped=%d inserted=%d",
+                "catalog autogen: %s primary=%d binaries-repo=%d inserted=%d",
                 app_id,
-                len(releases),
+                len(primary),
+                len(fallback),
                 inserted,
             )
         except Exception as exc:  # noqa: BLE001 — log + continue, one bad upstream shouldn't halt others
