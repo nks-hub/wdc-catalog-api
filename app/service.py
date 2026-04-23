@@ -290,7 +290,16 @@ def apply_generated_releases(
             )
             db.add(rel)
             db.flush()  # need rel.id for downloads
+            # Dedupe within this single scraper's downloads too — two
+            # generator passes (upstream scrape + binaries-repo fallback)
+            # can both return the same (os, arch, archive_type) triple
+            # and would otherwise trip the UNIQUE constraint.
+            seen_triples: set[tuple[str, str, str]] = set()
             for gd in gen.downloads:
+                triple = (gd.os, gd.arch, gd.archive_type)
+                if triple in seen_triples:
+                    continue
+                seen_triples.add(triple)
                 db.add(
                     Download(
                         release_id=rel.id,
@@ -302,17 +311,21 @@ def apply_generated_releases(
                         headers=gd.headers,
                     )
                 )
+            existing_by_version[gen.version] = rel  # subsequent scraper passes hit merge branch
             inserted += 1
             continue
 
-        # Merge: add downloads whose (os, arch) pair isn't already on the
-        # existing release. URL changes are NOT synced — if the admin has
-        # hand-edited a URL we don't want a scrape to silently overwrite
-        # it. Only additive.
-        existing_pairs = {(d.os, d.arch) for d in rel.downloads}
+        # Merge: add downloads whose (os, arch, archive_type) triple isn't
+        # already on the existing release. Matches the downloads table's
+        # UNIQUE constraint so we never try to INSERT a duplicate. URL
+        # changes are NOT synced — if the admin has hand-edited a URL we
+        # don't want a scrape to silently overwrite it. Only additive.
+        existing_triples = {(d.os, d.arch, d.archive_type) for d in rel.downloads}
         for gd in gen.downloads:
-            if (gd.os, gd.arch) in existing_pairs:
+            triple = (gd.os, gd.arch, gd.archive_type)
+            if triple in existing_triples:
                 continue
+            existing_triples.add(triple)  # block duplicate within this batch
             db.add(
                 Download(
                     release_id=rel.id,
