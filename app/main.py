@@ -73,8 +73,9 @@ if _sentry_dsn:
             ],
             # Scrub request data by default — we don't want user config
             # payloads (which may contain file paths, domain names, etc)
-            # landing in the error dashboard.
-            request_bodies="never",
+            # landing in the error dashboard. `request_bodies` was
+            # renamed to `max_request_body_size` in sentry-sdk 2.x.
+            max_request_body_size="never",
             debug=os.environ.get("SENTRY_DEBUG") == "1",
         )
     except ImportError:
