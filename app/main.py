@@ -41,6 +41,46 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+# Sentry — env-configurable DSN, no hardcoded default. Init runs before
+# FastAPI construction so every handler (including imports below that
+# might fail) gets captured. No network call happens when SENTRY_DSN is
+# empty; the SDK silently no-ops. See the env block at the top of this
+# file for the full list of knobs.
+_sentry_dsn = os.environ.get("SENTRY_DSN", "").strip()
+if _sentry_dsn:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+        from sentry_sdk.integrations.logging import LoggingIntegration
+
+        sentry_sdk.init(
+            dsn=_sentry_dsn,
+            environment=os.environ.get("SENTRY_ENVIRONMENT", "production"),
+            release=os.environ.get("SENTRY_RELEASE") or None,
+            traces_sample_rate=float(
+                os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1")
+            ),
+            profiles_sample_rate=float(
+                os.environ.get("SENTRY_PROFILES_SAMPLE_RATE", "0.0")
+            ),
+            send_default_pii=False,
+            max_breadcrumbs=100,
+            integrations=[
+                FastApiIntegration(transaction_style="endpoint"),
+                SqlalchemyIntegration(),
+                LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
+            ],
+            # Scrub request data by default — we don't want user config
+            # payloads (which may contain file paths, domain names, etc)
+            # landing in the error dashboard.
+            request_bodies="never",
+            debug=os.environ.get("SENTRY_DEBUG") == "1",
+        )
+    except ImportError:
+        # sentry-sdk not installed (e.g. local dev). Log but don't crash.
+        logging.warning("SENTRY_DSN set but sentry-sdk not installed; skipping init")
+
 from . import __version__
 from .auth import (
     SESSION_COOKIE,

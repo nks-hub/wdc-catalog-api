@@ -9,6 +9,10 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "pydantic>=2.9",
+    # Sentry stays optional — only initialised when SENTRY_DSN env is set.
+    # Pinning as core dep (not extras) so production Docker deploy gets
+    # crash reporting without a separate .[sentry] install step.
+    "sentry-sdk[fastapi,sqlalchemy]>=2.14",
 ]
 
 [project.optional-dependencies]
