@@ -340,7 +340,9 @@ def current_user(
                     "allowlist_bypass",
                     {
                         "actor": username or "anonymous",
-                        "client_addr": str(client_addr) if "client_addr" in locals() else "?",
+                        "client_addr": str(client_addr)
+                        if "client_addr" in locals()
+                        else "?",
                         "error_type": type(exc).__name__,
                     },
                 )
