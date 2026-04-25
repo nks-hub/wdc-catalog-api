@@ -82,17 +82,21 @@ if _sentry_dsn:
         # sentry-sdk not installed (e.g. local dev). Log but don't crash.
         logging.warning("SENTRY_DSN set but sentry-sdk not installed; skipping init")
 
-from . import __version__
-from .auth import (
+# Imports below sit after the optional Sentry init block above so any
+# import-time failures get captured by Sentry. ruff's E402 (module-level
+# import not at top) is silenced per-line — restructuring would mean
+# moving Sentry init below imports, which defeats the capture purpose.
+from . import __version__  # noqa: E402
+from .auth import (  # noqa: E402
     SESSION_COOKIE,
     SESSION_MAX_AGE,
     ensure_admin_user,
     issue_session,
 )
-from .cookies import cookie_secure as _cookie_secure
-from .db import create_all, session_factory
-from .devices import router as devices_router
-from .service import (
+from .cookies import cookie_secure as _cookie_secure  # noqa: E402
+from .db import create_all, session_factory  # noqa: E402
+from .devices import router as devices_router  # noqa: E402
+from .service import (  # noqa: E402
     seed_from_json,
 )
 
