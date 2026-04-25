@@ -466,10 +466,17 @@ def auth_sso_callback(
                     acct.email,
                 )
             else:
+                # Mirror the IdP groups authoritatively — earlier we
+                # fell back to `acct.role` when the user wasn't in the
+                # admin group, which meant an off-boarded admin kept
+                # the role forever (every fresh SSO login left the row
+                # at admin because we never demoted). Now: in admin group
+                # → admin, otherwise → user. Operators who need a
+                # non-IdP-mirrored role must manage it outside of SSO.
                 desired_role = (
-                    "admin" if _sso.is_admin_group(claims.groups) else acct.role
+                    "admin" if _sso.is_admin_group(claims.groups) else "user"
                 )
-                if desired_role and acct.role != desired_role:
+                if acct.role != desired_role:
                     acct.role = desired_role
                 _log_wdc.info(
                     "WDC SSO: reusing Account id=%s email=%s role=%s",

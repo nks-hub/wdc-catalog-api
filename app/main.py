@@ -206,14 +206,20 @@ async def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONR
 MAX_REQUEST_BYTES = int(os.environ.get("NKS_WDC_MAX_REQUEST_BYTES", 1024 * 1024))
 
 
+class _PayloadTooLarge(Exception):
+    """Raised by the ASGI receive wrapper when a streaming body crosses
+    MAX_REQUEST_BYTES. Caught in the middleware to convert into a 413."""
+
+
 @app.middleware("http")
 async def _limit_payload_size(request: Request, call_next):
+    from .problems import problem_response
+
+    # Fast-path Content-Length header — reject before reading any bytes.
     cl = request.headers.get("content-length")
     if cl is not None:
         try:
             if int(cl) > MAX_REQUEST_BYTES:
-                from .problems import problem_response
-
                 return problem_response(
                     request,
                     413,
@@ -222,7 +228,36 @@ async def _limit_payload_size(request: Request, call_next):
                 )
         except ValueError:
             pass
-    response = await call_next(request)
+
+    # Streaming-safe enforcement: wrap the ASGI `receive` callable and
+    # count bytes as the body arrives. Required for chunked transfer
+    # encoding (Transfer-Encoding: chunked carries no Content-Length, so
+    # the header check above silently passes — earlier this let multi-GB
+    # chunked bodies through and Pydantic buffered the lot in RAM).
+    bytes_seen = 0
+    original_receive = request._receive  # type: ignore[attr-defined]
+
+    async def _counting_receive():  # noqa: ANN202
+        nonlocal bytes_seen
+        message = await original_receive()
+        if message["type"] == "http.request":
+            chunk = message.get("body", b"") or b""
+            bytes_seen += len(chunk)
+            if bytes_seen > MAX_REQUEST_BYTES:
+                raise _PayloadTooLarge()
+        return message
+
+    request._receive = _counting_receive  # type: ignore[attr-defined]
+
+    try:
+        response = await call_next(request)
+    except _PayloadTooLarge:
+        return problem_response(
+            request,
+            413,
+            f"Request body exceeds {MAX_REQUEST_BYTES} bytes",
+            title="Content Too Large",
+        )
     # Keep the CSRF cookie fresh on every admin-UI HTML response so forms
     # always have a valid token paired with the session. Ignored by JSON
     # API consumers (they don't render HTML and don't inspect it).
