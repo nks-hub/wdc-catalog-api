@@ -92,6 +92,7 @@ from .auth import (  # noqa: E402
     SESSION_MAX_AGE,
     ensure_admin_user,
     issue_session,
+    _session_id,
 )
 from .cookies import cookie_secure as _cookie_secure  # noqa: E402
 from .db import create_all, session_factory  # noqa: E402
@@ -290,7 +291,9 @@ async def _limit_payload_size(request: Request, call_next):
             if username:
                 response.set_cookie(
                     key=SESSION_COOKIE,
-                    value=issue_session(username),
+                    value=issue_session(
+                        username, session_id=_session_id(existing_session)
+                    ),
                     max_age=SESSION_MAX_AGE,
                     httponly=True,
                     samesite="strict",
