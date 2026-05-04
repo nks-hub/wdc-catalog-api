@@ -303,18 +303,38 @@ def optional_account(
     ] = None,
     db: Session = Depends(get_session),
 ) -> Account | None:
+    """Resolve an Account from a Bearer token, returning ``None`` for
+    anonymous callers. Mirrors the revocation + token-version checks of
+    ``get_current_account`` so revoked / logged-out tokens cannot reach
+    endpoints that branch on ``account is not None`` — earlier this
+    helper accepted any structurally-valid JWT until natural expiry,
+    which let a logged-out user keep upserting config snapshots for
+    weeks past their session end."""
     if credentials is None:
         return None
     try:
         payload = decode_token(credentials.credentials)
         account_id = int(payload["sub"])
-        return db.get(Account, account_id)
+        jti = payload.get("jti")
     except Exception as exc:  # noqa: BLE001
-        # Log at debug so operators can grep for clients that send
-        # invalid tokens to public endpoints — useful signal when
-        # diagnosing misbehaving desktop clients or probing traffic.
         log.debug("optional_account rejected token: %s", exc)
         return None
+    if jti and _is_revoked(db, jti):
+        log.debug("optional_account rejected revoked jti=%s", jti)
+        return None
+    account = db.get(Account, account_id)
+    if account is None:
+        return None
+    token_version = payload.get("tv", 1)
+    if token_version != account.token_version:
+        log.debug(
+            "optional_account rejected stale tv=%s (current %s) for account %s",
+            token_version,
+            account.token_version,
+            account_id,
+        )
+        return None
+    return account
 
 
 # ── Auth endpoints ──────────────────────────────────────────────────────

@@ -313,10 +313,44 @@ def current_user(
                 )
     except HTTPException:
         raise
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         # Fail-open on unexpected DB / parse errors — breaking the gate
-        # wide open is better than locking operators out.
-        pass
+        # wide open is better than locking operators out. But silent
+        # bypass of an IP allowlist is itself a security event: malformed
+        # rows, transient DB errors, or `ipaddress` parse failures all
+        # disable the gate, and an attacker arriving during such a window
+        # gets full admin UI access. Emit a CRITICAL log line + Sentry
+        # capture so monitoring/alerting sees the bypass — the local
+        # audit-event table requires a Session+Account we don't have
+        # here, so we route through stderr+Sentry instead.
+        log.critical(
+            "admin allowlist fail-open: actor=%s client=%s err=%s msg=%s",
+            username or "anonymous",
+            str(client_addr) if "client_addr" in locals() else "?",
+            type(exc).__name__,
+            str(exc)[:200],
+        )
+        try:
+            import sentry_sdk
+
+            with sentry_sdk.push_scope() as scope:
+                scope.set_tag("security_event", "allowlist_bypassed")
+                scope.set_level("error")
+                scope.set_context(
+                    "allowlist_bypass",
+                    {
+                        "actor": username or "anonymous",
+                        "client_addr": str(client_addr)
+                        if "client_addr" in locals()
+                        else "?",
+                        "error_type": type(exc).__name__,
+                    },
+                )
+                sentry_sdk.capture_exception(exc)
+        except Exception:  # noqa: BLE001
+            # Sentry not configured or unreachable — the critical log
+            # above already flagged it.
+            pass
 
     return username
 
