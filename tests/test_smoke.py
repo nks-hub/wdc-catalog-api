@@ -52,6 +52,7 @@ def test_catalog_contains_seeded_apps(client: TestClient) -> None:
         "mysql",
         "nginx",
         "php",
+        "postgresql",
         "redis",
     }
     assert expected.issubset(set(body["apps"].keys())), (
