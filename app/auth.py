@@ -19,6 +19,7 @@ import hashlib
 import logging
 import os
 import secrets
+import uuid
 from typing import TYPE_CHECKING, Annotated
 
 import bcrypt
@@ -131,14 +132,38 @@ def verify_dummy_password(plain: str) -> bool:
     return False
 
 
+_SESSION_PAYLOAD_SEP = "|"
+
+
+def _split_session_payload(raw: str) -> tuple[str, str | None]:
+    if _SESSION_PAYLOAD_SEP not in raw:
+        return raw, None
+    username, session_id = raw.split(_SESSION_PAYLOAD_SEP, 1)
+    return username, session_id or None
+
+
+def _session_id(cookie_value: str | None) -> str | None:
+    if not cookie_value:
+        return None
+    try:
+        raw = _signer.unsign(cookie_value.encode("ascii")).decode("utf-8")
+    except BadSignature:
+        return None
+    _, session_id = _split_session_payload(raw)
+    return session_id
+
+
 def _fingerprint(signed_cookie: str) -> str:
-    """Return sha256 hex of the signed cookie bytes — used as DB lookup key."""
-    return hashlib.sha256(signed_cookie.encode("ascii")).hexdigest()
+    """Return the stable session fingerprint used for DB lookup."""
+    session_id = _session_id(signed_cookie)
+    source = session_id if session_id is not None else signed_cookie
+    return hashlib.sha256(source.encode("ascii")).hexdigest()
 
 
 def issue_session(
     username: str,
     *,
+    session_id: str | None = None,
     request: "Request | None" = None,
     db: "Session | None" = None,
 ) -> str:
@@ -148,7 +173,9 @@ def issue_session(
     Login handlers should also pass ``request`` and ``db`` so the row is
     written for revocation support.
     """
-    signed = _signer.sign(username.encode("utf-8")).decode("ascii")
+    session_id = session_id or uuid.uuid4().hex
+    payload = f"{username}{_SESSION_PAYLOAD_SEP}{session_id}"
+    signed = _signer.sign(payload.encode("utf-8")).decode("ascii")
     if db is not None:
         try:
             from sqlalchemy import select as _sel
@@ -187,7 +214,8 @@ def read_session(cookie_value: str | None) -> str | None:
     effective = min(SESSION_MAX_AGE, SESSION_IDLE_TIMEOUT)
     try:
         raw = _signer.unsign(cookie_value.encode("ascii"), max_age=effective)
-        return raw.decode("utf-8")
+        username, _ = _split_session_payload(raw.decode("utf-8"))
+        return username
     except BadSignature:
         return None
 
