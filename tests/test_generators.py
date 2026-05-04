@@ -18,6 +18,7 @@ from app.generators import (
     run_generator,
     generate_mysql,
     generate_composer,
+    generate_postgresql,
     _mysql_fallback,
 )
 
@@ -34,6 +35,7 @@ class TestGeneratorRegistry:
             "nginx",
             "mariadb",
             "mysql",
+            "postgresql",
             "mkcert",
             "node",
             "composer",
@@ -181,6 +183,48 @@ class TestMariaDBGenerator:
                     assert dl.archive_type == "zip"
                     assert dl.os == "windows"
                     assert dl.arch == "x64"
+
+
+class TestPostgreSQLGenerator:
+    def test_generate_postgresql_reads_binaries_repo_assets(self, monkeypatch):
+        def fake_github_json(path: str):
+            assert "webdev-console-binaries" in path
+            return [
+                {
+                    "tag_name": "binaries-postgresql-18.3",
+                    "assets": [
+                        {
+                            "name": "postgresql-18.3-windows-x64.zip",
+                            "browser_download_url": "https://example.test/postgresql-18.3-windows-x64.zip",
+                        },
+                        {
+                            "name": "postgresql-18.3-linux-x64.tar.gz",
+                            "browser_download_url": "https://example.test/postgresql-18.3-linux-x64.tar.gz",
+                        },
+                        {
+                            "name": "postgresql-18.3-macos-arm64.tar.gz",
+                            "browser_download_url": "https://example.test/postgresql-18.3-macos-arm64.tar.gz",
+                        },
+                    ],
+                }
+            ]
+
+        monkeypatch.setattr("app.generators._github_json", fake_github_json)
+
+        result = generate_postgresql(limit=5)
+
+        assert len(result) == 1
+        release = result[0]
+        assert release.version == "18.3"
+        assert release.major_minor == "18.3"
+        assert {(d.os, d.arch, d.archive_type) for d in release.downloads} == {
+            ("windows", "x64", "zip"),
+            ("linux", "x64", "tar.gz"),
+            ("macos", "arm64", "tar.gz"),
+        }
+        assert {d.source for d in release.downloads} == {
+            "nks-hub/webdev-console-binaries"
+        }
 
 
 class TestMailpitGenerator:

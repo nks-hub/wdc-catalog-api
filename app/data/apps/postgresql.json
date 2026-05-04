@@ -1,0 +1,9 @@
+{
+  "name": "postgresql",
+  "display_name": "PostgreSQL",
+  "category": "database",
+  "description": "Advanced open-source relational database for local development. WDC uses PostgreSQL binaries with generated data directories and standard pg_ctl lifecycle commands.",
+  "homepage": "https://www.postgresql.org/",
+  "license": "PostgreSQL",
+  "releases": []
+}

@@ -11,6 +11,7 @@ Sources
 php           → https://windows.php.net/downloads/releases/   (HTML listing)
 apache        → https://www.apachelounge.com/download/        (HTML listing)
 mysql         → https://dev.mysql.com/downloads/mysql/        (static versions)
+postgresql    → nks-hub/webdev-console-binaries releases      (WDC builds)
 mariadb       → https://archive.mariadb.org                   (static versions)
 redis         → github.com/redis-windows/redis-windows        (GitHub releases API)
 mailpit       → github.com/axllent/mailpit                    (GitHub releases API)
@@ -666,6 +667,17 @@ def generate_mysql(limit: int = 5) -> list[GenRelease]:
     return releases
 
 
+def generate_postgresql(limit: int = 5) -> list[GenRelease]:
+    """Return PostgreSQL releases published by webdev-console-binaries.
+
+    PostgreSQL needs normalized archive roots for the daemon's binary
+    resolver, so the catalog intentionally uses WDC-built release assets
+    instead of pointing clients at upstream source archives or nested
+    EnterpriseDB ZIPs directly.
+    """
+    return _generate_from_binaries_repo("postgresql", limit=limit)
+
+
 def _mysql_fallback(limit: int) -> list[GenRelease]:
     """Hardcoded recent MySQL versions as a safety net when scraping fails."""
     fallback = [
@@ -894,6 +906,7 @@ GENERATORS = {
     "nginx": generate_nginx,
     "mariadb": generate_mariadb,
     "mysql": generate_mysql,
+    "postgresql": generate_postgresql,
     "mkcert": generate_mkcert,
     "node": generate_node,
     "composer": generate_composer,

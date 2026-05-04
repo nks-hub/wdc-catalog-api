@@ -178,6 +178,7 @@ POST /admin/account/password
 | nginx       | `nginx.org/en/download.html` HTML listing           |
 | mariadb     | `archive.mariadb.org/` open-directory listing + `nks-hub/webdev-console-binaries` macOS probe |
 | mysql       | `dev.mysql.com/downloads/mysql/` + `nks-hub/webdev-console-binaries` macOS probe |
+| postgresql  | `nks-hub/webdev-console-binaries` releases |
 
 ## Development
 
