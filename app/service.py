@@ -12,6 +12,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -249,12 +250,35 @@ def _major_minor(version: str) -> str:
 # ── Auto-generator integration ──────────────────────────────────────────
 
 
+def _url_is_alive(url: str, *, timeout_seconds: float = 8.0) -> bool:
+    """HEAD-probe ``url`` with a short timeout, following redirects.
+
+    Returns True only on a 2xx final status. Used by the URL-heal pass to
+    decide whether a stored download URL is still functional and whether
+    a freshly-scraped replacement actually resolves before we swap it in.
+    Network failures count as "not alive" — the caller treats that as
+    "leave the entry untouched".
+    """
+    try:
+        resp = httpx.head(
+            url,
+            timeout=timeout_seconds,
+            follow_redirects=True,
+            headers={"User-Agent": "NKS-WDC-Catalog-URLHeal/0.1"},
+        )
+        return 200 <= resp.status_code < 300
+    except Exception as exc:  # noqa: BLE001 — network errors → treat as dead-but-untouched
+        log.debug("HEAD probe failed for %s: %s", url, exc)
+        return False
+
+
 def apply_generated_releases(
     db: Session,
     app_id: str,
     releases: list[GenRelease],
     *,
     replace: bool = False,
+    heal_dead_urls: bool = False,
 ) -> int:
     """Persist scraped releases. For versions that already exist, merge any
     NEW (os, arch) download entries into the existing release so that a
@@ -262,6 +286,16 @@ def apply_generated_releases(
     webdev-console-binaries) shows up on the next auto-generate without
     requiring the admin to manually delete + re-insert the whole release.
     ``replace=True`` wipes ALL releases first (for a clean regen).
+
+    ``heal_dead_urls`` (opt-in, used by the daily catalog-autogen cron):
+    when an existing download row's URL HEAD-probes as dead AND a freshly
+    scraped URL for the same (os, arch, archive_type) HEAD-probes as
+    alive, the stored URL is replaced. Working URLs — including admin
+    hand-edits — are never overwritten, preserving the long-standing
+    invariant. Designed to rescue catalog entries pinned to upstream
+    locations that get archived (e.g. php.net moves
+    /downloads/releases/php-X.Y.Z-... to /downloads/releases/archives/...
+    when the next patch ships).
 
     Returns the number of NEW releases inserted (excluding downloads added
     to pre-existing releases — those don't bump the counter but still
@@ -292,8 +326,15 @@ def apply_generated_releases(
             triples_per_rel[key] = bucket
         return bucket
 
+    def _existing_download(rel: Release, triple: tuple[str, str, str]) -> Download | None:
+        for d in rel.downloads:
+            if (d.os, d.arch, d.archive_type) == triple:
+                return d
+        return None
+
     inserted = 0
     downloads_added = 0
+    urls_healed = 0
     for gen in releases:
         rel = existing_by_version.get(gen.version)
         new_release = rel is None
@@ -314,6 +355,28 @@ def apply_generated_releases(
         for gd in gen.downloads:
             triple = (gd.os, gd.arch, gd.archive_type)
             if triple in seen:
+                if heal_dead_urls and not new_release:
+                    existing = _existing_download(rel, triple)
+                    if (
+                        existing is not None
+                        and existing.url != gd.url
+                        and not _url_is_alive(existing.url)
+                        and _url_is_alive(gd.url)
+                    ):
+                        log.info(
+                            "url-heal: %s %s %s/%s/%s : %s -> %s",
+                            app_id,
+                            gen.version,
+                            gd.os,
+                            gd.arch,
+                            gd.archive_type,
+                            existing.url,
+                            gd.url,
+                        )
+                        existing.url = gd.url
+                        existing.source = gd.source
+                        existing.headers = gd.headers
+                        urls_healed += 1
                 continue
             seen.add(triple)
             db.add(
@@ -331,7 +394,7 @@ def apply_generated_releases(
                 downloads_added += 1
 
     db.commit()
-    if inserted or downloads_added or replace:
+    if inserted or downloads_added or urls_healed or replace:
         _invalidate_catalog_cache()
     return inserted
 

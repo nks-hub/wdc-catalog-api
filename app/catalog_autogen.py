@@ -75,8 +75,14 @@ def run_catalog_autogen(limit_per_app: int = 10) -> list[AutogenOutcome]:
             # published binaries from the catalog.
             fallback = _generate_from_binaries_repo(app_id, limit=100)
             combined = primary + fallback
+            # heal_dead_urls=True opts the cron into HEAD-probe URL repair
+            # for stored entries whose upstream location moved (e.g. php.net
+            # archives a previous patch when a new one ships). Working URLs
+            # — admin hand-edits or upstream-stable links — are never touched.
             with session_factory() as db:
-                inserted = apply_generated_releases(db, app_id, combined)
+                inserted = apply_generated_releases(
+                    db, app_id, combined, heal_dead_urls=True
+                )
                 db.commit()
             outcomes.append(
                 AutogenOutcome(app_id=app_id, scraped=len(combined), inserted=inserted)

@@ -350,51 +350,62 @@ def generate_redis(limit: int = 5) -> list[GenRelease]:
 
 
 # ── PHP (windows.php.net) ───────────────────────────────────────────────
+#
+# php.net keeps only the *latest* patch of each minor branch in
+# /downloads/releases/. Older patches roll into /downloads/releases/archives/.
+# We scrape both and prefer the releases/ URL when both list the same
+# version, so the catalog never points at an URL that's been archived
+# upstream (the cause of the 2026-05-06 PHP 8.5.5 dead-link incident:
+# 8.5.6 shipped, 8.5.5 moved to archives, our entry's releases/ URL
+# 404'd — heal_dead_urls + this archives walk together fix it).
 
-_PHP_ROWS = (
-    # (list URL, archive suffix pattern, regex for version extraction)
+_PHP_ROWS: tuple[tuple[str, "re.Pattern[str]"], ...] = (
     (
         "https://windows.php.net/downloads/releases/",
+        re.compile(r'href="(php-(\d+\.\d+\.\d+)-nts-Win32-vs\d+-x64\.zip)"'),
+    ),
+    (
+        "https://windows.php.net/downloads/releases/archives/",
         re.compile(r'href="(php-(\d+\.\d+\.\d+)-nts-Win32-vs\d+-x64\.zip)"'),
     ),
 )
 
 
 def generate_php(limit: int = 10) -> list[GenRelease]:
-    releases: list[GenRelease] = []
+    by_version: dict[str, GenRelease] = {}
     for list_url, pattern in _PHP_ROWS:
         try:
             r = httpx.get(
                 list_url, timeout=HTTP_TIMEOUT, headers={"User-Agent": DEFAULT_UA}
             )
             r.raise_for_status()
-            seen: set[str] = set()
             for m in pattern.finditer(r.text):
                 filename, version = m.group(1), m.group(2)
-                if version in seen:
+                # Prefer first encounter (releases/) over archives/ for
+                # the same patch, since releases/ is the canonical "current"
+                # location and we walk in row order.
+                if version in by_version:
                     continue
-                seen.add(version)
-                download_url = list_url + filename
-                releases.append(
-                    GenRelease(
-                        version=version,
-                        major_minor=_major_minor(version),
-                        downloads=[
-                            GenDownload(
-                                download_url, "windows", "x64", "zip", "php.net"
-                            )
-                        ],
-                    )
+                by_version[version] = GenRelease(
+                    version=version,
+                    major_minor=_major_minor(version),
+                    downloads=[
+                        GenDownload(
+                            list_url + filename, "windows", "x64", "zip", "php.net"
+                        )
+                    ],
                 )
-                if len(releases) >= limit:
-                    break
         except Exception as exc:  # noqa: BLE001
             log.warning("PHP scrape failed for %s: %s", list_url, exc)
-    # Sort descending by semver-ish key
-    releases.sort(
-        key=lambda r: tuple(int(x) for x in r.version.split(".")), reverse=True
+    # Sort descending by semver tuple, cap at limit. Limit applies AFTER
+    # both rows are merged so archives/ patches get a fair shot at the
+    # top-N when releases/ shows only one version per minor.
+    sorted_releases = sorted(
+        by_version.values(),
+        key=lambda r: tuple(int(x) for x in r.version.split(".")),
+        reverse=True,
     )
-    return releases[:limit]
+    return sorted_releases[:limit]
 
 
 # ── Apache (apachelounge.com) ──────────────────────────────────────────

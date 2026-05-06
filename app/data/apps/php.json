@@ -12,7 +12,7 @@
       "channel": "stable",
       "downloads": [
         {
-          "url": "https://windows.php.net/downloads/releases/php-8.5.5-nts-Win32-vs17-x64.zip",
+          "url": "https://windows.php.net/downloads/releases/archives/php-8.5.5-nts-Win32-vs17-x64.zip",
           "os": "windows",
           "arch": "x64",
           "archive_type": "zip",

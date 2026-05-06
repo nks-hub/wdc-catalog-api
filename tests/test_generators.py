@@ -146,6 +146,75 @@ class TestPHPGenerator:
             parts = rel.major_minor.split(".")
             assert len(parts) == 2, f"major_minor {rel.major_minor} should be X.Y"
 
+    def test_generate_php_walks_releases_and_archives(self, monkeypatch):
+        """Regression for the 2026-05-06 dead-link incident: php.net moves
+        the previous patch into /downloads/releases/archives/ when a new
+        one lands in /downloads/releases/. Generator must scrape both
+        directories so older patches keep showing up with stable URLs."""
+        from app import generators
+
+        releases_listing = (
+            '<a href="php-8.5.6-nts-Win32-vs17-x64.zip">php-8.5.6...</a>'
+        )
+        archives_listing = (
+            '<a href="php-8.5.5-nts-Win32-vs17-x64.zip">php-8.5.5</a> '
+            '<a href="php-8.5.4-nts-Win32-vs17-x64.zip">php-8.5.4</a> '
+            '<a href="php-8.4.20-nts-Win32-vs17-x64.zip">php-8.4.20</a>'
+        )
+
+        class FakeResp:
+            def __init__(self, text):
+                self.text = text
+
+            def raise_for_status(self):
+                pass
+
+        def fake_get(url, **kwargs):
+            if "archives" in url:
+                return FakeResp(archives_listing)
+            return FakeResp(releases_listing)
+
+        monkeypatch.setattr(generators.httpx, "get", fake_get)
+
+        result = generators.generate_php(limit=10)
+        versions = {r.version for r in result}
+        assert "8.5.6" in versions, "current release must be in the result"
+        assert "8.5.5" in versions, "archived patch must still be scraped"
+        assert "8.5.4" in versions
+        assert "8.4.20" in versions
+
+        # 8.5.6 must keep the releases/ URL (canonical location); the
+        # archives entries must use archives/ URLs.
+        by_version = {r.version: r.downloads[0].url for r in result}
+        assert "downloads/releases/php-8.5.6" in by_version["8.5.6"]
+        assert "archives/php-8.5.5" in by_version["8.5.5"]
+
+    def test_generate_php_prefers_releases_over_archives_on_collision(
+        self, monkeypatch
+    ):
+        """When both rows list the same patch, the canonical releases/
+        URL must win — archives/ is the fallback."""
+        from app import generators
+
+        same_file = '<a href="php-8.5.6-nts-Win32-vs17-x64.zip">x</a>'
+
+        class FakeResp:
+            def __init__(self, text):
+                self.text = text
+
+            def raise_for_status(self):
+                pass
+
+        monkeypatch.setattr(
+            generators.httpx, "get", lambda url, **kw: FakeResp(same_file)
+        )
+
+        result = generators.generate_php(limit=5)
+        url = next(r.downloads[0].url for r in result if r.version == "8.5.6")
+        assert "/archives/" not in url, (
+            "releases/ must beat archives/ when both list the same patch"
+        )
+
 
 class TestMariaDBGenerator:
     def test_generate_mariadb_returns_list(self):

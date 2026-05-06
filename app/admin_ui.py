@@ -612,7 +612,13 @@ def admin_auto_generate(
     primary = run_generator(app_id, limit=limit)
     fallback = _generate_from_binaries_repo(app_id, limit=100)
     releases = primary + fallback
-    inserted = apply_generated_releases(db, app_id, releases)
+    # heal_dead_urls=True so the manual Auto-generate button also
+    # repairs entries pinned at upstream-archived locations (matches
+    # the daily cron behavior — no surprise that cron heals but the
+    # manual click does not).
+    inserted = apply_generated_releases(
+        db, app_id, releases, heal_dead_urls=True
+    )
 
     acct = _admin_account(db, username)
     _audit.emit(

@@ -192,3 +192,218 @@ class TestApplyGeneratedReleases:
                 d for d in rel.downloads if (d.os, d.arch) == ("linux", "x64")
             )
             assert linux_dl.url == "https://auto-scrape/linux.tar.gz"  # added
+
+
+class TestUrlHealing:
+    """Regression for the 2026-05-06 PHP 8.5.5 dead-link incident:
+    php.net archived 8.5.5 when 8.5.6 shipped, the catalog kept its
+    /downloads/releases/php-8.5.5-...zip URL, and downstream installs
+    started 404'ing. ``heal_dead_urls=True`` swaps a stored URL whose
+    HEAD probe fails for a freshly-scraped URL whose HEAD probe passes,
+    while leaving working URLs (admin overrides, still-canonical links)
+    untouched."""
+
+    def _make_app(self, prefix: str):
+        import uuid
+        from app.db import create_all, session_factory
+        from app.service import create_app
+
+        create_all()
+        app_id = f"{prefix}-{uuid.uuid4().hex[:6]}"
+        with session_factory() as db:
+            create_app(db, app_id=app_id, display_name=prefix.title())
+            db.commit()
+        return app_id
+
+    def test_heal_replaces_dead_url_with_alive_one(self, monkeypatch):
+        from app.db import session_factory
+        from app.generators import GenDownload, GenRelease
+        from app.service import apply_generated_releases, get_app
+
+        app_id = self._make_app("heal-dead")
+
+        # Seed: stored URL points at the (now-archived-upstream) location.
+        seed = [
+            GenRelease(
+                version="8.5.5",
+                major_minor="8.5",
+                downloads=[
+                    GenDownload(
+                        url="https://upstream/releases/php-8.5.5.zip",
+                        os="windows",
+                        arch="x64",
+                        archive_type="zip",
+                        source="php.net",
+                    )
+                ],
+            )
+        ]
+        with session_factory() as db:
+            apply_generated_releases(db, app_id, seed)
+            db.commit()
+
+        # Mock HEAD: stored URL dead, scraped URL alive.
+        def fake_head(url, **kw):
+            class R:
+                pass
+
+            r = R()
+            r.status_code = 200 if "/archives/" in url else 404
+            return r
+
+        monkeypatch.setattr("app.service.httpx.head", fake_head)
+
+        regen = [
+            GenRelease(
+                version="8.5.5",
+                major_minor="8.5",
+                downloads=[
+                    GenDownload(
+                        url="https://upstream/releases/archives/php-8.5.5.zip",
+                        os="windows",
+                        arch="x64",
+                        archive_type="zip",
+                        source="php.net",
+                    )
+                ],
+            )
+        ]
+        with session_factory() as db:
+            apply_generated_releases(db, app_id, regen, heal_dead_urls=True)
+            db.commit()
+
+        with session_factory() as db:
+            app = get_app(db, app_id)
+            rel = next(r for r in app.releases if r.version == "8.5.5")
+            url = next(
+                d.url for d in rel.downloads if (d.os, d.arch) == ("windows", "x64")
+            )
+            assert url == "https://upstream/releases/archives/php-8.5.5.zip"
+
+    def test_heal_preserves_working_url(self, monkeypatch):
+        """Admin override (or any working URL) must not be replaced even
+        when a different URL is scraped — the existing one HEAD-200s."""
+        from app.db import session_factory
+        from app.generators import GenDownload, GenRelease
+        from app.service import apply_generated_releases, get_app
+
+        app_id = self._make_app("heal-keep")
+        seed = [
+            GenRelease(
+                version="1.0.0",
+                major_minor="1.0",
+                downloads=[
+                    GenDownload(
+                        url="https://admin/custom.zip",
+                        os="windows",
+                        arch="x64",
+                        archive_type="zip",
+                        source="admin-override",
+                    )
+                ],
+            )
+        ]
+        with session_factory() as db:
+            apply_generated_releases(db, app_id, seed)
+            db.commit()
+
+        # Both URLs reachable — heal must NOT swap.
+        def fake_head(url, **kw):
+            class R:
+                pass
+
+            r = R()
+            r.status_code = 200
+            return r
+
+        monkeypatch.setattr("app.service.httpx.head", fake_head)
+
+        regen = [
+            GenRelease(
+                version="1.0.0",
+                major_minor="1.0",
+                downloads=[
+                    GenDownload(
+                        url="https://upstream/different.zip",
+                        os="windows",
+                        arch="x64",
+                        archive_type="zip",
+                        source="auto",
+                    )
+                ],
+            )
+        ]
+        with session_factory() as db:
+            apply_generated_releases(db, app_id, regen, heal_dead_urls=True)
+            db.commit()
+
+        with session_factory() as db:
+            app = get_app(db, app_id)
+            rel = next(r for r in app.releases if r.version == "1.0.0")
+            url = next(
+                d.url for d in rel.downloads if (d.os, d.arch) == ("windows", "x64")
+            )
+            assert url == "https://admin/custom.zip"
+
+    def test_heal_disabled_by_default_keeps_invariant(self, monkeypatch):
+        """Without ``heal_dead_urls=True`` the legacy invariant holds:
+        no URL is ever overwritten regardless of HEAD status. This guards
+        the daemon-side admin endpoint that opts out of healing."""
+        from app.db import session_factory
+        from app.generators import GenDownload, GenRelease
+        from app.service import apply_generated_releases, get_app
+
+        app_id = self._make_app("heal-off")
+        seed = [
+            GenRelease(
+                version="1.0.0",
+                major_minor="1.0",
+                downloads=[
+                    GenDownload(
+                        url="https://dead-but-stored.example/x.zip",
+                        os="windows",
+                        arch="x64",
+                        archive_type="zip",
+                        source="auto",
+                    )
+                ],
+            )
+        ]
+        with session_factory() as db:
+            apply_generated_releases(db, app_id, seed)
+            db.commit()
+
+        # If healing were silently on, this stub would return dead-everywhere.
+        def fake_head(url, **kw):
+            raise AssertionError(
+                "HEAD probe must not run when heal_dead_urls is False"
+            )
+
+        monkeypatch.setattr("app.service.httpx.head", fake_head)
+
+        regen = [
+            GenRelease(
+                version="1.0.0",
+                major_minor="1.0",
+                downloads=[
+                    GenDownload(
+                        url="https://alive.example/x.zip",
+                        os="windows",
+                        arch="x64",
+                        archive_type="zip",
+                        source="auto",
+                    )
+                ],
+            )
+        ]
+        with session_factory() as db:
+            apply_generated_releases(db, app_id, regen)  # heal_dead_urls=False
+            db.commit()
+
+        with session_factory() as db:
+            app = get_app(db, app_id)
+            rel = next(r for r in app.releases if r.version == "1.0.0")
+            url = next(
+                d.url for d in rel.downloads if (d.os, d.arch) == ("windows", "x64")
+            )
+            assert url == "https://dead-but-stored.example/x.zip"
