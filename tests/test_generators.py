@@ -189,6 +189,31 @@ class TestPHPGenerator:
         assert "downloads/releases/php-8.5.6" in by_version["8.5.6"]
         assert "archives/php-8.5.5" in by_version["8.5.5"]
 
+    def test_generate_php_follows_redirects(self, monkeypatch):
+        """windows.php.net 302s every directory listing to
+        downloads.php.net/~windows/. Without follow_redirects=True the
+        scraper would parse the empty redirect body and silently return
+        zero hits — the cause of the 2026-05-06 incident where the
+        primary scrape pass logged ``primary=0`` while the broken 8.5.5
+        URL stayed in the DB unhealed."""
+        from app import generators
+
+        captured: dict = {}
+
+        class FakeResp:
+            text = '<a href="php-8.5.6-nts-Win32-vs17-x64.zip">x</a>'
+
+            def raise_for_status(self):
+                pass
+
+        def fake_get(url, **kwargs):
+            captured["follow_redirects"] = kwargs.get("follow_redirects")
+            return FakeResp()
+
+        monkeypatch.setattr(generators.httpx, "get", fake_get)
+        generators.generate_php(limit=1)
+        assert captured.get("follow_redirects") is True
+
     def test_generate_php_prefers_releases_over_archives_on_collision(
         self, monkeypatch
     ):

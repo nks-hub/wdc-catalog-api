@@ -375,8 +375,14 @@ def generate_php(limit: int = 10) -> list[GenRelease]:
     by_version: dict[str, GenRelease] = {}
     for list_url, pattern in _PHP_ROWS:
         try:
+            # follow_redirects: windows.php.net 302s every directory listing
+            # to downloads.php.net/~windows/. Without this flag the scraper
+            # parses the redirect's empty body and silently returns 0 hits.
             r = httpx.get(
-                list_url, timeout=HTTP_TIMEOUT, headers={"User-Agent": DEFAULT_UA}
+                list_url,
+                timeout=HTTP_TIMEOUT,
+                headers={"User-Agent": DEFAULT_UA},
+                follow_redirects=True,
             )
             r.raise_for_status()
             for m in pattern.finditer(r.text):
