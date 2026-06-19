@@ -50,7 +50,7 @@ jobs:
       NKS_WDC_DISABLE_RATE_LIMITS: "1"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v6
         with:
