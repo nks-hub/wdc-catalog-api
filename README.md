@@ -1,3 +1,5 @@
+# NKS WDC Catalog API
+
 [![CI](https://github.com/nks-hub/wdc-catalog-api/actions/workflows/ci.yml/badge.svg)](https://github.com/nks-hub/wdc-catalog-api/actions/workflows/ci.yml)
 [![Latest Release](https://img.shields.io/github/v/release/nks-hub/wdc-catalog-api?label=release)](https://github.com/nks-hub/wdc-catalog-api/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -5,22 +7,20 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)](https://fastapi.tiangolo.com/)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io-2496ED)](https://github.com/nks-hub/wdc-catalog-api/pkgs/container/wdc-catalog-api)
 
-# NKS WDC Catalog API
-
-Cloud-hosted binary catalog + per-device config sync for [NKS WebDev Console](https://github.com/nks-hub/webdev-console). The C# daemon pulls release metadata (Apache, PHP, MySQL, Redis, Caddy, cloudflared, …) from this service and backs up local site/service configuration so a fresh install hydrates from the last known good snapshot.
+> Cloud-hosted binary catalog + per-device config sync for [NKS WebDev Console](https://github.com/nks-hub/webdev-console). The C# daemon pulls release metadata (Apache, PHP, MySQL, Redis, Caddy, cloudflared, …) from this service and backs up local site/service configuration so a fresh install hydrates from the last known good snapshot.
 
 ## Features
 
-- ✅ **Public JSON catalog** — `/api/v1/catalog` served in the exact shape `CatalogClient.cs` expects; drop in a URL and the daemon refreshes on startup
-- ✅ **Full HTML admin panel** — dashboard, user management (role + suspend + reset password), audit log + CSV export, invites (mint + redemption history), device browser, snapshot history with RFC 6902 diff, backup import / ZIP export, retention policy, global settings, revoked-token viewer
-- ✅ **RBAC with six roles** — owner → admin → operator → support → user → readonly; account-level login lockout after 5 failed attempts
-- ✅ **Envelope-encrypted snapshots** — AES-256-GCM with optional Variant B (passphrase-derived KEK for zero-knowledge mode)
-- ✅ **URL auto-generators** — one-click scraping of upstream release listings (GitHub Releases API, php.net, apachelounge, nginx.org) with HEAD-probe verification before insertion
-- ✅ **Config sync** — per-device JSON upload/download keyed by device ID for seamless re-install
-- ✅ **Observability** — `/healthz` (liveness), `/readyz` (DB + S3 deps), `/metrics` (Prometheus; optionally bearer-authed); structured JSON logs via `python-json-logger` with `X-Request-ID` round-trip
-- ✅ **OpenAPI 3.1** — auto-generated spec at `/openapi.json`; drift checker (`scripts/check-catalog-drift.mjs`) validates `CatalogClient.cs` against the published contract
-- ✅ **SQLite by default** — swappable to Postgres via `DATABASE_URL`
-- ✅ **Docker-ready** — published to GHCR on every tag (`ghcr.io/nks-hub/wdc-catalog-api:latest`)
+- 📦 **Public JSON catalog** — `/api/v1/catalog` served in the exact shape `CatalogClient.cs` expects; drop in a URL and the daemon refreshes on startup
+- 🖥️ **Full HTML admin panel** — dashboard, user management (role + suspend + reset password), audit log + CSV export, invites (mint + redemption history), device browser, snapshot history with RFC 6902 diff, backup import / ZIP export, retention policy, global settings, revoked-token viewer
+- 👥 **RBAC with six roles** — owner → admin → operator → support → user → readonly; account-level login lockout after 5 failed attempts
+- 🔐 **Envelope-encrypted snapshots** — AES-256-GCM with optional Variant B (passphrase-derived KEK for zero-knowledge mode)
+- ⚙️ **URL auto-generators** — one-click scraping of upstream release listings (GitHub Releases API, php.net, apachelounge, nginx.org) with HEAD-probe verification before insertion
+- 🔄 **Config sync** — per-device JSON upload/download keyed by device ID for seamless re-install
+- 📊 **Observability** — `/healthz` (liveness), `/readyz` (DB + S3 deps), `/metrics` (Prometheus; optionally bearer-authed); structured JSON logs via `python-json-logger` with `X-Request-ID` round-trip
+- 📜 **OpenAPI 3.1** — auto-generated spec at `/openapi.json`; drift checker (`scripts/check-catalog-drift.mjs`) validates `CatalogClient.cs` against the published contract
+- 🗄️ **SQLite by default** — swappable to Postgres via `DATABASE_URL`
+- 🐳 **Docker-ready** — published to GHCR on every tag (`ghcr.io/nks-hub/wdc-catalog-api:latest`)
 
 ## Requirements
 
@@ -203,12 +203,12 @@ CI runs `pytest + ruff + postgres compatibility` on every push.
 
 ## Contributing
 
-Contributions are welcome! For major changes please open an issue first.
+Contributions are welcome! For major changes, please open an issue first. Keep `pytest`, `ruff check` and `ruff format --check` green.
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feat/amazing-feature`)
-3. Keep `pytest` + `ruff check` + `ruff format --check` green
-4. Commit your changes — one-line conventional commit messages, no AI attribution
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: description'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
 ## Support
