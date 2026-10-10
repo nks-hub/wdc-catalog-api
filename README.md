@@ -7,25 +7,25 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)](https://fastapi.tiangolo.com/)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io-2496ED)](https://github.com/nks-hub/wdc-catalog-api/pkgs/container/wdc-catalog-api)
 
-> Cloud-hosted binary catalog + per-device config sync for [NKS WebDev Console](https://github.com/nks-hub/webdev-console). The C# daemon pulls release metadata (Apache, PHP, MySQL, Redis, Caddy, cloudflared, …) from this service and backs up local site/service configuration so a fresh install hydrates from the last known good snapshot.
+> Binary catalog and per-device config sync service for [NKS WebDev Console](https://github.com/nks-hub/webdev-console). The C# daemon pulls release metadata (Apache, PHP, MySQL, Redis, Caddy, cloudflared, …) from this service and backs up local site and service configuration, so a fresh install restores from the last snapshot.
 
 ## Features
 
-- 📦 **Public JSON catalog** — `/api/v1/catalog` served in the exact shape `CatalogClient.cs` expects; drop in a URL and the daemon refreshes on startup
-- 🖥️ **Full HTML admin panel** — dashboard, user management (role + suspend + reset password), audit log + CSV export, invites (mint + redemption history), device browser, snapshot history with RFC 6902 diff, backup import / ZIP export, retention policy, global settings, revoked-token viewer
-- 👥 **RBAC with six roles** — owner → admin → operator → support → user → readonly; account-level login lockout after 5 failed attempts
-- 🔐 **Envelope-encrypted snapshots** — AES-256-GCM with optional Variant B (passphrase-derived KEK for zero-knowledge mode)
-- ⚙️ **URL auto-generators** — one-click scraping of upstream release listings (GitHub Releases API, php.net, apachelounge, nginx.org) with HEAD-probe verification before insertion
-- 🔄 **Config sync** — per-device JSON upload/download keyed by device ID for seamless re-install
-- 📊 **Observability** — `/healthz` (liveness), `/readyz` (DB + S3 deps), `/metrics` (Prometheus; optionally bearer-authed); structured JSON logs via `python-json-logger` with `X-Request-ID` round-trip
-- 📜 **OpenAPI 3.1** — auto-generated spec at `/openapi.json`; drift checker (`scripts/check-catalog-drift.mjs`) validates `CatalogClient.cs` against the published contract
-- 🗄️ **SQLite by default** — swappable to Postgres via `DATABASE_URL`
-- 🐳 **Docker-ready** — published to GHCR on every tag (`ghcr.io/nks-hub/wdc-catalog-api:latest`)
+- 📦 **Public JSON catalog** - `/api/v1/catalog` in the shape `CatalogClient.cs` expects; the daemon refreshes it on startup
+- 🖥️ **HTML admin panel** - dashboard, user management (role + suspend + reset password), audit log + CSV export, invites (mint + redemption history), device browser, snapshot history with RFC 6902 diff, backup import / ZIP export, retention policy, global settings, revoked-token viewer
+- 👥 **RBAC with six roles** - owner → admin → operator → support → user → readonly; account-level login lockout after 5 failed attempts
+- 🔐 **Envelope-encrypted snapshots** - AES-256-GCM with optional Variant B (passphrase-derived KEK for zero-knowledge mode)
+- ⚙️ **URL auto-generators** - scrape upstream release listings (GitHub Releases API, php.net, apachelounge, nginx.org) with HEAD-probe verification before insertion
+- 🔄 **Config sync** - per-device JSON upload/download keyed by device ID, used to restore settings after a re-install
+- 📊 **Observability** - `/healthz` (liveness), `/readyz` (DB + S3 deps), `/metrics` (Prometheus; optionally bearer-authed); structured JSON logs via `python-json-logger` with `X-Request-ID` round-trip
+- 📜 **OpenAPI 3.1** - generated spec at `/openapi.json`; drift checker (`scripts/check-catalog-drift.mjs`) validates `CatalogClient.cs` against the published contract
+- 🗄️ **SQLite by default** - Postgres via `DATABASE_URL`
+- 🐳 **Docker image** - published to GHCR on every tag (`ghcr.io/nks-hub/wdc-catalog-api:latest`)
 
 ## Requirements
 
 - Python 3.11 or higher (tested on 3.11 and 3.12)
-- SQLite 3.35+ (included with Python) — or PostgreSQL 14+ for production
+- SQLite 3.35+ (included with Python) or PostgreSQL 14+ for production
 - Docker 24+ (optional, for containerised deployment)
 
 ## Installation
@@ -36,7 +36,7 @@
 run.cmd
 ```
 
-Creates a venv in `.venv/`, installs dependencies, and starts uvicorn on `http://127.0.0.1:8765` with hot-reload. First run bootstraps an `admin` / `admin` account (dev mode — env var `NKS_WDC_CATALOG_DEV=1` is set by the script).
+Creates a venv in `.venv/`, installs dependencies, and starts uvicorn on `http://127.0.0.1:8765` with hot-reload. First run bootstraps an `admin` / `admin` account (dev mode: the script sets `NKS_WDC_CATALOG_DEV=1`).
 
 POSIX / macOS:
 
@@ -67,17 +67,17 @@ Pre-built images are published to GHCR on every tag: `ghcr.io/nks-hub/wdc-catalo
 | `NKS_WDC_CATALOG_STATE_DIR` | `./state` | Where SQLite + uploads live |
 | `NKS_WDC_CATALOG_ADMIN_USER` | `admin` | Bootstrap admin username |
 | `NKS_WDC_CATALOG_ADMIN_PASS` | _required in prod_ | Bootstrap admin password (dev fallback: `admin`) |
-| `NKS_WDC_CATALOG_DEV` | — | `1` enables `admin`/`admin` fallback + verbose logs + ephemeral keys |
+| `NKS_WDC_CATALOG_DEV` | - | `1` enables `admin`/`admin` fallback + verbose logs + ephemeral keys |
 | `NKS_WDC_JWT_SECRET` | _required in prod_ | HS256 signing key for desktop-client JWTs |
 | `NKS_WDC_SESSION_SECRET` | _required in prod_ | `itsdangerous` signer key for admin UI session cookies |
-| `NKS_WDC_CATALOG_SECRET` | — | Legacy combined secret, fallback for both dedicated vars (deprecated) |
-| `NKS_WDC_CATALOG_ALLOW_CORS` | — | `1` emits permissive CORS headers |
+| `NKS_WDC_CATALOG_SECRET` | - | Legacy combined secret, fallback for both dedicated vars (deprecated) |
+| `NKS_WDC_CATALOG_ALLOW_CORS` | - | `1` emits permissive CORS headers |
 
-In production **the secret env vars must be set** to independent random 32+ byte values (`openssl rand -base64 48`). The service refuses to start otherwise. Setting `NKS_WDC_CATALOG_DEV=1` overrides the check and generates ephemeral random keys — local development only.
+In production **the secret env vars must be set** to independent random 32+ byte values (`openssl rand -base64 48`). The service refuses to start otherwise. Setting `NKS_WDC_CATALOG_DEV=1` overrides the check and generates ephemeral random keys; use it only for local development.
 
 ### Pointing NKS WDC at this service
 
-In NKS WebDev Console → **Settings → Advanced**:
+In NKS WebDev Console, **Settings → Advanced**:
 
 - **Catalog URL**: `http://127.0.0.1:8765` (local) or `https://wdc.nks-hub.cz` (public NKS instance)
 
