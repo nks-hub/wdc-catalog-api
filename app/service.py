@@ -272,6 +272,14 @@ def _url_is_alive(url: str, *, timeout_seconds: float = 8.0) -> bool:
         return False
 
 
+# Our own builds carry security backports that upstream never ships for
+# EOL branches (e.g. PHP2Shell fixes for Windows PHP 5.6–8.1), so they
+# replace a scraped upstream URL for the same platform. Admin edits keep
+# their own source label and are never touched.
+OWN_BUILD_SOURCE = "nks-hub/webdev-console-binaries"
+SUPERSEDED_BY_OWN_BUILDS = frozenset({"php.net"})
+
+
 def apply_generated_releases(
     db: Session,
     app_id: str,
@@ -358,6 +366,26 @@ def apply_generated_releases(
                 if heal_dead_urls and not new_release:
                     existing = _existing_download(rel, triple)
                     if (
+                        existing is not None
+                        and gd.source == OWN_BUILD_SOURCE
+                        and existing.source in SUPERSEDED_BY_OWN_BUILDS
+                        and _url_is_alive(gd.url)
+                    ):
+                        log.info(
+                            "own-build: %s %s %s/%s/%s : %s -> %s",
+                            app_id,
+                            gen.version,
+                            gd.os,
+                            gd.arch,
+                            gd.archive_type,
+                            existing.url,
+                            gd.url,
+                        )
+                        existing.url = gd.url
+                        existing.source = gd.source
+                        existing.headers = gd.headers
+                        urls_healed += 1
+                    elif (
                         existing is not None
                         and existing.url != gd.url
                         and not _url_is_alive(existing.url)

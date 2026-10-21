@@ -345,6 +345,71 @@ class TestUrlHealing:
             )
             assert url == "https://admin/custom.zip"
 
+    def test_own_build_replaces_php_net_but_not_admin_override(self, monkeypatch):
+        """A patched build in nks-hub/webdev-console-binaries supersedes a
+        working php.net URL (php.net ships no fixes for EOL Windows branches),
+        while an admin-labelled download stays untouched."""
+        from app.db import session_factory
+        from app.generators import GenDownload, GenRelease
+        from app.service import OWN_BUILD_SOURCE, apply_generated_releases, get_app
+
+        app_id = self._make_app("own-build")
+        seed = [
+            GenRelease(
+                version=v,
+                major_minor=v.rsplit(".", 1)[0],
+                downloads=[
+                    GenDownload(
+                        url=f"https://{src}/php-{v}.zip",
+                        os="windows",
+                        arch="x64",
+                        archive_type="zip",
+                        source=src,
+                    )
+                ],
+            )
+            for v, src in (("7.4.33", "php.net"), ("8.0.30", "admin-override"))
+        ]
+        with session_factory() as db:
+            apply_generated_releases(db, app_id, seed)
+            db.commit()
+
+        def fake_head(url, **kw):
+            class R:
+                pass
+
+            r = R()
+            r.status_code = 200
+            return r
+
+        monkeypatch.setattr("app.service.httpx.head", fake_head)
+
+        regen = [
+            GenRelease(
+                version=v,
+                major_minor=v.rsplit(".", 1)[0],
+                downloads=[
+                    GenDownload(
+                        url=f"https://github/own/php-{v}-windows-x64.zip",
+                        os="windows",
+                        arch="x64",
+                        archive_type="zip",
+                        source=OWN_BUILD_SOURCE,
+                    )
+                ],
+            )
+            for v in ("7.4.33", "8.0.30")
+        ]
+        with session_factory() as db:
+            apply_generated_releases(db, app_id, regen, heal_dead_urls=True)
+            db.commit()
+
+        with session_factory() as db:
+            app = get_app(db, app_id)
+            urls = {r.version: r.downloads[0].url for r in app.releases}
+            assert urls["7.4.33"] == "https://github/own/php-7.4.33-windows-x64.zip"
+            assert urls["8.0.30"] == "https://admin-override/php-8.0.30.zip"
+
     def test_heal_disabled_by_default_keeps_invariant(self, monkeypatch):
         """Without ``heal_dead_urls=True`` the legacy invariant holds:
         no URL is ever overwritten regardless of HEAD status. This guards
