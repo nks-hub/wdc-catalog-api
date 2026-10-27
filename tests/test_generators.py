@@ -1,9 +1,8 @@
 """Tests for the catalog-api auto-generators.
 
 Verifies that every registered generator is callable and returns the
-expected GenRelease structure. The MySQL generator specifically tests
-the fallback path since the live scrape depends on dev.mysql.com being
-reachable (unreliable in CI).
+expected GenRelease structure. apache and mysql are tested offline against
+a fake binaries-repo release listing.
 """
 
 from __future__ import annotations
@@ -16,11 +15,28 @@ from app.generators import (
     GenRelease,
     available_generators,
     run_generator,
+    generate_apache,
     generate_mysql,
     generate_composer,
     generate_postgresql,
-    _mysql_fallback,
 )
+
+MIRROR = "https://github.com/nks-hub/webdev-console-binaries/releases/download"
+
+
+def _mirror_release(app: str, version: str, assets: dict[str, int]) -> dict:
+    """One GitHub release payload shaped like the binaries repo's."""
+    return {
+        "tag_name": f"binaries-{app}-{version}",
+        "assets": [
+            {
+                "name": name,
+                "size": size,
+                "browser_download_url": f"{MIRROR}/binaries-{app}-{version}/{name}",
+            }
+            for name, size in assets.items()
+        ],
+    }
 
 
 class TestGeneratorRegistry:
@@ -49,55 +65,67 @@ class TestGeneratorRegistry:
         assert run_generator("nonexistent-app") == []
 
 
-class TestMySQLGenerator:
-    def test_fallback_returns_releases(self):
-        releases = _mysql_fallback(limit=5)
-        assert len(releases) > 0
-        assert len(releases) <= 5
-        for rel in releases:
-            assert isinstance(rel, GenRelease)
-            assert rel.version
-            assert rel.major_minor
-            assert len(rel.downloads) > 0
-            assert "mysql" in rel.downloads[0].url.lower()
-            assert rel.downloads[0].os == "windows"
-            assert rel.downloads[0].arch == "x64"
+class TestMirroredGenerators:
+    """apache and mysql are offered from the binaries repo only: ApacheLounge
+    serves an HTML 200 for rotated builds and dev.mysql.com answers 403, so
+    neither upstream URL may reach the catalog."""
 
-    def test_fallback_versions_are_semver(self):
-        releases = _mysql_fallback(limit=10)
-        for rel in releases:
-            parts = rel.version.split(".")
-            assert len(parts) == 3, f"Version {rel.version} is not semver"
-            for part in parts:
-                assert part.isdigit(), (
-                    f"Version segment '{part}' in {rel.version} is not numeric"
-                )
+    @staticmethod
+    def _fake_repo(monkeypatch):
+        payload = [
+            _mirror_release(
+                "mysql",
+                "9.7.1",
+                {
+                    "mysql-9.7.1-windows-x64.zip": 340_920_144,
+                    "mysql-9.7.1-linux-x64.tar.xz": 978_752_220,
+                },
+            ),
+            _mirror_release(
+                "apache", "2.4.66", {"httpd-2.4.66-windows-x64.zip": 11_527_838}
+            ),
+            _mirror_release("php", "8.4.20", {"php-8.4.20-windows-x64.zip": 34_323_692}),
+        ]
+        monkeypatch.setattr("app.generators._github_json", lambda path: payload)
 
-    def test_fallback_limit_respected(self):
-        assert len(_mysql_fallback(limit=2)) == 2
-        assert len(_mysql_fallback(limit=1)) == 1
+    def test_mysql_comes_only_from_the_binaries_repo(self, monkeypatch):
+        self._fake_repo(monkeypatch)
+        releases = generate_mysql(limit=5)
+        assert [r.version for r in releases] == ["9.7.1"]
+        assert releases[0].major_minor == "9.7"
+        urls = {d.url for d in releases[0].downloads}
+        assert urls == {
+            f"{MIRROR}/binaries-mysql-9.7.1/mysql-9.7.1-windows-x64.zip",
+            f"{MIRROR}/binaries-mysql-9.7.1/mysql-9.7.1-linux-x64.tar.xz",
+        }
 
-    def test_generate_mysql_returns_list(self):
-        # This may hit the network or fall back — either way must return a list.
-        result = generate_mysql(limit=3)
-        assert isinstance(result, list)
-        for rel in result:
-            assert isinstance(rel, GenRelease)
+    def test_apache_comes_only_from_the_binaries_repo(self, monkeypatch):
+        self._fake_repo(monkeypatch)
+        (release,) = generate_apache(limit=5)
+        assert release.version == "2.4.66"
+        (download,) = release.downloads
+        assert (download.os, download.arch, download.archive_type) == (
+            "windows",
+            "x64",
+            "zip",
+        )
+        assert download.url.startswith(MIRROR)
 
-    def test_fallback_urls_contain_version(self):
-        releases = _mysql_fallback(limit=4)
-        for rel in releases:
-            for dl in rel.downloads:
-                assert rel.version in dl.url, (
-                    f"URL {dl.url} should contain version {rel.version}"
-                )
-                assert "dev.mysql.com" in dl.url
+    def test_generators_do_not_scrape_the_upstream_sites(self, monkeypatch):
+        self._fake_repo(monkeypatch)
 
-    def test_fallback_major_minor_matches_version(self):
-        releases = _mysql_fallback(limit=4)
-        for rel in releases:
-            expected_mm = ".".join(rel.version.split(".")[:2])
-            assert rel.major_minor == expected_mm
+        def no_network(*args, **kwargs):
+            raise AssertionError("upstream site must not be contacted")
+
+        monkeypatch.setattr("app.generators.httpx.get", no_network)
+        monkeypatch.setattr("app.generators.httpx.head", no_network)
+        assert generate_mysql(limit=1)
+        assert generate_apache(limit=1)
+
+    def test_asset_sizes_are_carried_into_downloads(self, monkeypatch):
+        self._fake_repo(monkeypatch)
+        (release,) = generate_apache(limit=5)
+        assert release.downloads[0].size_bytes == 11_527_838
 
 
 class TestNodeGenerator:
@@ -375,18 +403,6 @@ class TestCloudflaredGenerator:
         if result and result[0].downloads:
             exts = {dl.archive_type for dl in result[0].downloads}
             assert len(exts) > 0
-
-
-class TestApacheGenerator:
-    def test_generate_apache_returns_list(self):
-        from app.generators import generate_apache
-
-        result = generate_apache(limit=2)
-        assert isinstance(result, list)
-        for rel in result:
-            assert isinstance(rel, GenRelease)
-            assert rel.version
-            assert "." in rel.version
 
 
 class TestComposerGenerator:

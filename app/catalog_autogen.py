@@ -43,7 +43,7 @@ def run_catalog_autogen(limit_per_app: int = 10) -> list[AutogenOutcome]:
 
     Two-pass strategy:
       1. Primary upstream scraper (GENERATORS[app_id]) — fresh versions
-         from the canonical source (archive.mariadb.org, apachelounge,
+         from the canonical source (archive.mariadb.org,
          php.net, etc.).
       2. Binaries-repo fallback — every ``binaries-<app>-<version>`` tag
          we've published, so versions we've source-built but that fell

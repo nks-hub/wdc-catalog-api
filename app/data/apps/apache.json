@@ -12,67 +12,25 @@
       "channel": "stable",
       "downloads": [
         {
-          "url": "https://www.apachelounge.com/download/VS17/binaries/httpd-2.4.66-251206-win64-VS17.zip",
+          "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-apache-2.4.66/httpd-2.4.66-windows-x64.zip",
           "os": "windows",
           "arch": "x64",
           "archive_type": "zip",
-          "source": "apachelounge",
-          "headers": {
-            "User-Agent": "NKS-WebDevConsole/1.0 (compatible)"
-          },
-          "notes": "Temporary: nks-hub mirror asset is a 2,451-byte HTML error page — build-apache.yml had no content-type/size validation. Revert after nks-hub/webdev-console-binaries#2 merges and the workflow re-publishes a real ZIP."
+          "source": "nks-hub"
         },
         {
           "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-apache-2.4.66/httpd-2.4.66-linux-x64.tar.xz",
           "os": "linux",
           "arch": "x64",
           "archive_type": "tar.xz",
-          "source": "nks-hub",
-          "sha_256": "92fafec9dbabedcc14f6586c3ec82300da3bcb7ab523c13f9368099c32c93f13",
-          "size_bytes": 5487792
+          "source": "nks-hub"
         },
         {
           "url": "https://github.com/nks-hub/webdev-console-binaries/releases/download/binaries-apache-2.4.66/httpd-2.4.66-macos-arm64.tar.xz",
           "os": "macos",
           "arch": "arm64",
           "archive_type": "tar.xz",
-          "source": "nks-hub",
-          "sha_256": "90593221ae9091c000d619d0cb053b20127b85515926acc876b00f258d34bcbf",
-          "size_bytes": 5273720
-        }
-      ]
-    },
-    {
-      "version": "2.4.65",
-      "major_minor": "2.4",
-      "channel": "stable",
-      "downloads": [
-        {
-          "url": "https://www.apachelounge.com/download/VS18/binaries/httpd-2.4.65-250401-win64-VS18.zip",
-          "os": "windows",
-          "arch": "x64",
-          "archive_type": "zip",
-          "source": "apachelounge",
-          "headers": {
-            "User-Agent": "NKS-WebDevConsole/1.0 (compatible)"
-          }
-        }
-      ]
-    },
-    {
-      "version": "2.4.62",
-      "major_minor": "2.4",
-      "channel": "stable",
-      "downloads": [
-        {
-          "url": "https://www.apachelounge.com/download/VS17/binaries/httpd-2.4.62-240718-win64-VS17.zip",
-          "os": "windows",
-          "arch": "x64",
-          "archive_type": "zip",
-          "source": "apachelounge",
-          "headers": {
-            "User-Agent": "NKS-WebDevConsole/1.0 (compatible)"
-          }
+          "source": "nks-hub"
         }
       ]
     }

@@ -15,7 +15,7 @@
 - 🖥️ **HTML admin panel** - dashboard, user management (role + suspend + reset password), audit log + CSV export, invites (mint + redemption history), device browser, snapshot history with RFC 6902 diff, backup import / ZIP export, retention policy, global settings, revoked-token viewer
 - 👥 **RBAC with six roles** - owner → admin → operator → support → user → readonly; account-level login lockout after 5 failed attempts
 - 🔐 **Envelope-encrypted snapshots** - AES-256-GCM with optional Variant B (passphrase-derived KEK for zero-knowledge mode)
-- ⚙️ **URL auto-generators** - scrape upstream release listings (GitHub Releases API, php.net, apachelounge, nginx.org) with HEAD-probe verification before insertion
+- ⚙️ **URL auto-generators** - scrape upstream release listings (GitHub Releases API, php.net, nginx.org) with HEAD-probe verification before insertion
 - 🔄 **Config sync** - per-device JSON upload/download keyed by device ID, used to restore settings after a re-install
 - 📊 **Observability** - `/healthz` (liveness), `/readyz` (DB + S3 deps), `/metrics` (Prometheus; optionally bearer-authed); structured JSON logs via `python-json-logger` with `X-Request-ID` round-trip
 - 📜 **OpenAPI 3.1** - generated spec at `/openapi.json`; drift checker (`scripts/check-catalog-drift.mjs`) validates `CatalogClient.cs` against the published contract
@@ -174,11 +174,13 @@ POST /admin/account/password
 | caddy       | `github.com/caddyserver/caddy` releases             |
 | redis       | `github.com/redis-windows/redis-windows` releases   |
 | php         | `windows.php.net/downloads/releases/` HTML listing  |
-| apache      | `www.apachelounge.com/download/` HTML listing       |
+| apache      | `nks-hub/webdev-console-binaries` releases (mirror only) |
 | nginx       | `nginx.org/en/download.html` HTML listing           |
 | mariadb     | `archive.mariadb.org/` open-directory listing + `nks-hub/webdev-console-binaries` macOS probe |
-| mysql       | `dev.mysql.com/downloads/mysql/` + `nks-hub/webdev-console-binaries` macOS probe |
+| mysql       | `nks-hub/webdev-console-binaries` releases (mirror only) |
 | postgresql  | `nks-hub/webdev-console-binaries` releases |
+
+apache and mysql are served from the mirror only: ApacheLounge answers 200 with an HTML page for builds that rotated off disk and `dev.mysql.com` answers 403 to non-browser clients. The public catalog drops any download of these apps that is not a mirrored release asset, and any asset whose recorded size is below 100 KB.
 
 ## Development
 

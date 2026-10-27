@@ -47,15 +47,28 @@ def get_app_document(db: Session, app_id: str) -> AppDoc | None:
     return _app_to_schema(app) if app else None
 
 
+def _offerable_downloads(app_id: str, downloads: list[Download]) -> list[Download]:
+    """Drop downloads the daemon must never be pointed at: for
+    ``MIRROR_ONLY_APPS`` anything that is not a mirrored release asset
+    (upstream hosts rotate files off disk or block non-browser clients),
+    and any asset whose recorded size is too small to be a real archive
+    (an HTML error page saved under the archive name)."""
+    mirror_only = app_id in MIRROR_ONLY_APPS
+    return [
+        d
+        for d in downloads
+        if (not mirror_only or d.url.startswith(MIRROR_URL_PREFIX))
+        and (d.size_bytes is None or d.size_bytes >= MIN_DOWNLOAD_BYTES)
+    ]
+
+
 def _app_to_schema(app: App) -> AppDoc:
-    return AppDoc(
-        name=app.id,
-        display_name=app.display_name or app.id,
-        category=app.category or "other",
-        description=app.description or "",
-        homepage=app.homepage,
-        license=app.license,
-        releases=[
+    releases = []
+    for r in app.releases:
+        downloads = _offerable_downloads(app.id, r.downloads)
+        if r.downloads and not downloads:
+            continue  # every download was withdrawn, so the version is not installable
+        releases.append(
             ReleaseDoc(
                 version=r.version,
                 major_minor=r.major_minor,
@@ -72,11 +85,18 @@ def _app_to_schema(app: App) -> AppDoc:
                         sha256=d.sha256,
                         size_bytes=d.size_bytes,
                     )
-                    for d in r.downloads
+                    for d in downloads
                 ],
             )
-            for r in app.releases
-        ],
+        )
+    return AppDoc(
+        name=app.id,
+        display_name=app.display_name or app.id,
+        category=app.category or "other",
+        description=app.description or "",
+        homepage=app.homepage,
+        license=app.license,
+        releases=releases,
     )
 
 
@@ -279,6 +299,15 @@ def _url_is_alive(url: str, *, timeout_seconds: float = 8.0) -> bool:
 OWN_BUILD_SOURCE = "nks-hub/webdev-console-binaries"
 SUPERSEDED_BY_OWN_BUILDS = frozenset({"php.net"})
 
+# Apps whose upstream cannot be trusted to serve the file: ApacheLounge
+# answers 200 + an HTML page for builds that rotated off disk, dev.mysql.com
+# answers 403 to non-browser clients. The catalog serves only assets mirrored
+# (and validated) into OWN_BUILD_SOURCE for them.
+MIRROR_ONLY_APPS = frozenset({"apache", "mysql"})
+MIRROR_URL_PREFIX = f"https://github.com/{OWN_BUILD_SOURCE}/releases/download/"
+# No real archive or binary we ship is this small; an HTML error page is ~2 KB.
+MIN_DOWNLOAD_BYTES = 100_000
+
 
 def apply_generated_releases(
     db: Session,
@@ -343,6 +372,8 @@ def apply_generated_releases(
     inserted = 0
     downloads_added = 0
     urls_healed = 0
+    sizes_refreshed = 0
+    mirror_only = app.id in MIRROR_ONLY_APPS
     for gen in releases:
         rel = existing_by_version.get(gen.version)
         new_release = rel is None
@@ -363,12 +394,29 @@ def apply_generated_releases(
         for gd in gen.downloads:
             triple = (gd.os, gd.arch, gd.archive_type)
             if triple in seen:
+                existing = _existing_download(rel, triple)
+                # A mirrored asset can be re-published (fixed or broken), so
+                # its recorded size follows the release asset; _offerable_downloads
+                # hides it while the size is implausible.
+                if (
+                    existing is not None
+                    and existing.url == gd.url
+                    and gd.size_bytes is not None
+                    and existing.size_bytes != gd.size_bytes
+                ):
+                    existing.size_bytes = gd.size_bytes
+                    sizes_refreshed += 1
                 if heal_dead_urls and not new_release:
-                    existing = _existing_download(rel, triple)
                     if (
                         existing is not None
                         and gd.source == OWN_BUILD_SOURCE
-                        and existing.source in SUPERSEDED_BY_OWN_BUILDS
+                        and (
+                            existing.source in SUPERSEDED_BY_OWN_BUILDS
+                            or (
+                                mirror_only
+                                and not existing.url.startswith(MIRROR_URL_PREFIX)
+                            )
+                        )
                         and _url_is_alive(gd.url)
                     ):
                         log.info(
@@ -384,6 +432,7 @@ def apply_generated_releases(
                         existing.url = gd.url
                         existing.source = gd.source
                         existing.headers = gd.headers
+                        existing.size_bytes = gd.size_bytes
                         urls_healed += 1
                     elif (
                         existing is not None
@@ -404,6 +453,7 @@ def apply_generated_releases(
                         existing.url = gd.url
                         existing.source = gd.source
                         existing.headers = gd.headers
+                        existing.size_bytes = gd.size_bytes
                         urls_healed += 1
                 continue
             seen.add(triple)
@@ -416,13 +466,14 @@ def apply_generated_releases(
                     archive_type=gd.archive_type,
                     source=gd.source,
                     headers=gd.headers,
+                    size_bytes=gd.size_bytes,
                 )
             )
             if not new_release:
                 downloads_added += 1
 
     db.commit()
-    if inserted or downloads_added or urls_healed or replace:
+    if inserted or downloads_added or urls_healed or sizes_refreshed or replace:
         _invalidate_catalog_cache()
     return inserted
 
