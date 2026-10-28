@@ -72,6 +72,9 @@ Pre-built images are published to GHCR on every tag: `ghcr.io/nks-hub/wdc-catalo
 | `NKS_WDC_SESSION_SECRET` | _required in prod_ | `itsdangerous` signer key for admin UI session cookies |
 | `NKS_WDC_CATALOG_SECRET` | - | Legacy combined secret, fallback for both dedicated vars (deprecated) |
 | `NKS_WDC_CATALOG_ALLOW_CORS` | - | `1` emits permissive CORS headers |
+| `NKS_WDC_PLUGINS_GITHUB_TOKEN` | - | Optional GitHub token for the plugin catalog's releases request. Raises the GitHub API limit from 60 to 5000 requests per hour. Needs no scopes for a public repo. |
+
+The plugin catalog (`/api/v1/plugins/catalog`) keeps the last good GitHub response in memory and in `plugins-releases.json` in the state dir. When GitHub fails (rate limit, 5xx, network), it serves that copy with `"stale": true` and the time of the fetch in `generated_at`. If GitHub fails and no copy exists yet, the endpoints return `503` with `Retry-After` instead of an empty catalog.
 
 In production **the secret env vars must be set** to independent random 32+ byte values (`openssl rand -base64 48`). The service refuses to start otherwise. Setting `NKS_WDC_CATALOG_DEV=1` overrides the check and generates ephemeral random keys; use it only for local development.
 

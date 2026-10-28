@@ -12,7 +12,9 @@ difference: plugin release assets are NOT partitioned by OS/arch (managed
 the plugin id comes from the tag prefix; legacy tags without the
 ``nks.wdc.`` prefix fall back to the asset filename. Every download carries
 the sha256 of its zip, and each plugin carries the ``displayName`` and
-``description`` from its ``plugin.json`` at the newest tag.
+``description`` from its ``plugin.json`` at the newest tag. When GitHub
+fails, the last good response is served with ``"stale": true`` and its
+``generated_at`` time instead of an empty catalog.
 
 Endpoint:
     GET /api/v1/plugins/catalog           — full plugins catalog
@@ -22,12 +24,15 @@ Endpoint:
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 from threading import Lock
 from typing import Any
 
@@ -35,11 +40,17 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from .generators import DEFAULT_UA, GenDownload, GenRelease
+from .settings import get_settings
 
 log = logging.getLogger(__name__)
 
 HTTP_TIMEOUT = float(os.environ.get("NKS_WDC_PLUGINS_HTTP_TIMEOUT", "10"))
 PLUGINS_REPO = os.environ.get("NKS_WDC_PLUGINS_REPO", "nks-hub/webdev-console-plugins")
+# Optional GitHub token for the releases API call (raises the limit from
+# 60 to 5000 requests/h). Sent only to api.github.com, never logged.
+GITHUB_TOKEN = os.environ.get("NKS_WDC_PLUGINS_GITHUB_TOKEN", "").strip()
+# File in the state dir that keeps the last good releases response across restarts.
+STATE_FILENAME = "plugins-releases.json"
 # In-process TTL for the GitHub releases fetch. Without this every HTTP
 # hit to /api/v1/plugins/catalog (and the per-plugin variant) re-queried
 # GitHub, which burns the 60-req/h anonymous rate limit on a single
@@ -52,7 +63,9 @@ RELEASES_LIMIT = 100
 _IO_WORKERS = 8
 
 _cache_lock = Lock()
-_cache: dict[tuple[str, int], tuple[float, list[dict[str, Any]]]] = {}
+# Successful fetches only: (monotonic time, releases, ISO-8601 UTC wall time).
+# Entries are kept after the TTL expires so they can be served stale.
+_cache: dict[tuple[str, int], tuple[float, list[dict[str, Any]], str]] = {}
 # Release assets and tagged plugin.json files never change once published, so
 # successful lookups live for the whole process; failures are never stored.
 _sha256_cache: dict[tuple[Any, str], str] = {}
@@ -72,7 +85,47 @@ _TAG_ID_PREFIX = "nks.wdc."
 _ASSET_RE = re.compile(r"^NKS\.WebDevConsole\.Plugin\.(?P<name>[A-Za-z0-9]+)\.zip$")
 
 
-def _github_releases(repo: str, limit: int = 20) -> list[dict[str, Any]]:
+@dataclass(frozen=True)
+class ReleasesSnapshot:
+    releases: list[dict[str, Any]]
+    generated_at: str
+    stale: bool
+
+
+def _state_file() -> Path:
+    return get_settings().resolved_state_dir / STATE_FILENAME
+
+
+def _save_snapshot(repo: str, limit: int, generated_at: str, releases: list[dict[str, Any]]) -> None:
+    """Persist the last good releases response; best effort, never raises."""
+    path = _state_file()
+    tmp = path.with_suffix(".tmp")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(
+            json.dumps({"repo": repo, "limit": limit, "generated_at": generated_at, "releases": releases}),
+            encoding="utf-8",
+        )
+        os.replace(tmp, path)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("could not persist plugins releases to %s: %s", path, exc)
+
+
+def _load_snapshot(repo: str, limit: int) -> tuple[str, list[dict[str, Any]]] | None:
+    """Read the persisted releases for ``(repo, limit)``; None when absent, foreign or empty."""
+    path = _state_file()
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        if saved["repo"] == repo and saved["limit"] == limit and saved["releases"]:
+            return saved["generated_at"], saved["releases"]
+    except FileNotFoundError:
+        pass
+    except Exception as exc:  # noqa: BLE001
+        log.warning("ignoring unreadable plugins releases file %s: %s", path, exc)
+    return None
+
+
+def _github_releases(repo: str, limit: int = RELEASES_LIMIT) -> ReleasesSnapshot | None:
     """Fetch the last `limit` releases from a public GitHub repo.
 
     Shares the DEFAULT_UA + timeout conventions with generators._github_releases
@@ -82,14 +135,18 @@ def _github_releases(repo: str, limit: int = 20) -> list[dict[str, Any]]:
     Results are memoised in-process for ``CACHE_TTL_SECONDS`` (default 60s)
     keyed by ``(repo, limit)`` so the endpoint does not re-hit GitHub on
     every single request. Set ``CACHE_TTL_SECONDS=0`` to disable.
+
+    When GitHub fails (rate limit, 5xx, network), the last good response is
+    returned with ``stale=True``: from memory, else from the state dir file
+    that survives restarts. A failure never overwrites either copy, and
+    None means GitHub failed and no earlier non-empty copy exists.
     """
     key = (repo, limit)
     now = time.monotonic()
-    if CACHE_TTL_SECONDS > 0:
-        with _cache_lock:
-            entry = _cache.get(key)
-            if entry is not None and (now - entry[0]) < CACHE_TTL_SECONDS:
-                return entry[1]
+    with _cache_lock:
+        entry = _cache.get(key)
+    if CACHE_TTL_SECONDS > 0 and entry is not None and (now - entry[0]) < CACHE_TTL_SECONDS:
+        return ReleasesSnapshot(entry[1], entry[2], stale=False)
 
     url = f"https://api.github.com/repos/{repo}/releases?per_page={limit}"
     headers = {
@@ -97,20 +154,27 @@ def _github_releases(repo: str, limit: int = 20) -> list[dict[str, Any]]:
         "User-Agent": DEFAULT_UA,
         "X-GitHub-Api-Version": "2022-11-28",
     }
+    if GITHUB_TOKEN:
+        headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
     try:
         r = httpx.get(url, headers=headers, timeout=HTTP_TIMEOUT)
         r.raise_for_status()
         data = r.json()
+        if not isinstance(data, list):
+            raise ValueError("releases response is not a list")
     except Exception as exc:  # noqa: BLE001
         log.warning("GitHub plugins-repo fetch failed for %s: %s", repo, exc)
-        # Don't poison the cache with empty lists — upstream transient
-        # failures would otherwise paper over real data for a full TTL.
-        return []
+        if entry is not None and entry[1]:
+            return ReleasesSnapshot(entry[1], entry[2], stale=True)
+        saved = _load_snapshot(repo, limit)
+        return ReleasesSnapshot(saved[1], saved[0], stale=True) if saved else None
 
-    if CACHE_TTL_SECONDS > 0:
-        with _cache_lock:
-            _cache[key] = (now, data)
-    return data
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with _cache_lock:
+        _cache[key] = (now, data, generated_at)
+    if data:
+        _save_snapshot(repo, limit, generated_at, data)
+    return ReleasesSnapshot(data, generated_at, stale=False)
 
 
 def _asset_plugin_id(filename: str) -> str | None:
@@ -242,18 +306,32 @@ def _build_release(version: str, rel: dict[str, Any], asset: dict[str, Any]) -> 
     )
 
 
-def generate_plugins(limit: int = RELEASES_LIMIT) -> dict[str, PluginEntry]:
+@dataclass
+class PluginsCatalog:
+    plugins: dict[str, PluginEntry]
+    generated_at: str
+    stale: bool
+
+
+def generate_plugins(limit: int = RELEASES_LIMIT) -> PluginsCatalog | None:
     """Fetch plugin releases from the plugins repo and group by plugin id.
 
-    Returns a mapping ``{plugin_id: PluginEntry}`` where each release has
+    ``plugins`` maps ``plugin_id`` to a ``PluginEntry`` where each release has
     exactly one download entry (the .zip for that plugin at that version).
     Releases are ordered newest version first, so ``releases[0]`` is the
     latest. ``name`` and ``description`` come from ``plugin.json`` at the
     newest tag; ``name`` falls back to the plugin directory name and
     ``description`` to None when that file cannot be fetched.
+
+    ``stale`` is True when GitHub failed and the catalog was built from the
+    last good response, taken at ``generated_at``. Returns None when GitHub
+    failed and there is no earlier response at all.
     """
+    snapshot = _github_releases(PLUGINS_REPO, limit=limit)
+    if snapshot is None:
+        return None
     found: dict[str, list[tuple[str, dict[str, Any], dict[str, Any]]]] = {}
-    for rel in _github_releases(PLUGINS_REPO, limit=limit):
+    for rel in snapshot.releases:
         for plugin_id, version, asset in _plugin_assets(rel):
             found.setdefault(plugin_id, []).append((version, rel, asset))
     for items in found.values():
@@ -272,18 +350,31 @@ def generate_plugins(limit: int = RELEASES_LIMIT) -> dict[str, PluginEntry]:
         built = pool.map(lambda f: _build_release(*f[1:]), flat)
         for (plugin_id, *_), release in zip(flat, built):
             grouped.setdefault(plugin_id, []).append(release)
-        return {
+        plugins = {
             plugin_id: PluginEntry(plugin_id, name, description, grouped[plugin_id])
             for plugin_id, (name, description) in zip(found, described)
         }
+    return PluginsCatalog(plugins, snapshot.generated_at, snapshot.stale)
 
 
-def _plugins_catalog_payload() -> dict[str, Any]:
-    grouped = generate_plugins()
-    plugins = [asdict(entry) for _, entry in sorted(grouped.items())]
+def _current_catalog() -> PluginsCatalog:
+    catalog = generate_plugins()
+    if catalog is None:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "plugin catalog unavailable: GitHub did not answer and no earlier copy exists",
+            headers={"Retry-After": "60"},
+        )
+    return catalog
+
+
+def _plugins_catalog_payload(catalog: PluginsCatalog) -> dict[str, Any]:
+    plugins = [asdict(entry) for _, entry in sorted(catalog.plugins.items())]
     return {
         "schema": "wdc-plugins/v1",
         "source": PLUGINS_REPO,
+        "generated_at": catalog.generated_at,
+        "stale": catalog.stale,
         "plugin_count": len(plugins),
         "plugins": plugins,
     }
@@ -291,7 +382,7 @@ def _plugins_catalog_payload() -> dict[str, Any]:
 
 @router.get("/catalog")
 def api_get_plugins_catalog(request: Request) -> Response:
-    payload = _plugins_catalog_payload()
+    payload = _plugins_catalog_payload(_current_catalog())
     return Response(
         content=_json_dumps(payload),
         media_type="application/json",
@@ -302,11 +393,16 @@ def api_get_plugins_catalog(request: Request) -> Response:
 @router.get("/catalog/{plugin_id}")
 def api_get_single_plugin(plugin_id: str, request: Request) -> Response:
     plugin_id = plugin_id.lower()
-    grouped = generate_plugins()
-    if plugin_id not in grouped:
+    catalog = _current_catalog()
+    if plugin_id not in catalog.plugins:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "plugin not found")
+    payload = {
+        **asdict(catalog.plugins[plugin_id]),
+        "generated_at": catalog.generated_at,
+        "stale": catalog.stale,
+    }
     return Response(
-        content=_json_dumps(asdict(grouped[plugin_id])),
+        content=_json_dumps(payload),
         media_type="application/json",
         headers={"Cache-Control": "public, max-age=60"},
     )

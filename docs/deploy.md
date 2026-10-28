@@ -31,6 +31,8 @@ NKS_WDC_CATALOG_ADMIN_USER=admin
 NKS_WDC_CATALOG_ADMIN_PASS=<strong random password>
 NKS_WDC_CATALOG_AUTO_MIGRATE=1
 NKS_WDC_LOG_LEVEL=INFO
+# Optional: lifts the plugin catalog's GitHub API limit from 60 to 5000 req/h
+# NKS_WDC_PLUGINS_GITHUB_TOKEN=<GitHub token, no scopes needed>
 ```
 
 Never set `NKS_WDC_CATALOG_DEV=1` in production — it unlocks the
