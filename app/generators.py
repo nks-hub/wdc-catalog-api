@@ -50,6 +50,7 @@ class GenDownload:
     source: str = "auto"
     headers: dict[str, str] | None = None
     size_bytes: int | None = None
+    sha256: str | None = None
 
 
 @dataclass
