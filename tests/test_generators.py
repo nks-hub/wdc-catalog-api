@@ -7,8 +7,11 @@ a fake binaries-repo release listing.
 
 from __future__ import annotations
 
+import json
 import re
+from types import SimpleNamespace
 
+import httpx
 import pytest
 from app.generators import (
     GENERATORS,
@@ -130,51 +133,268 @@ class TestMirroredGenerators:
         assert release.downloads[0].size_bytes == 11_527_838
 
 
+class Upstream:
+    """Offline stand-in for every host the generators talk to.
+
+    A test registers a recorded answer under a URL fragment; the longest
+    matching fragment wins. Anything unrecorded fails like a dead network.
+    """
+
+    def __init__(self) -> None:
+        self.pages: dict[str, object] = {}
+        self.head_ok: set[str] = set()
+        self.requested: list[str] = []
+        self.error: Exception | None = None
+
+    def serve(self, fragment: str, body: object) -> None:
+        self.pages[fragment] = body
+
+    def github(self, repo: str, releases: list[dict]) -> None:
+        self.serve(f"/repos/{repo}/releases", releases)
+
+    def body(self, url: str) -> object:
+        if self.error:
+            raise self.error
+        self.requested.append(url)
+        for fragment in sorted(self.pages, key=len, reverse=True):
+            if fragment in url:
+                return self.pages[fragment]
+        raise httpx.ConnectError(f"no recorded answer for {url}")
+
+
+class _Page:
+    def __init__(self, body: object) -> None:
+        self._body = body
+
+    @property
+    def text(self) -> str:
+        return self._body if isinstance(self._body, str) else json.dumps(self._body)
+
+    def json(self) -> object:
+        return self._body
+
+    def raise_for_status(self) -> None:
+        pass
+
+
+def _release(tag: str, *, prerelease: bool = False, draft: bool = False, assets=()) -> dict:
+    return {
+        "tag_name": tag,
+        "prerelease": prerelease,
+        "draft": draft,
+        "published_at": "2026-10-22T09:00:00Z",
+        "assets": list(assets),
+    }
+
+
+def _assets(repo: str, tag: str, *names: str) -> list[dict]:
+    base = f"https://github.com/{repo}/releases/download/{tag}"
+    return [{"name": n, "browser_download_url": f"{base}/{n}"} for n in names]
+
+
+def _mailpit(tag: str) -> dict:
+    names = [f"mailpit-{os_}.{ext}" for os_, ext in [
+        ("darwin-amd64", "tar.gz"), ("darwin-arm64", "tar.gz"), ("linux-386", "tar.gz"),
+        ("linux-amd64", "tar.gz"), ("linux-arm", "tar.gz"), ("linux-arm64", "tar.gz"),
+        ("windows-amd64", "zip"), ("windows-arm64", "zip"),
+    ]]
+    return _release(tag, assets=_assets("axllent/mailpit", tag, *names))
+
+
+def _caddy(tag: str, **flags) -> dict:
+    v = tag.lstrip("v")
+    names = [
+        f"caddy_{v}_windows_amd64.zip", f"caddy_{v}_linux_amd64.tar.gz", f"caddy_{v}_linux_arm64.tar.gz",
+        f"caddy_{v}_mac_arm64.tar.gz", f"caddy_{v}_mac_amd64.tar.gz", f"caddy_{v}_checksums.txt",
+    ]
+    return _release(tag, assets=_assets("caddyserver/caddy", tag, *names), **flags)
+
+
+def _redis(tag: str) -> dict:
+    names = [f"Redis-{tag}-Windows-x64-{flavour}.zip" for flavour in (
+        "cygwin-with-Service", "cygwin", "msys2-with-Service", "msys2",
+    )]
+    return _release(tag, assets=_assets("redis-windows/redis-windows", tag, *names))
+
+
+def _cloudflared(tag: str) -> dict:
+    names = [
+        "cloudflared-darwin-amd64.tgz", "cloudflared-darwin-arm64.tgz", "cloudflared-linux-386",
+        "cloudflared-linux-amd64", "cloudflared-linux-arm64", "cloudflared-windows-386.exe",
+        "cloudflared-windows-amd64.exe", "cloudflared-windows-amd64.msi", f"cloudflared_{tag}_amd64.deb",
+    ]
+    return _release(tag, assets=_assets("cloudflare/cloudflared", tag, *names))
+
+
+def _mkcert(tag: str) -> dict:
+    names = [f"mkcert-{tag}-{suffix}" for suffix in (
+        "darwin-amd64", "darwin-arm64", "linux-amd64", "linux-arm64", "windows-amd64.exe", "windows-arm64.exe",
+    )]
+    return _release(tag, assets=_assets("FiloSottile/mkcert", tag, *names))
+
+
+# Shaped like GitHub's answer for composer/composer, newest first. The RC is
+# flagged upstream, the beta only gives itself away by its tag, and the draft
+# must never be offered.
+COMPOSER_RELEASES = [
+    _release("2.11.0-RC1", prerelease=True),
+    _release("2.10.1"),
+    _release("2.10.0"),
+    _release("2.10.0-beta.1"),
+    _release("2.99.0", draft=True),
+    _release("2.9.5"),
+    _release("2.9.0-alpha2"),
+    _release("2.9.0"),
+]
+
+NGINX_DOWNLOAD_PAGE = """
+<table>
+<tr><td>Mainline version</td></tr>
+<tr><td><a href="/download/nginx-1.31.8.tar.gz">nginx-1.31.8</a></td>
+    <td><a href="/download/nginx-1.31.8.tar.gz.asc">pgp</a></td>
+    <td><a href="/download/nginx-1.31.8.zip">nginx/Windows-1.31.8</a></td>
+    <td><a href="/download/nginx-1.31.8.zip.asc">pgp</a></td></tr>
+<tr><td>Stable version</td></tr>
+<tr><td><a href="/download/nginx-1.30.6.zip">nginx/Windows-1.30.6</a></td></tr>
+<tr><td><a href="/download/nginx-1.30.6.zip">nginx/Windows-1.30.6</a></td></tr>
+<tr><td>Legacy versions</td></tr>
+<tr><td><a href="/download/nginx-1.28.3.zip">nginx/Windows-1.28.3</a></td></tr>
+</table>
+"""
+
+_NODE_FILES = ["linux-x64", "osx-arm64-tar", "osx-x64-tar", "src", "win-x64-zip"]
+NODE_INDEX = [
+    {"version": "v26.12.1", "date": "2026-10-21", "files": _NODE_FILES, "lts": False},
+    {"version": "v24.11.0", "date": "2026-10-08", "files": _NODE_FILES, "lts": "Krypton"},
+    {"version": "v0.1.0", "date": "2011-08-26", "files": ["src"], "lts": False},
+    {"version": "v22.15.0", "date": "2026-04-23", "files": _NODE_FILES, "lts": "Jod"},
+]
+
+MARIADB_ARCHIVE_PAGE = "".join(
+    f'<a href="mariadb-{v}/">mariadb-{v}/</a>\n'
+    for v in ("10.0", "10.0.0", "11.8.3", "12.0.2", "13.1.1", "13.1.1")
+)
+
+PHP_RELEASES_PAGE = '<a href="php-8.5.9-nts-Win32-vs17-x64.zip">php-8.5.9</a><a href="php-8.4.19-nts-Win32-vs17-x64.zip">php-8.4.19</a>'
+PHP_ARCHIVES_PAGE = (
+    '<a href="php-8.5.8-nts-Win32-vs17-x64.zip">php-8.5.8</a>'
+    '<a href="php-8.4.9-nts-Win32-vs17-x64.zip">php-8.4.9</a>'
+    '<a href="php-8.4.19-nts-Win32-vs17-x64.zip">php-8.4.19</a>'
+)
+
+BINARIES_REPO = [
+    _mirror_release("apache", "2.4.66", {"apache-2.4.66-windows-x64.zip": 12_000_000}),
+    _mirror_release("mysql", "9.7.1", {"mysql-9.7.1-windows-x64.zip": 250_000_000}),
+    _mirror_release(
+        "postgresql",
+        "18.3",
+        {
+            "postgresql-18.3-windows-x64.zip": 300_000_000,
+            "postgresql-18.3-linux-x64.tar.gz": 60_000_000,
+            "postgresql-18.3-macos-arm64.tar.gz": 55_000_000,
+        },
+    ),
+    _mirror_release(
+        "mariadb",
+        "11.4.4",
+        {"mariadb-11.4.4-linux-x64.tar.gz": 90_000_000, "mariadb-11.4.4-macos-arm64.tar.gz": 85_000_000},
+    ),
+]
+
+
+@pytest.fixture
+def upstream(monkeypatch) -> Upstream:
+    """Every upstream the generators use, preloaded with recorded answers."""
+    up = Upstream()
+    up.github("axllent/mailpit", [_mailpit("v1.32.0"), _mailpit("v1.31.6"), _mailpit("v1.31.5")])
+    up.github(
+        "caddyserver/caddy",
+        [_caddy("v2.11.7"), _caddy("v2.11.0-beta.2", prerelease=True), _caddy("v2.10.2"), _caddy("v2.8.0-rc.1")],
+    )
+    up.github("redis-windows/redis-windows", [_redis("8.10.3"), _redis("8.10.2"), _redis("8.8.3")])
+    up.github("cloudflare/cloudflared", [_cloudflared("2026.10.5"), _cloudflared("2026.10.4")])
+    up.github("FiloSottile/mkcert", [_mkcert("v1.4.4"), _mkcert("v1.4.3")])
+    up.github("composer/composer", COMPOSER_RELEASES)
+    up.github("nks-hub/webdev-console-binaries", BINARIES_REPO)
+    up.serve("nginx.org/en/download.html", NGINX_DOWNLOAD_PAGE)
+    up.serve("nodejs.org/dist/index.json", NODE_INDEX)
+    up.serve("archive.mariadb.org/", MARIADB_ARCHIVE_PAGE)
+    up.serve("windows.php.net/downloads/releases/", PHP_RELEASES_PAGE)
+    up.serve("windows.php.net/downloads/releases/archives/", PHP_ARCHIVES_PAGE)
+    up.head_ok.update(
+        {
+            "mariadb-13.1.1-winx64.zip",
+            "mariadb-11.8.3-winx64.zip",
+            "binaries-mariadb-13.1.1/mariadb-13.1.1-macos-arm64.tar.gz",
+        }
+    )
+
+    monkeypatch.setattr("app.generators.httpx.get", lambda url, **kw: _Page(up.body(url)))
+    monkeypatch.setattr("app.generators._github_json", lambda path: up.body(path))
+    monkeypatch.setattr(
+        "app.generators.httpx.head",
+        lambda url, **kw: SimpleNamespace(status_code=200 if any(f in url for f in up.head_ok) else 404),
+    )
+    return up
+
+
 class TestNodeGenerator:
-    def test_generate_node_returns_list(self):
+    def test_generate_node_returns_list(self, upstream):
         from app.generators import generate_node
 
-        result = generate_node(limit=2)
-        assert isinstance(result, list)
+        result = generate_node(limit=3)
+        assert [r.version for r in result] == ["26.12.1", "24.11.0", "22.15.0"]
         for rel in result:
             assert isinstance(rel, GenRelease)
             assert not rel.version.startswith("v")
 
-    def test_generate_node_has_multi_platform(self):
+    def test_generate_node_has_multi_platform(self, upstream):
         from app.generators import generate_node
 
-        result = generate_node(limit=1)
-        if result:
-            downloads = result[0].downloads
-            os_set = {d.os for d in downloads}
-            assert "windows" in os_set or len(downloads) > 0
+        downloads = generate_node(limit=1)[0].downloads
+        assert {(d.os, d.arch, d.archive_type) for d in downloads} == {
+            ("windows", "x64", "zip"),
+            ("linux", "x64", "tar.xz"),
+            ("macos", "arm64", "tar.gz"),
+            ("macos", "x64", "tar.gz"),
+        }
+        assert downloads[0].url == "https://nodejs.org/dist/v26.12.1/node-v26.12.1-win-x64.zip"
 
-    def test_generate_node_channel_detection(self):
+    def test_generate_node_channel_detection(self, upstream):
         from app.generators import generate_node
 
-        result = generate_node(limit=5)
-        channels = {r.channel for r in result}
-        assert channels <= {"stable", "lts"}
+        channels = {r.version: r.channel for r in generate_node(limit=5)}
+        assert channels == {"26.12.1": "stable", "24.11.0": "lts", "22.15.0": "lts"}
+
+    def test_generate_node_skips_releases_without_a_download(self, upstream):
+        from app.generators import generate_node
+
+        assert "0.1.0" not in {r.version for r in generate_node(limit=5)}
 
 
 class TestPHPGenerator:
-    def test_generate_php_returns_list(self):
+    def test_generate_php_returns_list(self, upstream):
         from app.generators import generate_php
 
-        result = generate_php(limit=2)
-        assert isinstance(result, list)
+        result = generate_php(limit=3)
+        assert [r.version for r in result] == ["8.5.9", "8.5.8", "8.4.19"]
         for rel in result:
             assert isinstance(rel, GenRelease)
             assert rel.version
             assert rel.major_minor
 
-    def test_generate_php_major_minor_format(self):
+    def test_generate_php_major_minor_format(self, upstream):
         from app.generators import generate_php
 
-        result = generate_php(limit=3)
-        for rel in result:
+        for rel in generate_php(limit=5):
             parts = rel.major_minor.split(".")
             assert len(parts) == 2, f"major_minor {rel.major_minor} should be X.Y"
+
+    def test_generate_php_orders_patches_numerically(self, upstream):
+        from app.generators import generate_php
+
+        versions = [r.version for r in generate_php(limit=10)]
+        assert versions.index("8.4.19") < versions.index("8.4.9")
 
     def test_generate_php_walks_releases_and_archives(self, monkeypatch):
         """Regression for the 2026-05-06 dead-link incident: php.net moves
@@ -272,7 +492,7 @@ class TestPHPGenerator:
 
 
 class TestMariaDBGenerator:
-    def test_generate_mariadb_returns_list(self):
+    def test_generate_mariadb_returns_list(self, upstream):
         """generate_mariadb merges 3 sources: archive.mariadb.org (win zip),
         the per-version binaries-repo macOS probe, and a final
         _generate_from_binaries_repo pass that re-adds older versions
@@ -281,18 +501,14 @@ class TestMariaDBGenerator:
         zip) or `nks-hub/webdev-console-binaries` (macos-arm64 tarball)."""
         from app.generators import generate_mariadb
 
-        result = generate_mariadb(limit=2)
-        assert isinstance(result, list)
+        result = generate_mariadb(limit=3)
+        assert [r.version for r in result] == ["13.1.1", "11.8.3", "11.4.4"]
         for rel in result:
             assert isinstance(rel, GenRelease)
-            if rel.downloads:
-                sources = {dl.source for dl in rel.downloads}
-                assert sources & {
-                    "mariadb.org",
-                    "nks-hub/webdev-console-binaries",
-                }, f"unexpected sources {sources}"
+            sources = {dl.source for dl in rel.downloads}
+            assert sources & {"mariadb.org", "nks-hub/webdev-console-binaries"}, f"unexpected sources {sources}"
 
-    def test_generate_mariadb_windows_download_is_zip(self):
+    def test_generate_mariadb_windows_download_is_zip(self, upstream):
         """The upstream archive.mariadb.org path always returns a Windows
         zip — when that download exists in the merged output, its metadata
         must match (os=windows, arch=x64, archive_type=zip). macOS entries
@@ -300,13 +516,26 @@ class TestMariaDBGenerator:
         skipped here — they're exercised elsewhere."""
         from app.generators import generate_mariadb
 
-        result = generate_mariadb(limit=1)
-        for rel in result:
-            for dl in rel.downloads:
-                if dl.source == "mariadb.org":
-                    assert dl.archive_type == "zip"
-                    assert dl.os == "windows"
-                    assert dl.arch == "x64"
+        upstream_downloads = [
+            dl for rel in generate_mariadb(limit=3) for dl in rel.downloads if dl.source == "mariadb.org"
+        ]
+        assert len(upstream_downloads) == 2
+        for dl in upstream_downloads:
+            assert dl.archive_type == "zip"
+            assert dl.os == "windows"
+            assert dl.arch == "x64"
+
+    def test_generate_mariadb_skips_versions_without_a_windows_build(self, upstream):
+        from app.generators import generate_mariadb
+
+        assert "12.0.2" not in {r.version for r in generate_mariadb(limit=10)}
+
+    def test_generate_mariadb_adds_the_macos_arm64_build_when_it_exists(self, upstream):
+        from app.generators import generate_mariadb
+
+        by_version = {r.version: {(d.os, d.arch) for d in r.downloads} for r in generate_mariadb(limit=3)}
+        assert ("macos", "arm64") in by_version["13.1.1"]
+        assert ("macos", "arm64") not in by_version["11.8.3"]
 
 
 class TestPostgreSQLGenerator:
@@ -352,18 +581,27 @@ class TestPostgreSQLGenerator:
 
 
 class TestMailpitGenerator:
-    def test_generate_mailpit_returns_list(self):
+    def test_generate_mailpit_returns_list(self, upstream):
         from app.generators import generate_mailpit
 
         result = generate_mailpit(limit=2)
-        assert isinstance(result, list)
+        assert [r.version for r in result] == ["1.32.0", "1.31.6"]
         for rel in result:
             assert isinstance(rel, GenRelease)
             assert not rel.version.startswith("v")
 
+    def test_generate_mailpit_picks_the_three_supported_platforms(self, upstream):
+        from app.generators import generate_mailpit
+
+        assert {(d.os, d.arch, d.archive_type) for d in generate_mailpit(limit=1)[0].downloads} == {
+            ("windows", "x64", "zip"),
+            ("linux", "x64", "tar.gz"),
+            ("macos", "arm64", "tar.gz"),
+        }
+
 
 class TestCaddyGenerator:
-    def test_generate_caddy_returns_list(self):
+    def test_generate_caddy_returns_list(self, upstream):
         from app.generators import generate_caddy
 
         result = generate_caddy(limit=2)
@@ -372,87 +610,103 @@ class TestCaddyGenerator:
             assert isinstance(rel, GenRelease)
             assert not rel.version.startswith("v")
 
+    def test_betas_and_rcs_are_not_offered(self, upstream):
+        from app.generators import generate_caddy
+
+        assert [r.version for r in generate_caddy(limit=5)] == ["2.11.7", "2.10.2"]
+
+    def test_generate_caddy_picks_the_three_supported_platforms(self, upstream):
+        from app.generators import generate_caddy
+
+        assert {(d.os, d.arch, d.archive_type) for d in generate_caddy(limit=1)[0].downloads} == {
+            ("windows", "x64", "zip"),
+            ("linux", "x64", "tar.gz"),
+            ("macos", "arm64", "tar.gz"),
+        }
+
 
 class TestRedisGenerator:
-    def test_generate_redis_returns_list(self):
+    def test_generate_redis_returns_list(self, upstream):
         from app.generators import generate_redis
 
         result = generate_redis(limit=2)
-        assert isinstance(result, list)
+        assert [r.version for r in result] == ["8.10.3", "8.10.2"]
         for rel in result:
             assert isinstance(rel, GenRelease)
             assert not rel.version.startswith("v")
 
+    def test_generate_redis_offers_one_windows_zip_per_release(self, upstream):
+        from app.generators import generate_redis
+
+        (dl,) = generate_redis(limit=1)[0].downloads
+        assert (dl.os, dl.arch, dl.archive_type) == ("windows", "x64", "zip")
+        assert "Windows" in dl.url
+
 
 class TestNginxGenerator:
-    def test_generate_nginx_returns_list(self):
+    def test_generate_nginx_returns_list(self, upstream):
         from app.generators import generate_nginx
 
         result = generate_nginx(limit=2)
-        assert isinstance(result, list)
+        assert [r.version for r in result] == ["1.31.8", "1.30.6"]
         for rel in result:
             assert isinstance(rel, GenRelease)
             assert "." in rel.version
             for dl in rel.downloads:
                 assert "nginx" in dl.url
 
+    def test_download_links_on_the_page_are_absolute_paths(self, upstream):
+        """nginx.org writes ``href="/download/nginx-X.zip"``; a pattern that
+        only accepts ``href="nginx-X.zip"`` finds nothing and the scraper
+        silently offers no new nginx at all."""
+        from app.generators import generate_nginx
+
+        (dl,) = generate_nginx(limit=1)[0].downloads
+        assert dl.url == "https://nginx.org/download/nginx-1.31.8.zip"
+        assert (dl.os, dl.arch, dl.archive_type) == ("windows", "x64", "zip")
+
+    def test_a_version_listed_twice_is_offered_once(self, upstream):
+        from app.generators import generate_nginx
+
+        versions = [r.version for r in generate_nginx(limit=10)]
+        assert versions == ["1.31.8", "1.30.6", "1.28.3"]
+
 
 class TestCloudflaredGenerator:
-    def test_generate_cloudflared_has_exe(self):
+    def test_generate_cloudflared_has_exe(self, upstream):
         from app.generators import generate_cloudflared
 
         result = generate_cloudflared(limit=1)
-        if result and result[0].downloads:
-            exts = {dl.archive_type for dl in result[0].downloads}
-            assert len(exts) > 0
+        assert result[0].version == "2026.10.5"
+        assert "exe" in {dl.archive_type for dl in result[0].downloads}
+
+    def test_generate_cloudflared_covers_every_supported_platform(self, upstream):
+        from app.generators import generate_cloudflared
+
+        assert {(d.os, d.arch, d.archive_type) for d in generate_cloudflared(limit=1)[0].downloads} == {
+            ("windows", "x64", "exe"),
+            ("windows", "x86", "exe"),
+            ("linux", "x64", "bin"),
+            ("linux", "arm64", "bin"),
+            ("macos", "x64", "tgz"),
+            ("macos", "arm64", "tgz"),
+        }
 
 
-def _release(tag: str, *, prerelease: bool = False, draft: bool = False, assets=()) -> dict:
-    return {
-        "tag_name": tag,
-        "prerelease": prerelease,
-        "draft": draft,
-        "published_at": "2026-10-22T09:00:00Z",
-        "assets": list(assets),
-    }
+class TestMkcertGenerator:
+    def test_generate_mkcert_covers_every_platform(self, upstream):
+        from app.generators import generate_mkcert
 
-
-# Shaped like GitHub's answer for composer/composer, newest first. The RC is
-# flagged upstream, the beta only gives itself away by its tag, and the draft
-# must never be offered.
-COMPOSER_RELEASES = [
-    _release("2.11.0-RC1", prerelease=True),
-    _release("2.10.1"),
-    _release("2.10.0"),
-    _release("2.10.0-beta.1"),
-    _release("2.99.0", draft=True),
-    _release("2.9.5"),
-    _release("2.9.0-alpha2"),
-    _release("2.9.0"),
-]
-
-
-@pytest.fixture
-def github_answers(monkeypatch):
-    """Serve a payload as GitHub's releases answer; returns ``(set_payload, requested_urls)``."""
-    state = {"payload": [], "error": None}
-    urls: list[str] = []
-
-    class _Resp:
-        def raise_for_status(self):
-            pass
-
-        def json(self):
-            return state["payload"]
-
-    def fake_get(url, **kwargs):
-        urls.append(url)
-        if state["error"]:
-            raise state["error"]
-        return _Resp()
-
-    monkeypatch.setattr("app.generators.httpx.get", fake_get)
-    return state, urls
+        result = generate_mkcert(limit=2)
+        assert [r.version for r in result] == ["1.4.4", "1.4.3"]
+        assert {(d.os, d.arch, d.archive_type) for d in result[0].downloads} == {
+            ("macos", "x64", "bin"),
+            ("macos", "arm64", "bin"),
+            ("linux", "x64", "bin"),
+            ("linux", "arm64", "bin"),
+            ("windows", "x64", "exe"),
+            ("windows", "arm64", "exe"),
+        }
 
 
 class TestPrereleaseVersion:
@@ -469,64 +723,34 @@ class TestPrereleaseVersion:
 
 
 class TestGithubReleasesStableOnly:
-    def test_drops_flagged_tagged_and_draft_releases(self, github_answers):
-        state, _ = github_answers
-        state["payload"] = COMPOSER_RELEASES
+    def test_drops_flagged_tagged_and_draft_releases(self, upstream):
         tags = [r["tag_name"] for r in _github_releases("composer/composer", limit=10)]
         assert tags == ["2.10.1", "2.10.0", "2.9.5", "2.9.0"]
 
-    def test_limit_counts_stable_releases_only(self, github_answers):
-        state, _ = github_answers
-        state["payload"] = COMPOSER_RELEASES
+    def test_limit_counts_stable_releases_only(self, upstream):
         tags = [r["tag_name"] for r in _github_releases("composer/composer", limit=2)]
         assert tags == ["2.10.1", "2.10.0"]
 
-    def test_asks_github_for_more_than_limit_so_prereleases_do_not_eat_slots(self, github_answers):
-        _, urls = github_answers
+    def test_asks_github_for_more_than_limit_so_prereleases_do_not_eat_slots(self, upstream):
         _github_releases("composer/composer", limit=10)
         _github_releases("composer/composer", limit=60)
-        assert [u.rsplit("per_page=", 1)[1] for u in urls] == ["30", "100"]
+        assert [u.rsplit("per_page=", 1)[1] for u in upstream.requested] == ["30", "100"]
 
-    def test_upstream_failure_gives_empty_list(self, github_answers):
-        state, _ = github_answers
-        state["error"] = RuntimeError("simulated network failure")
+    def test_upstream_failure_gives_empty_list(self, upstream):
+        upstream.error = RuntimeError("simulated network failure")
         assert _github_releases("composer/composer") == []
-
-
-class TestCaddyStableOnly:
-    def test_betas_and_rcs_are_not_offered(self, github_answers):
-        from app.generators import generate_caddy
-
-        def asset(tag):
-            return {
-                "name": f"caddy_{tag}_linux_amd64.tar.gz",
-                "browser_download_url": f"https://example/caddy/{tag}/caddy_{tag}_linux_amd64.tar.gz",
-            }
-
-        state, _ = github_answers
-        state["payload"] = [
-            _release("v2.11.0-beta.2", prerelease=True, assets=[asset("2.11.0-beta.2")]),
-            _release("v2.9.1", assets=[asset("2.9.1")]),
-            _release("v2.8.0-rc.1", assets=[asset("2.8.0-rc.1")]),
-            _release("v2.8.4", assets=[asset("2.8.4")]),
-        ]
-        assert [r.version for r in generate_caddy(limit=5)] == ["2.9.1", "2.8.4"]
 
 
 class TestComposerGenerator:
     _SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 
-    @pytest.fixture(autouse=True)
-    def recorded_composer(self, github_answers):
-        github_answers[0]["payload"] = COMPOSER_RELEASES
-
-    def test_composer_returns_list(self):
+    def test_composer_returns_list(self, upstream):
         result = generate_composer(limit=2)
         assert isinstance(result, list)
         for rel in result:
             assert isinstance(rel, GenRelease)
 
-    def test_composer_semver(self):
+    def test_composer_semver(self, upstream):
         result = generate_composer(limit=10)
         assert result
         for rel in result:
@@ -534,64 +758,75 @@ class TestComposerGenerator:
                 f"Version {rel.version!r} does not match semver X.Y.Z"
             )
 
-    def test_composer_skips_release_candidates_betas_and_alphas(self):
+    def test_composer_skips_release_candidates_betas_and_alphas(self, upstream):
         assert [r.version for r in generate_composer(limit=10)] == ["2.10.1", "2.10.0", "2.9.5", "2.9.0"]
 
-    def test_composer_latest_is_newest_stable_even_with_limit_one(self):
+    def test_composer_latest_is_newest_stable_even_with_limit_one(self, upstream):
         assert [r.version for r in generate_composer(limit=1)] == ["2.10.1"]
 
-    def test_composer_limit_respected(self):
+    def test_composer_limit_respected(self, upstream):
         assert len(generate_composer(limit=2)) == 2
         assert len(generate_composer(limit=1)) == 1
 
-    def test_composer_all_three_os(self):
+    def test_composer_all_three_os(self, upstream):
         os_set = {dl.os for dl in generate_composer(limit=1)[0].downloads}
         assert os_set == {"windows", "linux", "macos"}
 
-    def test_composer_phar_url_pattern(self):
+    def test_composer_phar_url_pattern(self, upstream):
         for dl in generate_composer(limit=1)[0].downloads:
             assert dl.url == "https://getcomposer.org/download/2.10.1/composer.phar"
             assert dl.archive_type == "phar"
             assert dl.source == "getcomposer.org"
 
-    def test_composer_channel_stable(self):
+    def test_composer_channel_stable(self, upstream):
         for rel in generate_composer(limit=10):
             assert rel.channel == "stable"
 
-    def test_composer_no_v_prefix(self):
+    def test_composer_no_v_prefix(self, upstream):
         for rel in generate_composer(limit=10):
             assert not rel.version.startswith("v"), (
                 f"Version {rel.version!r} should not start with 'v'"
             )
 
-    def test_composer_returns_list_on_network_failure(self, github_answers):
-        github_answers[0]["error"] = RuntimeError("simulated network failure")
+    def test_composer_returns_list_on_network_failure(self, upstream):
+        upstream.error = RuntimeError("simulated network failure")
         assert run_generator("composer", limit=1) == []
 
 
-@pytest.mark.integration
-class TestComposerLive:
-    """Talks to api.github.com. Skipped unless pytest runs with --run-integration."""
-
-    def test_live_composer_offers_only_stable_versions(self):
-        result = generate_composer(limit=10)
-        if not result:
-            pytest.skip("GitHub unreachable or rate limited")
-        for rel in result:
-            assert re.fullmatch(r"\d+\.\d+\.\d+", rel.version), rel.version
-            assert {dl.os for dl in rel.downloads} == {"windows", "linux", "macos"}
-
-
 class TestGenReleaseStructure:
-    """Spot-check that every generator's output conforms to GenRelease."""
+    """Every registered generator turns its recorded upstream into valid releases."""
 
     @pytest.mark.parametrize("app_id", list(GENERATORS.keys()))
-    def test_generator_returns_valid_releases(self, app_id: str):
-        # Run with limit=1 to minimize network calls in CI.
-        # Some generators may return 0 if the upstream is unreachable.
-        releases = run_generator(app_id, limit=1)
-        assert isinstance(releases, list)
+    def test_generator_returns_valid_releases(self, upstream, app_id: str):
+        releases = run_generator(app_id, limit=2)
+        assert releases, f"{app_id}: recorded upstream produced no release"
         for rel in releases:
             assert isinstance(rel, GenRelease)
-            assert rel.version
-            assert len(rel.downloads) >= 0
+            assert rel.version and not rel.version.startswith("v")
+            assert not is_prerelease_version(rel.version)
+            assert rel.downloads, f"{app_id} {rel.version}: no downloads"
+            for dl in rel.downloads:
+                assert dl.url.startswith("https://")
+                assert dl.os in {"windows", "linux", "macos"}
+                assert dl.arch in {"x64", "x86", "arm64"}
+                assert dl.archive_type and dl.source
+
+    @pytest.mark.parametrize("app_id", list(GENERATORS.keys()))
+    def test_generator_survives_a_dead_network(self, upstream, app_id: str):
+        upstream.error = RuntimeError("simulated network failure")
+        assert isinstance(run_generator(app_id, limit=2), list)
+
+
+@pytest.mark.integration
+class TestGeneratorsLive:
+    """Talks to the real upstreams. Skipped unless pytest runs with --run-integration."""
+
+    @pytest.mark.parametrize("app_id", list(GENERATORS.keys()))
+    def test_live_generator_offers_only_stable_versions(self, app_id: str):
+        releases = run_generator(app_id, limit=2)
+        if not releases:
+            pytest.skip(f"{app_id}: upstream unreachable or rate limited")
+        for rel in releases:
+            assert rel.version and not rel.version.startswith("v")
+            assert not is_prerelease_version(rel.version), rel.version
+            assert rel.downloads

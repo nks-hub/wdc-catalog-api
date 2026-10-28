@@ -548,7 +548,8 @@ def generate_mariadb(limit: int = 5) -> list[GenRelease]:
 
 # ── Nginx (nginx.org) ──────────────────────────────────────────────────
 
-_NGINX_PATTERN = re.compile(r'href="(nginx-(\d+\.\d+\.\d+)\.zip)"')
+# nginx.org links the zips as href="/download/nginx-X.Y.Z.zip".
+_NGINX_PATTERN = re.compile(r'href="(?:/download/)?(nginx-(\d+\.\d+\.\d+)\.zip)"')
 
 
 def generate_nginx(limit: int = 5) -> list[GenRelease]:
