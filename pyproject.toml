@@ -35,3 +35,6 @@ include = ["app*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+markers = [
+    "integration: talks to the live network, skipped unless --run-integration is passed",
+]

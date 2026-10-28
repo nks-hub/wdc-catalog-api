@@ -65,9 +65,23 @@ class GenRelease:
 # ── GitHub helper ───────────────────────────────────────────────────────
 
 
+_PRERELEASE_RE = re.compile(r"(?i)(?<=\d)[-_.]?(?:alpha|beta|rc)[-_.]?\d*$")
+
+
+def is_prerelease_version(version: str) -> bool:
+    """True for alpha, beta and release-candidate versions such as ``2.11.0-RC1``."""
+    return bool(_PRERELEASE_RE.search(version))
+
+
 def _github_releases(repo: str, limit: int = 10) -> list[dict]:
-    """Fetch the last `limit` releases from a public GitHub repo."""
-    url = f"https://api.github.com/repos/{repo}/releases?per_page={limit}"
+    """Fetch the last `limit` stable releases from a public GitHub repo.
+
+    Releases flagged as draft or pre-release on GitHub, and tags that name an
+    alpha, beta or RC, are dropped: every generator publishes on the stable
+    channel. GitHub's page is requested larger than `limit` so dropped
+    pre-releases do not shrink the result below it.
+    """
+    url = f"https://api.github.com/repos/{repo}/releases?per_page={min(limit * 3, 100)}"
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": DEFAULT_UA,
@@ -76,10 +90,20 @@ def _github_releases(repo: str, limit: int = 10) -> list[dict]:
     try:
         r = httpx.get(url, headers=headers, timeout=HTTP_TIMEOUT)
         r.raise_for_status()
-        return r.json()
+        releases = r.json()
     except Exception as exc:  # noqa: BLE001
         log.warning("GitHub fetch failed for %s: %s", repo, exc)
         return []
+    stable = [
+        rel
+        for rel in releases
+        if not (
+            rel.get("prerelease")
+            or rel.get("draft")
+            or is_prerelease_version(rel.get("tag_name") or "")
+        )
+    ]
+    return stable[:limit]
 
 
 def _github_json(path: str) -> list[dict]:

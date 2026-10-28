@@ -17,7 +17,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
 from .db import App, Download, Release
-from .generators import GenRelease
+from .generators import GenRelease, is_prerelease_version
 from .schemas import AppDoc, CatalogDocument, DownloadDoc, ReleaseDoc
 
 log = logging.getLogger(__name__)
@@ -65,6 +65,8 @@ def _offerable_downloads(app_id: str, downloads: list[Download]) -> list[Downloa
 def _app_to_schema(app: App) -> AppDoc:
     releases = []
     for r in app.releases:
+        if r.channel == "stable" and is_prerelease_version(r.version):
+            continue  # stored by an older generator that did not filter pre-releases
         downloads = _offerable_downloads(app.id, r.downloads)
         if r.downloads and not downloads:
             continue  # every download was withdrawn, so the version is not installable

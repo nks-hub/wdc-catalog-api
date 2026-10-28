@@ -192,6 +192,7 @@ apache and mysql are served from the mirror only: ApacheLounge answers 200 with 
 ```bash
 pytest                    # 550+ tests, coverage 85%+
 pytest --cov=app          # with coverage report
+pytest --run-integration  # also run tests that need the live network
 ruff format app/ tests/   # format
 ruff check app/ tests/    # lint
 ```

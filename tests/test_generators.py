@@ -13,7 +13,9 @@ import pytest
 from app.generators import (
     GENERATORS,
     GenRelease,
+    _github_releases,
     available_generators,
+    is_prerelease_version,
     run_generator,
     generate_apache,
     generate_mysql,
@@ -405,8 +407,118 @@ class TestCloudflaredGenerator:
             assert len(exts) > 0
 
 
+def _release(tag: str, *, prerelease: bool = False, draft: bool = False, assets=()) -> dict:
+    return {
+        "tag_name": tag,
+        "prerelease": prerelease,
+        "draft": draft,
+        "published_at": "2026-10-22T09:00:00Z",
+        "assets": list(assets),
+    }
+
+
+# Shaped like GitHub's answer for composer/composer, newest first. The RC is
+# flagged upstream, the beta only gives itself away by its tag, and the draft
+# must never be offered.
+COMPOSER_RELEASES = [
+    _release("2.11.0-RC1", prerelease=True),
+    _release("2.10.1"),
+    _release("2.10.0"),
+    _release("2.10.0-beta.1"),
+    _release("2.99.0", draft=True),
+    _release("2.9.5"),
+    _release("2.9.0-alpha2"),
+    _release("2.9.0"),
+]
+
+
+@pytest.fixture
+def github_answers(monkeypatch):
+    """Serve a payload as GitHub's releases answer; returns ``(set_payload, requested_urls)``."""
+    state = {"payload": [], "error": None}
+    urls: list[str] = []
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return state["payload"]
+
+    def fake_get(url, **kwargs):
+        urls.append(url)
+        if state["error"]:
+            raise state["error"]
+        return _Resp()
+
+    monkeypatch.setattr("app.generators.httpx.get", fake_get)
+    return state, urls
+
+
+class TestPrereleaseVersion:
+    @pytest.mark.parametrize(
+        "version",
+        ["2.11.0-RC1", "2.9.0-beta.3", "2.8.0-rc.1", "3.0.0alpha1", "8.5.0RC1", "2.10.0-BETA2"],
+    )
+    def test_alpha_beta_rc_are_prereleases(self, version):
+        assert is_prerelease_version(version)
+
+    @pytest.mark.parametrize("version", ["2.10.0", "2026.9.3", "8.0.2-2", "1.4.4", "13.1.1", "v1.0.0", ""])
+    def test_plain_versions_are_not(self, version):
+        assert not is_prerelease_version(version)
+
+
+class TestGithubReleasesStableOnly:
+    def test_drops_flagged_tagged_and_draft_releases(self, github_answers):
+        state, _ = github_answers
+        state["payload"] = COMPOSER_RELEASES
+        tags = [r["tag_name"] for r in _github_releases("composer/composer", limit=10)]
+        assert tags == ["2.10.1", "2.10.0", "2.9.5", "2.9.0"]
+
+    def test_limit_counts_stable_releases_only(self, github_answers):
+        state, _ = github_answers
+        state["payload"] = COMPOSER_RELEASES
+        tags = [r["tag_name"] for r in _github_releases("composer/composer", limit=2)]
+        assert tags == ["2.10.1", "2.10.0"]
+
+    def test_asks_github_for_more_than_limit_so_prereleases_do_not_eat_slots(self, github_answers):
+        _, urls = github_answers
+        _github_releases("composer/composer", limit=10)
+        _github_releases("composer/composer", limit=60)
+        assert [u.rsplit("per_page=", 1)[1] for u in urls] == ["30", "100"]
+
+    def test_upstream_failure_gives_empty_list(self, github_answers):
+        state, _ = github_answers
+        state["error"] = RuntimeError("simulated network failure")
+        assert _github_releases("composer/composer") == []
+
+
+class TestCaddyStableOnly:
+    def test_betas_and_rcs_are_not_offered(self, github_answers):
+        from app.generators import generate_caddy
+
+        def asset(tag):
+            return {
+                "name": f"caddy_{tag}_linux_amd64.tar.gz",
+                "browser_download_url": f"https://example/caddy/{tag}/caddy_{tag}_linux_amd64.tar.gz",
+            }
+
+        state, _ = github_answers
+        state["payload"] = [
+            _release("v2.11.0-beta.2", prerelease=True, assets=[asset("2.11.0-beta.2")]),
+            _release("v2.9.1", assets=[asset("2.9.1")]),
+            _release("v2.8.0-rc.1", assets=[asset("2.8.0-rc.1")]),
+            _release("v2.8.4", assets=[asset("2.8.4")]),
+        ]
+        assert [r.version for r in generate_caddy(limit=5)] == ["2.9.1", "2.8.4"]
+
+
 class TestComposerGenerator:
     _SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
+
+    @pytest.fixture(autouse=True)
+    def recorded_composer(self, github_answers):
+        github_answers[0]["payload"] = COMPOSER_RELEASES
 
     def test_composer_returns_list(self):
         result = generate_composer(limit=2)
@@ -415,51 +527,59 @@ class TestComposerGenerator:
             assert isinstance(rel, GenRelease)
 
     def test_composer_semver(self):
-        result = generate_composer(limit=3)
+        result = generate_composer(limit=10)
+        assert result
         for rel in result:
             assert self._SEMVER.match(rel.version), (
                 f"Version {rel.version!r} does not match semver X.Y.Z"
             )
 
+    def test_composer_skips_release_candidates_betas_and_alphas(self):
+        assert [r.version for r in generate_composer(limit=10)] == ["2.10.1", "2.10.0", "2.9.5", "2.9.0"]
+
+    def test_composer_latest_is_newest_stable_even_with_limit_one(self):
+        assert [r.version for r in generate_composer(limit=1)] == ["2.10.1"]
+
     def test_composer_limit_respected(self):
-        result = generate_composer(limit=2)
-        assert len(result) <= 2
-        result_one = generate_composer(limit=1)
-        assert len(result_one) <= 1
+        assert len(generate_composer(limit=2)) == 2
+        assert len(generate_composer(limit=1)) == 1
 
     def test_composer_all_three_os(self):
-        result = generate_composer(limit=1)
-        if not result:
-            pytest.skip("composer upstream unreachable")
-        os_set = {dl.os for dl in result[0].downloads}
+        os_set = {dl.os for dl in generate_composer(limit=1)[0].downloads}
         assert os_set == {"windows", "linux", "macos"}
 
     def test_composer_phar_url_pattern(self):
-        result = generate_composer(limit=1)
-        if not result:
-            pytest.skip("composer upstream unreachable")
-        for dl in result[0].downloads:
-            assert "getcomposer.org/download/" in dl.url
-            assert dl.url.endswith("composer.phar")
+        for dl in generate_composer(limit=1)[0].downloads:
+            assert dl.url == "https://getcomposer.org/download/2.10.1/composer.phar"
             assert dl.archive_type == "phar"
             assert dl.source == "getcomposer.org"
 
     def test_composer_channel_stable(self):
-        result = generate_composer(limit=3)
-        for rel in result:
+        for rel in generate_composer(limit=10):
             assert rel.channel == "stable"
 
     def test_composer_no_v_prefix(self):
-        result = generate_composer(limit=3)
-        for rel in result:
+        for rel in generate_composer(limit=10):
             assert not rel.version.startswith("v"), (
                 f"Version {rel.version!r} should not start with 'v'"
             )
 
-    def test_composer_returns_list_on_network_failure(self):
-        # Even if the network is unreachable, run_generator must return a list.
-        result = run_generator("composer", limit=1)
-        assert isinstance(result, list)
+    def test_composer_returns_list_on_network_failure(self, github_answers):
+        github_answers[0]["error"] = RuntimeError("simulated network failure")
+        assert run_generator("composer", limit=1) == []
+
+
+@pytest.mark.integration
+class TestComposerLive:
+    """Talks to api.github.com. Skipped unless pytest runs with --run-integration."""
+
+    def test_live_composer_offers_only_stable_versions(self):
+        result = generate_composer(limit=10)
+        if not result:
+            pytest.skip("GitHub unreachable or rate limited")
+        for rel in result:
+            assert re.fullmatch(r"\d+\.\d+\.\d+", rel.version), rel.version
+            assert {dl.os for dl in rel.downloads} == {"windows", "linux", "macos"}
 
 
 class TestGenReleaseStructure:
