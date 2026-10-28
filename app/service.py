@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -62,9 +63,15 @@ def _offerable_downloads(app_id: str, downloads: list[Download]) -> list[Downloa
     ]
 
 
+def _version_key(version: str) -> tuple[int, ...]:
+    """Numeric sort key. The database orders versions as text, which puts 2.9.1
+    above 2.11.7, and the daemon takes the first release as the latest."""
+    return tuple(int(n) for n in re.findall(r"\d+", version))
+
+
 def _app_to_schema(app: App) -> AppDoc:
     releases = []
-    for r in app.releases:
+    for r in sorted(app.releases, key=lambda r: _version_key(r.version), reverse=True):
         if r.channel == "stable" and is_prerelease_version(r.version):
             continue  # stored by an older generator that did not filter pre-releases
         downloads = _offerable_downloads(app.id, r.downloads)

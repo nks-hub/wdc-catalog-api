@@ -472,3 +472,41 @@ class TestUrlHealing:
                 d.url for d in rel.downloads if (d.os, d.arch) == ("windows", "x64")
             )
             assert url == "https://dead-but-stored.example/x.zip"
+
+
+class TestReleaseOrder:
+    """The daemon takes the first release of an app as its latest, so the
+    catalog must order versions numerically, not as text."""
+
+    @staticmethod
+    def _served(*versions: str) -> list[str]:
+        import uuid
+
+        from app.service import get_app_document
+
+        create_all()
+        app_id = f"order-{uuid.uuid4().hex[:6]}"
+        releases = [
+            GenRelease(
+                version=v,
+                downloads=[GenDownload(f"https://example.test/{v}.zip", "windows", "x64", "zip", "test")],
+            )
+            for v in versions
+        ]
+        with session_factory() as db:
+            create_app(db, app_id=app_id)
+            apply_generated_releases(db, app_id, releases)
+            db.commit()
+        with session_factory() as db:
+            return [r.version for r in get_app_document(db, app_id).releases]
+
+    def test_two_digit_components_outrank_one_digit_ones(self):
+        assert self._served("2.9.1", "2.11.7", "2.10.2") == ["2.11.7", "2.10.2", "2.9.1"]
+        assert self._served("8.8.3", "8.10.3", "8.2.10") == ["8.10.3", "8.8.3", "8.2.10"]
+        assert self._served("2026.9.3", "2026.10.5") == ["2026.10.5", "2026.9.3"]
+
+    def test_patch_numbers_within_a_minor(self):
+        assert self._served("8.4.9", "8.4.19", "8.4.2") == ["8.4.19", "8.4.9", "8.4.2"]
+
+    def test_four_part_versions_sit_between_their_neighbours(self):
+        assert self._served("8.6.1", "8.6.1.1", "8.6.2") == ["8.6.2", "8.6.1.1", "8.6.1"]
